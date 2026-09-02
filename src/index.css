@@ -54,15 +54,19 @@ body {
 }
 footer { padding-bottom: env(safe-area-inset-bottom); }
 
-/* тонкая фактура бумаги */
+/* тонкая фактура бумаги (чистый CSS, без внешних ресурсов) */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 90;
   pointer-events: none;
-  opacity: 0.03;
-  background-image: url("image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.5;
+  background-image:
+    radial-gradient(rgba(30, 58, 47, 0.035) 1px, transparent 1px),
+    radial-gradient(rgba(217, 142, 50, 0.03) 1px, transparent 1px);
+  background-size: 22px 22px, 34px 34px;
+  background-position: 0 0, 11px 17px;
 }
 
 ::selection { background: var(--color-accent-soft); color: var(--color-dark); }
