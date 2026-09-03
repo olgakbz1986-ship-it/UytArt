@@ -105,7 +105,8 @@ export default function ProfilePage() {
   const [ticketFor, setTicketFor] = useState<{ order: Order; kind: "problem" | "return" } | null>(null);
   const [reviewFor, setReviewFor] = useState<Order | null>(null);
 
-  /* загрузка аватара: кроп в квадрат и сжатие до 256px (чтобы не раздувать localStorage) */
+  /* загрузка аватара: кроп в квадрат и сжатие до 256px (чтобы не раздувать localStorage).
+     Сохраняется мгновенно при выборе файла — без необходимости жать «Сохранить». */
   const onAvatarFile = (f: File | undefined) => {
     if (!f || !f.type.startsWith("image/")) return;
     const url = URL.createObjectURL(f);
@@ -119,10 +120,17 @@ export default function ProfilePage() {
       if (!ctx) return;
       const min = Math.min(img.width, img.height);
       ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
-      setAvatarDraft(canvas.toDataURL("image/jpeg", 0.85));
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setAvatarDraft(dataUrl);
+      updateUser({ avatar: dataUrl }); /* автосохранение */
       URL.revokeObjectURL(url);
     };
+    img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
+  };
+  const removeAvatar = () => {
+    setAvatarDraft(null);
+    updateUser({ avatar: undefined });
   };
 
   const saveProfile = () => {
@@ -172,11 +180,18 @@ export default function ProfilePage() {
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        {(avatarDraft ?? user.avatar) ? (
-          <img src={avatarDraft ?? user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
-        ) : (
-          <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
-        )}
+        {/* кликабельный аватар: загрузка фото с мгновенным сохранением */}
+        <label className="relative group shrink-0 cursor-pointer" title="Загрузить фото профиля">
+          {(avatarDraft ?? user.avatar) ? (
+            <img src={avatarDraft ?? user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
+          ) : (
+            <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
+          )}
+          <span className="absolute inset-0 rounded-full bg-dark/0 group-hover:bg-dark/45 flex items-center justify-center transition-colors">
+            <Camera size={20} className="text-cream opacity-0 group-hover:opacity-100 transition-opacity" />
+          </span>
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => onAvatarFile(e.target.files?.[0])} />
+        </label>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {user.name.split(" ")[0]}!</h1>
@@ -534,8 +549,8 @@ export default function ProfilePage() {
               <Btn size="sm" onClick={saveProfile}>
                 {profileSaved ? <><Check size={15} /> Сохранено</> : "Сохранить изменения"}
               </Btn>
-              {avatarDraft && (
-                <button onClick={() => setAvatarDraft(null)} className="text-[12.5px] font-semibold text-ink-mute hover:text-error cursor-pointer transition-colors">Отменить фото</button>
+              {(avatarDraft ?? user.avatar) && (
+                <button onClick={removeAvatar} className="text-[12.5px] font-semibold text-ink-mute hover:text-error cursor-pointer transition-colors">Удалить фото</button>
               )}
             </div>
           </SettingsSection>
