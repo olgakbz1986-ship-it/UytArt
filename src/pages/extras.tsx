@@ -5,8 +5,9 @@ import { persist } from "zustand/middleware";
 import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
+  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
 } from "lucide-react";
-import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS } from "../data/seed";
+import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
 import {
@@ -16,7 +17,7 @@ import {
 import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
-import { Badge, Btn, Field, Modal, ProgressBar } from "../components/ui";
+import { Badge, Btn, Field, Modal, ProgressBar, Reveal } from "../components/ui";
 import { Markdown } from "../components/markdown";
 
 /* ============================================================
@@ -959,28 +960,471 @@ export function SellerDashboardPage() {
 }
 
 /* ============================================================
-   О нас
+   О нас — манифест маркетплейса нового поколения
    ============================================================ */
+const aboutStats: [string, string][] = [
+  ["1 240", "мастеров и производств"],
+  ["8", "групп товаров"],
+  ["41", "категория и сотни подкатегорий"],
+  ["74", "города доставки по России"],
+];
+
+const aboutCategories = [
+  ["🛋️", "Интерьерный декор и авторская мебель"],
+  ["👗", "Уникальная одежда и аксессуары"],
+  ["💍", "Ювелирные изделия и бижутерия"],
+  ["🏺", "Керамика, текстиль и искусство"],
+  ["🎁", "Персональные подарки и сувениры"],
+  ["🎨", "Товары для хобби и творчества"],
+];
+
+const aboutTech = [
+  { icon: Brain, title: "AI и Данные", text: "YandexGPT и Yandex Vision для анализа запросов и визуального поиска, векторные базы данных (pgvector) для сверхточного подбора товаров по стилю и настроению, машинное обучение для персонализации рекомендаций.", tags: ["YandexGPT", "Yandex Vision", "pgvector", "ML"] },
+  { icon: ShieldCheck, title: "Надежность", text: "Архитектура на базе Supabase (PostgreSQL) со строгими политиками безопасности (RLS), шифрованием чувствительных данных и ежедневным резервным копированием.", tags: ["Supabase", "PostgreSQL", "RLS", "AES-256"] },
+  { icon: Truck, title: "Скорость и удобство", text: "Интеграция с лучшими логистическими и платежными сервисами для бесшовного опыта от клика до доставки.", tags: ["СДЭК", "Boxberry", "Почта России", "ЮKassa"] },
+  { icon: Globe, title: "Масштабируемость", text: "Облачная инфраструктура, способная обслуживать миллионы пользователей, с автоматическим масштабированием и мониторингом 24/7.", tags: ["Cloud", "Auto-scaling", "24/7"] },
+];
+
+const aboutValues = [
+  ["Уникальность вместо массовости", "Мы ценим историю, стоящую за каждой вещью, и мастера, который её создал."],
+  ["Технологии с человеческим лицом", "AI должен помогать, а не усложнять. Наш тон общения — теплый, заботливый и экспертный."],
+  ["Прозрачность и честность", "Никаких скрытых условий, поддельных отзывов или недобросовестных продавцов. Каждая сделка защищена."],
+  ["Поддержка локального производства", "Мы развиваем культуру осознанного потребления, где качественные авторские вещи служат годами и передают свою ценность."],
+  ["Инновации без границ", "Мы постоянно внедряем новые технологии и функции, чтобы сделать ваш опыт покупки максимально удобным и вдохновляющим."],
+];
+
 export function AboutPage() {
   return (
-    <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-12">
-      <h1 className="font-lux text-[clamp(34px,5vw,56px)] leading-[1.05] text-ink mb-6">Пространство,<br />у которого есть автор</h1>
-      <p className="font-quote text-[22px] text-ink-soft leading-relaxed mb-8 max-w-2xl">
-        УютАрт — AI-маркетплейс, где технологии помогают находить вещи с характером, а мастера получают честный доступ к покупателям по всей России.
-      </p>
-      <div className="grid sm:grid-cols-3 gap-4 mb-10">
-        {[["1 240", "мастерских"], ["41", "категория товаров"], ["74", "города доставки"]].map(([n, l]) => (
-          <div key={l} className="bg-surface rounded-2xl shadow-card p-6 text-center">
-            <p className="font-display font-extrabold text-[34px] text-accent-deep">{n}</p>
-            <p className="text-[13px] text-ink-soft mt-1">{l}</p>
+    <div>
+      {/* ---------- открытие: манифест ---------- */}
+      <section className="relative overflow-hidden bg-dark text-cream">
+        {/* многослойный фон */}
+        <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 15% 20%, rgba(217,142,50,0.22) 0, transparent 45%), radial-gradient(circle at 85% 80%, rgba(45,95,76,0.5) 0, transparent 50%)" }} />
+        <img src={GROUP_IMG.home} alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.10] kb" />
+        <div className="absolute inset-0 bg-gradient-to-b from-dark/40 via-transparent to-dark" />
+        {/* контурный домик как фоновый паттерн */}
+        <svg className="absolute right-[-40px] top-1/2 -translate-y-1/2 w-[340px] h-[340px] text-cream/[0.06] hidden lg:block" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M7 19L20 7l13 12M10 18v13h20V18M17 31v-8a3 3 0 0 1 6 0v8" stroke="currentColor" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+
+        <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20 sm:py-28">
+          <Reveal>
+            <p className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-accent mb-6">
+              <span className="w-6 h-px bg-accent" /> УютАрт — маркетплейс нового поколения
+            </p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h1 className="font-lux text-[clamp(42px,6.5vw,88px)] leading-[1.02] max-w-4xl">
+              Мы не маркетплейс.<br />
+              <span className="text-accent">Мы — новая категория.</span>
+            </h1>
+          </Reveal>
+          <Reveal delay={160}>
+            <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-8">
+              УютАрт создан с одной амбициозной целью: изменить то, как люди находят, создают и покупают уникальные вещи.
+              Мы наблюдали, как гиганты e-commerce превратили покупку товаров в безликий конвейер, где миллионы одинаковых
+              SKU теряются в алгоритмах. А соцсети дали вдохновение, но не дали инструмента для его реализации.
+            </p>
+          </Reveal>
+          <Reveal delay={240}>
+            <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-5">
+              Мы закрываем этот разрыв. УютАрт — это первая в России вертикальная экосистема нового поколения, где
+              передовые технологии искусственного интеллекта встречаются с талантами мастеров со всей страны. Мы объединяем
+              широкий ассортимент уникальных товаров, возможность индивидуальных заказов и интеллектуальный подбор в едином
+              пространстве. Мы превращаем хаотичный поиск в осмысленный процесс создания вашего идеального мира.
+            </p>
+          </Reveal>
+          <Reveal delay={320}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-6 mt-14 max-w-4xl">
+              {aboutStats.map(([n, l]) => (
+                <div key={l} className="border-l-2 border-accent/50 pl-4">
+                  <p className="font-display font-extrabold text-[30px] sm:text-[36px] text-cream leading-none">{n}</p>
+                  <p className="text-[12.5px] text-cream/60 mt-2 leading-snug">{l}</p>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- миссия ---------- */}
+      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+        <div className="grid md:grid-cols-[280px_1fr] gap-10 items-start">
+          <Reveal>
+            <div className="md:sticky md:top-24">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Наша миссия</p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">Делать уникальное — доступным</h2>
+            </div>
+          </Reveal>
+          <Reveal delay={100}>
+            <p className="font-quote text-[clamp(22px,2.6vw,30px)] leading-[1.45] text-ink">
+              Делать уникальные, качественные и осмысленные вещи доступными для каждого, поддерживая при этом таланты
+              мастеров и производителей со всей России.
+            </p>
+            <p className="text-[15.5px] leading-[1.75] text-ink-soft mt-6 max-w-2xl">
+              Мы верим, что технологии должны не заменять человеческое творчество, а усиливать его, делая процесс поиска,
+              заказа и покупки интуитивным, безопасным и вдохновляющим.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- 5 столпов превосходства ---------- */}
+      <section className="bg-surface/60 border-y border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <div className="max-w-3xl mb-14">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Почему УютАрт</p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">Это будущее e-commerce нового поколения</h2>
+              <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
+                Мы проанализировали лучшие мировые практики (от Etsy и Westwing до Houzz и Pinterest) и создали решение,
+                которое объединяет их сильные стороны, устраняя фундаментальные недостатки. Наши 5 столпов превосходства:
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="space-y-14">
+            {/* 1. AI-помощник */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <PillarNum n="01" icon={Brain} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Интеллектуальный AI-помощник <span className="text-accent-deep">(Agentic AI)</span></h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Наш AI-агент — это не простой чат-бот. Это ваш персональный эксперт, который понимает естественный язык,
+                    помнит ваши предпочтения, стиль и историю покупок. Он не просто ищет товары по ключевым словам — он
+                    анализирует ваши запросы, генерирует визуальные концепции и подбирает идеальные варианты из широкого
+                    каталога, будь то интерьерный декор, авторская одежда, уникальные подарки или предметы искусства.
+                  </p>
+                  <Link to="/ai-assistant" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Попробовать AI-ассистента <ArrowRight size={16} />
+                  </Link>
+                </div>
+                {/* мок чата AI */}
+                <div className="bg-surface rounded-2xl shadow-lift p-5 max-w-md lg:ml-auto border border-line-soft">
+                  <div className="flex items-center gap-2.5 pb-4 border-b border-line-soft">
+                    <span className="w-9 h-9 rounded-full bg-ai-soft text-ai flex items-center justify-center"><Sparkles size={17} /></span>
+                    <div>
+                      <p className="text-[13.5px] font-bold text-ink">AI-ассистент УютАрт</p>
+                      <p className="text-[11px] text-success flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" /> помнит ваш стиль</p>
+                    </div>
+                  </div>
+                  <div className="py-4 space-y-3">
+                    <div className="bg-dark text-cream rounded-2xl rounded-tr-sm px-4 py-2.5 text-[13px] max-w-[85%] ml-auto w-fit">Подбери тёплый декор для гостиной в сканди</div>
+                    <div className="bg-ai-soft text-ink rounded-2xl rounded-tl-sm px-4 py-2.5 text-[13px] w-fit flex items-center gap-1.5">
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai inline-block" />
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai inline-block" />
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai inline-block" />
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {["Свечи", "Плед", "Керамика"].map((c) => (
+                        <span key={c} className="px-3 py-1.5 rounded-full bg-cream border border-line-soft text-[11.5px] font-semibold text-ink-soft">{c}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 2. Индивидуальные заказы */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                {/* мок заказа */}
+                <div className="bg-surface rounded-2xl shadow-lift p-5 max-w-md border border-dashed border-accent/60 lg:order-1 order-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[12px] font-bold uppercase tracking-wide text-accent-deep">Индивидуальный заказ</p>
+                    <Badge tone="honey">3 отклика</Badge>
+                  </div>
+                  <div className="flex gap-3.5">
+                    <span className="w-16 h-16 rounded-xl bg-cream border border-line-soft flex items-center justify-center text-[26px] shrink-0"><Camera size={22} className="text-ink-mute" /></span>
+                    <div>
+                      <p className="text-[14px] font-bold text-ink">Дубовый стол с эпоксидной рекой</p>
+                      <p className="text-[12px] text-ink-soft mt-1 leading-snug">140×70 см, фото-референс приложен, доставка в Казань</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                    <span className="text-[12px] text-ink-mute">Бюджет</span>
+                    <span className="font-display font-bold text-[17px] text-ink">до 60 000 ₽</span>
+                  </div>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="02" icon={Wrench} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Индивидуальные заказы мастерам</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Уникальная функция, которой нет ни у одного маркетплейса в России. Вы можете разместить индивидуальный
+                    заказ с детальным описанием, эскизами или фото-референсами, и мастера со всей страны откликнутся на ваш
+                    запрос. От авторской мебели до уникальных украшений, от кастомной одежды до персональных подарков — вы
+                    получаете доступ к тысячам талантов, готовых создать вещь специально для вас.
+                  </p>
+                  <Link to="/market" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Разместить заказ <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 3. Широкий ассортимент */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <PillarNum n="03" icon={Boxes} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Широкий ассортимент уникальных товаров</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Мы не ограничиваемся одной категорией. УютАрт — это экосистема, где представлены интерьерный декор и
+                    авторская мебель, уникальная одежда и аксессуары ручной работы, ювелирные изделия, керамика, текстиль,
+                    предметы искусства, персональные подарки и товары для хобби — и многое другое от проверенных мастеров и
+                    небольших производств.
+                  </p>
+                  <Link to="/catalog" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Смотреть каталог <ArrowRight size={16} />
+                  </Link>
+                </div>
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md lg:ml-auto border border-line-soft">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-4">Что вы найдёте</p>
+                  <div className="flex flex-wrap gap-2">
+                    {aboutCategories.map(([e, l]) => (
+                      <span key={l} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-cream border border-line-soft text-[12.5px] font-semibold text-ink hover:border-accent hover:text-accent-deep transition-colors cursor-default">
+                        <span>{e}</span> {l}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[12px] text-ink-mute mt-4 flex items-center gap-1.5"><Sparkles size={13} className="text-accent" /> И многое другое от проверенных мастеров</p>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 4. Кураторский отбор */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md border border-line-soft lg:order-1 order-2">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-4">Каждый продавец проходит</p>
+                  <div className="space-y-3">
+                    {["Верификацию документов (ИНН, ОГРН, выписки)", "Ручную и автоматическую премодерацию товаров", "Проверку: реальный мастер, а не перекупщик"].map((t) => (
+                      <div key={t} className="flex items-start gap-3">
+                        <span className="w-6 h-6 rounded-full bg-success-soft text-[#4d7327] flex items-center justify-center shrink-0 mt-0.5"><CheckCircle2 size={14} /></span>
+                        <p className="text-[13.5px] font-semibold text-ink leading-snug">{t}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="04" icon={ShieldCheck} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Бескомпромиссный кураторский отбор</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Мы не гонимся за миллионами SKU. Каждый продавец на УютАрт проходит строгую верификацию (ИНН, ОГРН,
+                    выписки), а каждый товар — ручную и автоматическую премодерацию. Мы гарантируем, что за каждым лотом
+                    стоит реальный мастер, дизайнер или небольшое производство, а не перекупщик с масс-маркета.
+                  </p>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 5. Безопасность */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <PillarNum n="05" icon={CreditCard} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Абсолютная безопасность и прозрачность</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Модель «Безопасной сделки» означает, что ваши средства хранятся на защищенном транзитном счете платформы
+                    и перечисляются продавцу только после подтверждения отправки товара. Мы строго соблюдаем 152-ФЗ и 54-ФЗ,
+                    а все финансовые операции проходят через проверенные шлюзы (ЮKassa) с автоматической выдачей чеков.
+                  </p>
+                </div>
+                {/* мок безопасной сделки */}
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md lg:ml-auto border border-line-soft">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-5">Как работает безопасная сделка</p>
+                  <div className="flex items-center justify-between">
+                    {[["Покупатель", "🧑"], ["Транзитный счёт", "🔒"], ["Продавец", "🧑‍🎨"]].map(([l, e], i) => (
+                      <div key={l} className="flex items-center">
+                        <div className="text-center w-[86px]">
+                          <span className="block w-14 h-14 mx-auto rounded-full bg-cream border border-line-soft flex items-center justify-center text-[24px]">{e}</span>
+                          <p className="text-[11px] font-bold text-ink mt-2 leading-tight">{l}</p>
+                        </div>
+                        {i < 2 && <ArrowRight size={16} className="text-accent mx-1 shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[12px] text-ink-soft mt-5 leading-relaxed">Деньги уходят мастеру только после подтверждения отправки товара.</p>
+                </div>
+              </div>
+            </Reveal>
           </div>
-        ))}
+        </div>
+      </section>
+
+      {/* ---------- для кого ---------- */}
+      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+        <Reveal>
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Для кого</p>
+          <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight mb-12 max-w-2xl">Мы создаем эту экосистему для трех аудиторий</h2>
+        </Reveal>
+        <div className="space-y-5">
+          <Reveal>
+            <AudienceBand icon={Gift} tone="accent" title="Для ценителей уникальности"
+              text="Для тех, кто устал от однотипных решений масс-маркета и ищет вещи, которые расскажут историю о его владельце. Для людей, которые хотят найти идеальный подарок, обустроить пространство со вкусом или просто приобрести что-то особенное, не тратя сотни часов на поиски."
+              link={{ to: "/catalog", label: "Исследовать каталог" }} />
+          </Reveal>
+          <Reveal delay={80}>
+            <AudienceBand icon={Wrench} tone="ai" title="Для мастеров и творцов"
+              text="Для художников, дизайнеров, ремесленников, экспертов 3D-печати, швей, ювелиров и небольших производств. Мы даем вам премиальную витрину, доступ к платежеспособной аудитории, инструменты для приема индивидуальных заказов и технологические решения, которые раньше были доступны только крупным брендам."
+              link={{ to: "/seller/register", label: "Открыть мастерскую" }} />
+          </Reveal>
+          <Reveal delay={160}>
+            <AudienceBand icon={Palette} tone="premium" title="Для дизайнеров и профессионалов"
+              text="Мы становимся вашим надежным технологическим партнером. Находите проверенных мастеров, формируйте заказы для клиентов в пару кликов, получайте прозрачное вознаграждение за рекомендации через наш B2B-портал и используйте AI-инструменты для визуализации проектов."
+              link={{ to: "/ai-assistant", label: "AI-инструменты" }} />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- технологии ---------- */}
+      <section className="relative overflow-hidden bg-dark text-cream">
+        <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 80% 15%, rgba(217,142,50,0.18) 0, transparent 45%), radial-gradient(circle at 15% 85%, rgba(45,95,76,0.45) 0, transparent 50%)" }} />
+        <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent mb-3">Технологии</p>
+            <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] leading-tight max-w-2xl">Которым можно доверять</h2>
+            <p className="text-cream/70 text-[15px] leading-relaxed max-w-2xl mt-4">
+              За эстетикой и простотой нашего интерфейса стоит мощная инженерная машина. Мы используем современный
+              российский и открытый технологический стек.
+            </p>
+          </Reveal>
+          <div className="grid md:grid-cols-2 gap-5 mt-12">
+            {aboutTech.map((t, i) => (
+              <Reveal key={t.title} delay={(i % 2) * 80}>
+                <div className="bg-white/[0.05] border border-white/10 rounded-2xl p-6 h-full hover:bg-white/[0.08] hover:border-accent/40 transition-all duration-300">
+                  <div className="flex items-center gap-3.5 mb-4">
+                    <span className="w-11 h-11 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><t.icon size={21} /></span>
+                    <h3 className="font-display font-bold text-[17px]">{t.title}</h3>
+                  </div>
+                  <p className="text-[13.5px] leading-relaxed text-cream/70">{t.text}</p>
+                  <div className="flex flex-wrap gap-1.5 mt-4">
+                    {t.tags.map((tag) => (
+                      <span key={tag} className="px-2.5 py-1 rounded-full bg-white/[0.07] border border-white/10 text-[11px] font-semibold text-cream/70">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- ценности ---------- */}
+      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+        <Reveal>
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Наши ценности</p>
+          <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight mb-12 max-w-2xl">Принципы, которые не обсуждаются</h2>
+        </Reveal>
+        <div className="space-y-0">
+          {aboutValues.map(([t, d], i) => (
+            <Reveal key={t} delay={i * 60}>
+              <div className="grid md:grid-cols-[80px_1fr_2fr] gap-4 md:gap-8 items-baseline py-6 border-b border-line-soft group hover:bg-surface/60 transition-colors px-2 md:px-4 -mx-2 md:-mx-4 rounded-xl">
+                <span className="font-lux text-[30px] text-accent/60 group-hover:text-accent transition-colors leading-none">{String(i + 1).padStart(2, "0")}</span>
+                <h3 className="font-display font-bold text-[17px] text-ink leading-snug">{t}</h3>
+                <p className="text-[14.5px] leading-relaxed text-ink-soft">{d}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ---------- присоединяйтесь ---------- */}
+      <section className="bg-surface/60 border-t border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <div className="max-w-3xl mb-12">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Присоединяйтесь</p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">К эволюции покупок</h2>
+              <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
+                УютАрт — это больше, чем маркетплейс. Это экосистема, где технологии встречаются с творчеством, а каждый
+                покупатель становится соавтором своего уникального мира.
+              </p>
+            </div>
+          </Reveal>
+          <div className="grid md:grid-cols-3 gap-5">
+            <Reveal>
+              <JoinCard tone="accent" emoji="🛍️" role="Если вы покупатель"
+                text="Начните диалог с нашим AI-ассистентом прямо сейчас, разместите индивидуальный заказ мастеру или исследуйте тысячи уникальных товаров от проверенных продавцов."
+                link={{ to: "/ai-assistant", label: "Начать с AI" }} />
+            </Reveal>
+            <Reveal delay={80}>
+              <JoinCard tone="ai" emoji="🛠️" role="Если вы мастер или производитель"
+                text="Подайте заявку на верификацию и откройте свою цифровую мастерскую для тысяч ценителей качественных вещей по всей России. Получайте не только стандартные заказы, но и индивидуальные проекты от клиентов, которые ценят ваш талант."
+                link={{ to: "/seller/register", label: "Стать продавцом" }} />
+            </Reveal>
+            <Reveal delay={160}>
+              <JoinCard tone="premium" emoji="✏️" role="Если вы дизайнер или профессионал"
+                text="Используйте наши B2B-инструменты для работы с клиентами, получайте вознаграждение за рекомендации и создавайте проекты вместе с проверенными мастерами."
+                link={{ to: "/plans", label: "B2B-возможности" }} />
+            </Reveal>
+          </div>
+
+          <Reveal delay={200}>
+            <p className="font-lux text-[clamp(26px,4vw,46px)] leading-[1.2] text-ink text-center mt-20 max-w-3xl mx-auto">
+              УютАрт. Где технологии встречаются с <span className="text-accent-deep">искусством создания уникального</span>.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------- вспомогательные блоки страницы «О нас» ---------- */
+function PillarNum({ n, icon: Icon }: { n: string; icon: React.ElementType }) {
+  return (
+    <div className="flex items-center gap-3.5">
+      <span className="font-lux text-[40px] leading-none text-accent/70">{n}</span>
+      <span className="w-11 h-11 rounded-xl bg-dark text-accent flex items-center justify-center"><Icon size={21} /></span>
+    </div>
+  );
+}
+
+function AudienceBand({ icon: Icon, tone, title, text, link }: {
+  icon: React.ElementType;
+  tone: "accent" | "ai" | "premium";
+  title: string; text: string; link: { to: string; label: string };
+}) {
+  const toneMap = {
+    accent: { bar: "bg-accent", chip: "bg-accent-soft text-accent-deep" },
+    ai: { bar: "bg-ai", chip: "bg-ai-soft text-ai" },
+    premium: { bar: "bg-premium", chip: "bg-premium-soft text-[#a67c4e]" },
+  }[tone];
+  return (
+    <div className="bg-surface rounded-2xl shadow-card border border-line-soft overflow-hidden flex flex-col md:flex-row hover:shadow-lift transition-shadow duration-300">
+      <div className={`w-full md:w-1.5 ${toneMap.bar} shrink-0`} />
+      <div className="p-6 sm:p-7 flex-1">
+        <div className="flex items-center gap-3.5 mb-3">
+          <span className={`w-11 h-11 rounded-xl flex items-center justify-center ${toneMap.chip}`}><Icon size={21} /></span>
+          <h3 className="font-display font-bold text-[19px] text-ink">{title}</h3>
+        </div>
+        <p className="text-[14.5px] leading-[1.7] text-ink-soft max-w-3xl">{text}</p>
+        <Link to={link.to} className="inline-flex items-center gap-2 mt-4 text-[13.5px] font-bold text-accent-deep hover:text-accent transition-colors">
+          {link.label} <ArrowRight size={15} />
+        </Link>
       </div>
-      <div className="space-y-5 text-[15px] leading-[1.75] text-ink-soft">
-        <p>Мы — информационный агрегатор (ст. 12 ЗоЗПП): не продаём товары сами, а соединяем проверенных продавцов и покупателей. Каждый продавец проходит верификацию документов, каждая сделка защищена: деньги резервируются на транзитном счёте и уходят мастеру только после отправки.</p>
-        <p>AI-дизайнер собирает образы из реальных товаров каталога, учитывая ваш регион: крупногабарит — только от мастеров, которые доставляют в ваш округ, декор — со всей страны.</p>
-        <p>Оператор платформы — {OPERATOR.name}, ИНН {OPERATOR.inn}.</p>
-      </div>
+    </div>
+  );
+}
+
+function JoinCard({ tone, emoji, role, text, link }: {
+  tone: "accent" | "ai" | "premium"; emoji: string; role: string; text: string; link: { to: string; label: string };
+}) {
+  const btnMap = {
+    accent: "bg-dark text-cream hover:bg-dark-deep",
+    ai: "bg-ai text-cream hover:bg-dark",
+    premium: "bg-premium text-ink hover:bg-accent",
+  }[tone];
+  return (
+    <div className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 flex flex-col h-full hover:shadow-lift hover:-translate-y-1 transition-all duration-300">
+      <span className="text-[34px] mb-4">{emoji}</span>
+      <p className="font-display font-bold text-[16px] text-ink mb-3">{role}</p>
+      <p className="text-[13.5px] leading-relaxed text-ink-soft flex-1">{text}</p>
+      <Link to={link.to} className={`inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13.5px] font-bold mt-6 transition-colors ${btnMap}`}>
+        {link.label} <ArrowRight size={15} />
+      </Link>
     </div>
   );
 }
