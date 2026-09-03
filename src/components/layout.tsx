@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, Sparkles, User, LogOut, Search, ArrowRight, X, ClipboardList, Gem, Mail, FileText } from "lucide-react";
+import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
 import { GROUPS, GROUP_IMG, CATEGORIES, OPERATOR, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { GroupImg } from "./ui";
@@ -143,14 +143,14 @@ export function Header() {
   const cartCount = cart.reduce((s, c) => s + c.qty, 0);
 
   const links = [
-    { to: "/catalog", label: "Каталог", icon: null },
-    { to: "/market", label: "Заказы", icon: <ClipboardList size={17} className="text-accent-deep" /> },
-    { to: "/masters", label: "Мастера", icon: null },
-    { to: "/ai-assistant", label: "AI-дизайнер", icon: <Sparkles size={17} className="text-ai" /> },
-    { to: "/plans", label: "Тарифы", icon: <Gem size={17} className="text-premium" /> },
-    { to: "/about", label: "О нас", icon: null },
-    { to: "/contacts", label: "Контакты", icon: <Mail size={17} className="text-accent" /> },
-    { to: "/legal", label: "Документы", icon: <FileText size={17} className="text-ink-soft" /> },
+    { to: "/catalog", label: "Каталог" },
+    { to: "/market", label: "Заказы" },
+    { to: "/masters", label: "Мастера" },
+    { to: "/ai-assistant", label: "AI-дизайнер" },
+    { to: "/plans", label: "Тарифы" },
+    { to: "/about", label: "О нас" },
+    { to: "/contacts", label: "Контакты" },
+    { to: "/legal", label: "Документы" },
   ];
 
   const closeMenu = () => {
@@ -217,7 +217,6 @@ export function Header() {
                 <Link key={l.to} to={l.to} onClick={closeMenu}
                   className="group flex items-center gap-3 px-3 h-[52px] rounded-[10px] text-[16px] font-bold text-ink hover:bg-surface transition-colors duration-200 fade-up"
                   style={{ animationDelay: `${60 + i * 50}ms` }}>
-                  {l.icon}
                   {l.label}
                   <ArrowRight size={16} className="ml-auto text-ink-mute opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
                 </Link>
