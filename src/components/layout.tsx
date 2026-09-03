@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, Sparkles, User, LogOut, Search, ArrowRight, X, ClipboardList, Gem, Mail } from "lucide-react";
+import { ShoppingBag, Sparkles, User, LogOut, Search, ArrowRight, X, ClipboardList, Gem, Mail, FileText } from "lucide-react";
 import { GROUPS, GROUP_IMG, CATEGORIES, OPERATOR, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { GroupImg } from "./ui";
@@ -150,6 +150,7 @@ export function Header() {
     { to: "/plans", label: "Тарифы", icon: <Gem size={17} className="text-premium" /> },
     { to: "/about", label: "О нас", icon: null },
     { to: "/contacts", label: "Контакты", icon: <Mail size={17} className="text-accent" /> },
+    { to: "/legal", label: "Правовая информация", icon: <FileText size={17} className="text-ink-soft" /> },
   ];
 
   const closeMenu = () => {
@@ -249,43 +250,57 @@ export function Header() {
   );
 }
 
-/* ---------- футер ---------- */
+/* ---------- иконки соцсетей (инлайн-SVG, монохром) ---------- */
+function TelegramIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9.04 15.51l-.37 5.27c.53 0 .76-.23 1.04-.5l2.5-2.4 5.18 3.8c.95.52 1.63.25 1.88-.88l3.4-15.98c.3-1.4-.51-1.95-1.43-1.6L1.35 10.9c-1.36.53-1.34 1.29-.23 1.63l5.1 1.59L18.06 6.7c.56-.37 1.07-.16.65.2L9.04 15.5z" />
+    </svg>
+  );
+}
+function VkIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M13.16 17.5c-5.66 0-8.9-3.88-9.03-10.33h2.83c.09 4.73 2.17 6.73 3.82 7.14V7.17h2.67v4.09c1.63-.18 3.34-2.03 3.92-4.09h2.66c-.44 2.54-2.3 4.39-3.62 5.15 1.32.61 3.44 2.22 4.25 5.18h-2.93c-.63-1.96-2.2-3.47-4.28-3.68v3.68h-.29z" />
+    </svg>
+  );
+}
+function PinterestIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.48 2 12c0 4.24 2.64 7.86 6.36 9.31-.09-.79-.17-2 .03-2.86.18-.78 1.17-4.97 1.17-4.97s-.3-.6-.3-1.48c0-1.39.81-2.43 1.81-2.43.85 0 1.27.64 1.27 1.41 0 .86-.55 2.14-.83 3.33-.24 1 .5 1.81 1.48 1.81 1.78 0 3.14-1.87 3.14-4.58 0-2.39-1.72-4.06-4.18-4.06-2.85 0-4.52 2.14-4.52 4.35 0 .86.33 1.79.75 2.29.08.1.09.19.07.29l-.28 1.14c-.04.19-.15.23-.34.14-1.25-.58-2.03-2.41-2.03-3.88 0-3.16 2.29-6.06 6.62-6.06 3.47 0 6.17 2.47 6.17 5.78 0 3.45-2.18 6.23-5.2 6.23-1.02 0-1.97-.53-2.3-1.15l-.62 2.38c-.23.87-.84 1.96-1.25 2.62.94.29 1.94.45 2.97.45 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
+    </svg>
+  );
+}
+
+/* ---------- футер: соцсети + копирайт + почта ---------- */
 export function Footer() {
   return (
     <footer className="bg-dark text-cream mt-16">
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-12 grid md:grid-cols-4 gap-8">
-        <div>
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-10">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
             <HouseMark size={34} className="text-cream" />
             <span className="font-display font-bold text-[18px]">УютАрт</span>
           </div>
-          <p className="text-[13px] text-cream/60 leading-relaxed mt-4 max-w-[260px]">
-            AI-маркетплейс огромного ассортимента: от авторского декора до техники, одежды и товаров для дома — от проверенных продавцов со всей России.
-          </p>
+          <div className="flex items-center gap-3">
+            <a href="https://t.me/uyutart" target="_blank" rel="noopener noreferrer" aria-label="Telegram"
+              className="w-11 h-11 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              <TelegramIcon />
+            </a>
+            <a href="https://vk.com/uyutart" target="_blank" rel="noopener noreferrer" aria-label="ВКонтакте"
+              className="w-11 h-11 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              <VkIcon />
+            </a>
+            <a href="https://pinterest.com/uyutart" target="_blank" rel="noopener noreferrer" aria-label="Pinterest"
+              className="w-11 h-11 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              <PinterestIcon />
+            </a>
+          </div>
         </div>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-widest text-cream/40 mb-4">Покупателям</p>
-          {[["/catalog", "Каталог"], ["/market", "Биржа заказов"], ["/ai-assistant", "AI-дизайнер"], ["/plans", "Тарифы"], ["/profile", "Личный кабинет"]].map(([to, label]) => (
-            <Link key={to} to={to} className="block text-[13px] text-cream/70 hover:text-cream py-1.5 transition-colors">{label}</Link>
-          ))}
-        </div>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-widest text-cream/40 mb-4">Продавцам</p>
-          {[["/seller/register", "Стать продавцом"], ["/seller/dashboard", "Кабинет продавца"], ["/legal/seller_agreement", "Агентский договор"]].map(([to, label]) => (
-            <Link key={to} to={to} className="block text-[13px] text-cream/70 hover:text-cream py-1.5 transition-colors">{label}</Link>
-          ))}
-        </div>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-widest text-cream/40 mb-4">Право и помощь</p>
-          {[["/legal/buyer_tos", "Оферта"], ["/legal/return_policy", "Возврат товара"], ["/legal/escrow_rules", "Безопасная сделка"], ["/legal/privacy", "Конфиденциальность"], ["/legal/ip_policy", "Политика ИС"], ["/about", "О нас"], ["/contacts", "Контакты"]].map(([to, label]) => (
-            <Link key={to} to={to} className="block text-[13px] text-cream/70 hover:text-cream py-1.5 transition-colors">{label}</Link>
-          ))}
-        </div>
-      </div>
-      <div className="border-t border-white/10">
-        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-cream/50">
-          <span>© {new Date().getFullYear()} {OPERATOR.short} · ИНН {OPERATOR.inn} · {OPERATOR.status}</span>
-          <span>{OPERATOR.domain} · {OPERATOR.legalEmail}</span>
+        <div className="border-t border-white/10 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-cream/50">
+          <span>© 2026 УютАрт. Все права защищены</span>
+          <a href="mailto:support@uyutart.ru" className="hover:text-cream transition-colors">support@uyutart.ru</a>
         </div>
       </div>
     </footer>

@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
-  ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem,
+  ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
 } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
@@ -981,6 +981,41 @@ export function AboutPage() {
         <p>AI-дизайнер собирает образы из реальных товаров каталога, учитывая ваш регион: крупногабарит — только от мастеров, которые доставляют в ваш округ, декор — со всей страны.</p>
         <p>Оператор платформы — {OPERATOR.name}, ИНН {OPERATOR.inn}.</p>
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Правовая информация — индекс документов (/legal)
+   ============================================================ */
+const LEGAL_INDEX: { to: string; title: string; desc: string }[] = [
+  { to: "/legal/buyer_tos", title: "Пользовательское соглашение (Оферта)", desc: "Условия покупки на платформе, статус агрегатора, ответственность сторон." },
+  { to: "/legal/privacy", title: "Политика конфиденциальности", desc: "Как мы обрабатываем персональные данные по 152-ФЗ." },
+  { to: "/legal/data_processing", title: "Политика обработки персональных данных", desc: "Порядок сбора, хранения и защиты персональных данных." },
+  { to: "/legal/escrow_rules", title: "Правила безопасной сделки", desc: "Резервирование средств на транзитном счёте до подтверждения отправки." },
+  { to: "/legal/return_policy", title: "Правила возврата товара", desc: "Возврат в течение 7 дней, за исключением товаров на заказ." },
+  { to: "/legal/seller_agreement", title: "Агентский договор для мастеров", desc: "Условия работы продавцом: комиссия, гарантии, индемнификация." },
+  { to: "/legal/market_rules", title: "Правила биржи заказов", desc: "Порядок размещения индивидуальных заказов и откликов мастеров." },
+];
+
+export function LegalIndexPage() {
+  return (
+    <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
+      <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Правовая информация</h1>
+      <p className="text-[14px] text-ink-soft mb-8">Здесь собраны все юридические документы и правила платформы УютАрт.</p>
+      <div className="grid sm:grid-cols-2 gap-4">
+        {LEGAL_INDEX.map((d) => (
+          <Link key={d.to} to={d.to}
+            className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col">
+            <p className="font-display font-bold text-[16px] text-ink leading-snug group-hover:text-accent-deep transition-colors">{d.title}</p>
+            <p className="text-[13px] text-ink-soft mt-2 leading-relaxed">{d.desc}</p>
+            <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-bold text-accent-deep">
+              Читать документ <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform duration-200" />
+            </span>
+          </Link>
+        ))}
+      </div>
+      <p className="text-[12px] text-ink-mute mt-8">Оператор платформы: {OPERATOR.name} · ИНН {OPERATOR.inn} · {OPERATOR.legalEmail}</p>
     </div>
   );
 }

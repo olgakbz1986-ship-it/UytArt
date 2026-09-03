@@ -11,7 +11,7 @@ import AiPage from "./pages/ai";
 import ProfilePage from "./pages/profile";
 import {
   PlansPage, MarketPage, SellerRegisterPage, SellerDashboardPage,
-  AboutPage, LegalPage, ContactsPage, NotFoundPage,
+  AboutPage, LegalIndexPage, LegalPage, ContactsPage, NotFoundPage,
 } from "./pages/extras";
 
 function ScrollToTop() {
@@ -72,6 +72,7 @@ export default function App() {
               <Route path="/seller/register" element={<SellerRegisterPage />} />
               <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
               <Route path="/about" element={<AboutPage />} />
+              <Route path="/legal" element={<LegalIndexPage />} />
               <Route path="/legal/:type" element={<LegalPage />} />
               <Route path="/contacts" element={<ContactsPage />} />
               <Route path="*" element={<NotFoundPage />} />
