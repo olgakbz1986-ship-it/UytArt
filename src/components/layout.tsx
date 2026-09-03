@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
-import { GROUPS, GROUP_IMG, CATEGORIES, OPERATOR, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
+import { GROUPS, GROUP_IMG, CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { GroupImg } from "./ui";
 
@@ -239,7 +239,6 @@ export function Header() {
                   <User size={16} /> Войти или зарегистрироваться
                 </Link>
               )}
-              <p className="text-[11px] text-ink-mute text-center mt-3">{OPERATOR.short} · ИНН {OPERATOR.inn}</p>
             </div>
           </div>
         </div>
@@ -271,34 +270,28 @@ function PinterestIcon() {
   );
 }
 
-/* ---------- футер: соцсети + копирайт + почта ---------- */
+/* ---------- футер: одна строка — копирайт слева, почта и соцсети справа ---------- */
 export function Footer() {
   return (
     <footer className="bg-dark text-cream mt-16">
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-10">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2.5">
-            <HouseMark size={34} className="text-cream" />
-            <span className="font-display font-bold text-[18px]">УютАрт</span>
-          </div>
-          <div className="flex items-center gap-3">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <span className="text-[12px] text-cream/50">© 2026 УютАрт. Все права защищены</span>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <a href="mailto:info@starttechpro.ru" className="text-[12px] text-cream/70 hover:text-cream transition-colors">info@starttechpro.ru</a>
+          <div className="flex items-center gap-2">
             <a href="https://t.me/uyutart" target="_blank" rel="noopener noreferrer" aria-label="Telegram"
-              className="w-11 h-11 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              className="w-9 h-9 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
               <TelegramIcon />
             </a>
             <a href="https://vk.com/uyutart" target="_blank" rel="noopener noreferrer" aria-label="ВКонтакте"
-              className="w-11 h-11 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              className="w-9 h-9 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
               <VkIcon />
             </a>
             <a href="https://pinterest.com/uyutart" target="_blank" rel="noopener noreferrer" aria-label="Pinterest"
-              className="w-11 h-11 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              className="w-9 h-9 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
               <PinterestIcon />
             </a>
           </div>
-        </div>
-        <div className="border-t border-white/10 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-cream/50">
-          <span>© 2026 УютАрт. Все права защищены</span>
-          <a href="mailto:support@uyutart.ru" className="hover:text-cream transition-colors">support@uyutart.ru</a>
         </div>
       </div>
     </footer>

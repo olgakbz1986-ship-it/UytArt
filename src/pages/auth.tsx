@@ -35,7 +35,7 @@ export function AuthPage() {
     if (code !== "4242") { setError("Неверный код. Для демо введите 4242"); return; }
     setBusy(true);
     setTimeout(() => {
-      login({ id: "u" + Date.now(), name: "Покупатель УютАрт", email: phone + "@uyutart.ru", phone, role: "buyer" });
+      login({ id: "u" + Date.now(), name: "Покупатель УютАрт", email: phone + "@starttechpro.ru", phone, role: "buyer" });
       nav("/profile");
     }, 500);
   };

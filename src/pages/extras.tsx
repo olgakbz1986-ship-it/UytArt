@@ -1080,7 +1080,7 @@ export function ContactsPage() {
       <p className="text-[14px] text-ink-soft mb-8">Мы отвечаем в течение рабочего дня.</p>
 
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
-        {[["Покупателям", "Вопросы по заказам, возврату и доставке", OPERATOR.supportEmail, "🛒"], ["Продавцам", "Витрина, выплаты, верификация", "sellers@uyutart.ru", "🏪"], ["Партнёрам и юр. вопросы", "Договоры, интеграции, СМИ", OPERATOR.legalEmail, "🤝"]].map(([t, d, e, ic]) => (
+        {[["Покупателям", "Вопросы по заказам, возврату и доставке", OPERATOR.supportEmail, "🛒"], ["Продавцам", "Витрина, выплаты, верификация", "info@starttechpro.ru", "🏪"], ["Партнёрам и юр. вопросы", "Договоры, интеграции, СМИ", OPERATOR.legalEmail, "🤝"]].map(([t, d, e, ic]) => (
           <div key={t} className="bg-surface rounded-2xl shadow-card p-6">
             <p className="text-[28px] mb-3">{ic}</p>
             <p className="font-bold text-[15px] text-ink">{t}</p>

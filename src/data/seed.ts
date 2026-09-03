@@ -9,8 +9,8 @@ export const OPERATOR = {
   inn: "4632275840",
   kpp: "463201001",
   domain: "uyutart.ru",
-  legalEmail: "legal@uyutart.ru",
-  supportEmail: "support@uyutart.ru",
+  legalEmail: "info@starttechpro.ru",
+  supportEmail: "info@starttechpro.ru",
   status: "Информационный агрегатор (ст. 12 ЗоЗПП), не является продавцом",
 };
 
