@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X } from "lucide-react";
+import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield } from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
 import { useMarketStore } from "./extras";
-import { Badge, Btn, Field, ProductImg, ProgressBar } from "../components/ui";
+import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection } from "../components/ui";
 import { ChatModal } from "../components/chat";
 import { ReviewModal, TicketModal } from "../components/review";
 
@@ -16,26 +16,30 @@ type Tab = "orders" | "favorites" | "concepts" | "prices" | "custom" | "addresse
 const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
 
 /* Визуальные токены и возможности каждого уровня покупателя */
-const BUYER_TIER: Record<string, { accent: string; soft: string; tagline: string; unlocked: string[]; locked: string[]; next?: string }> = {
+const BUYER_TIER: Record<string, { level: number; accent: string; soft: string; tagline: string; unlocked: string[]; locked: string[]; next?: string }> = {
   free: {
+    level: 0,
     accent: "#6b6b66", soft: "#eae4d4", tagline: "Знакомство с платформой",
     unlocked: ["Покупки и безопасная сделка", "2 AI-генерации в месяц", "1 индивидуальный заказ", "Бонусная программа"],
     locked: ["Концепты и отслеживание цен", "Фильтры качества", "Скидка на заказы"],
     next: "start",
   },
   start: {
+    level: 1,
     accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Уверенный покупатель",
     unlocked: ["15 AI-генераций", "3 индивидуальных заказа", "Фильтры качества", "Скидка 3%", "Концепты и 10 отслеживаемых цен"],
     locked: ["Ранний доступ к коллекциям", "Скидка 5%"],
     next: "designer",
   },
   designer: {
+    level: 2,
     accent: "#c77e28", soft: "#f9ebd2", tagline: "Ценитель уникального",
     unlocked: ["50 AI-генераций", "10 индивидуальных заказов", "Скидка 5%", "Ранний доступ к коллекциям", "Безлимит отслеживания цен"],
     locked: ["Персональный куратор", "VIP-статус и закрытые распродажи"],
     next: "premium",
   },
   premium: {
+    level: 3,
     accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей",
     unlocked: ["Безлимит AI-генераций и заказов", "Скидка 7%", "Персональный куратор", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
     locked: [],
@@ -78,6 +82,11 @@ export default function ProfilePage() {
 
   const lim = buyerLimits(buyerPlan);
   const isPaid = buyerPlan !== "free";
+
+  /* настройки (доступность секций зависит от уровня тарифа) */
+  const [notif, setNotif] = useState({ email: true, push: true, telegram: false });
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  const [privacy, setPrivacy] = useState({ aiProfiling: false, digest: true });
   const tier = BUYER_TIER[buyerPlan] || BUYER_TIER.free;
 
   const [tab, setTab] = useState<Tab>("orders");
@@ -127,6 +136,10 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Улучшить тариф</Link>
+          <button onClick={() => { setTab("settings"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="Настройки"
+            className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-soft hover:bg-line-soft hover:text-ink transition-colors cursor-pointer">
+            <Settings size={19} />
+          </button>
           <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
             <LogOut size={18} />
           </button>
@@ -427,16 +440,59 @@ export default function ProfilePage() {
 
       {/* НАСТРОЙКИ */}
       {tab === "settings" && (
-        <div className="max-w-[560px] bg-surface rounded-2xl shadow-card p-7 fade-up">
-          <h2 className="font-display font-bold text-[20px] text-ink mb-5">Настройки профиля</h2>
-          <div className="space-y-4">
-            <Field label="Имя"><input className="field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></Field>
-            <Field label="Email"><input className="field" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></Field>
-            <Field label="Телефон"><input className="field" placeholder="+7 (___) ___-__-__" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></Field>
-            <Btn onClick={() => updateUser(profile)}>Сохранить изменения</Btn>
-          </div>
-          <div className="mt-6 pt-6 border-t border-line-soft">
-            <p className="text-[13px] font-semibold text-ink mb-2 flex items-center gap-2"><CreditCard size={16} className="text-accent-deep" /> Тариф: {PLAN_NAME[buyerPlan]}</p>
+        <div className="fade-up space-y-4">
+          <p className="text-[13px] text-ink-soft">Настройки · уровень тарифа <strong style={{ color: tier.accent }}>{PLAN_NAME[buyerPlan]}</strong> — чем выше тариф, тем больше разделов доступно.</p>
+
+          {/* Профиль — всем */}
+          <SettingsSection title="Профиль" icon={<Settings size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
+            <div className="space-y-3.5">
+              <Field label="Имя"><input className="field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></Field>
+              <Field label="Email"><input className="field" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></Field>
+              <Field label="Телефон"><input className="field" placeholder="+7 (___) ___-__-__" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></Field>
+              <Btn size="sm" onClick={() => updateUser(profile)}>Сохранить изменения</Btn>
+            </div>
+          </SettingsSection>
+
+          {/* Уведомления — всем */}
+          <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
+            {([["email", "Email — статусы заказов и чеки"], ["push", "Push — снижение цен и бонусы"], ["telegram", "Telegram-бот — важное"]] as const).map(([k, label]) => (
+              <label key={k} className="flex items-center justify-between py-2 border-b border-line-soft last:border-0 cursor-pointer">
+                <span className="text-[13px] text-ink-soft">{label}</span>
+                <input type="checkbox" checked={notif[k]} onChange={(e) => setNotif({ ...notif, [k]: e.target.checked })} />
+              </label>
+            ))}
+          </SettingsSection>
+
+          {/* Тема — со «Старт» */}
+          <SettingsSection title="Тема оформления" icon={<Palette size={15} />} minLevel={1} level={tier.level} nextLabel="тариф «Старт»" accent={tier.accent}>
+            <div className="flex gap-2 flex-wrap">
+              {([["light", "Светлая"], ["dark", "Тёмная"], ["system", "Системная"]] as const).map(([id, label]) => (
+                <button key={id} onClick={() => setTheme(id)}
+                  className={`px-4 h-10 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${theme === id ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </SettingsSection>
+
+          {/* Приватность — с «Дизайнер» */}
+          <SettingsSection title="Приватность и данные" icon={<Shield size={15} />} minLevel={2} level={tier.level} nextLabel="тариф «Дизайнер»" accent={tier.accent}>
+            {([["aiProfiling", "AI-профилирование для персональных подборок"], ["digest", "Еженедельный дайджест новинок"]] as const).map(([k, label]) => (
+              <label key={k} className="flex items-center justify-between py-2 border-b border-line-soft last:border-0 cursor-pointer">
+                <span className="text-[13px] text-ink-soft">{label}</span>
+                <input type="checkbox" checked={privacy[k]} onChange={(e) => setPrivacy({ ...privacy, [k]: e.target.checked })} />
+              </label>
+            ))}
+            <Btn size="sm" variant="ghost" className="mt-3 !text-error">Удалить аккаунт</Btn>
+          </SettingsSection>
+
+          {/* Куратор — «Премиум» */}
+          <SettingsSection title="Персональный куратор" icon={<Sparkles size={15} />} minLevel={3} level={tier.level} nextLabel="тариф «Премиум»" accent={tier.accent}>
+            <p className="text-[13px] text-ink-soft leading-relaxed">Ваш куратор — Анна. Приоритетная поддержка 24/7, помощь с подбором и индивидуальные предложения.</p>
+          </SettingsSection>
+
+          <div className="bg-surface rounded-2xl shadow-card p-5">
+            <p className="text-[13px] font-semibold text-ink mb-1 flex items-center gap-2"><CreditCard size={16} className="text-accent-deep" /> Тариф: {PLAN_NAME[buyerPlan]}</p>
             <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Управлять подпиской</Link>
           </div>
         </div>

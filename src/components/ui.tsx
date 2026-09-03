@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { X, CheckCircle2, Lock } from "lucide-react";
 
 /* ---------- кнопки ---------- */
 export function Btn({ children, onClick, variant = "primary", size = "md", disabled, className = "", title }: {
@@ -200,6 +201,35 @@ export function ProgressBar({ value, max, tone = "accent" }: { value: number; ma
   return (
     <div className="h-2 rounded-full bg-line-soft overflow-hidden">
       <div className={`h-full rounded-full transition-all duration-500 ${colors[tone]}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/* ---------- секция настроек с гейтингом по уровню тарифа ---------- */
+export function SettingsSection({ title, icon, minLevel, level, nextLabel, accent, children }: {
+  title: string; icon: ReactNode; minLevel: number; level: number; nextLabel?: string; accent: string; children: ReactNode;
+}) {
+  const locked = level < minLevel;
+  if (locked) {
+    return (
+      <div className="bg-surface rounded-2xl shadow-card p-5 opacity-70 border border-dashed border-line">
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="w-8 h-8 rounded-[10px] bg-line-soft text-ink-mute flex items-center justify-center shrink-0">{icon}</span>
+          <p className="font-display font-bold text-[15px] text-ink-soft flex-1">{title}</p>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ink-mute"><Lock size={12} /> {nextLabel || "выше тариф"}</span>
+        </div>
+        <p className="text-[12.5px] text-ink-mute">Доступно на более высоких тарифах. <Link to="/plans" className="font-bold underline" style={{ color: accent }}>Открыть тарифы</Link></p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-surface rounded-2xl shadow-card p-5">
+      <div className="flex items-center gap-2.5 mb-4">
+        <span className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: `${accent}22`, color: accent }}>{icon}</span>
+        <p className="font-display font-bold text-[15px] text-ink flex-1">{title}</p>
+        <CheckCircle2 size={15} style={{ color: accent }} />
+      </div>
+      {children}
     </div>
   );
 }

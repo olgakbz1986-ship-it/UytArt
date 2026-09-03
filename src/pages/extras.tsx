@@ -6,6 +6,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
+  Lock, Bell, Shield, Settings,
 } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
@@ -17,7 +18,7 @@ import {
 import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
-import { Badge, Btn, Field, Modal, ProgressBar, Reveal } from "../components/ui";
+import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection } from "../components/ui";
 import { Markdown } from "../components/markdown";
 
 /* ============================================================
@@ -231,6 +232,15 @@ export function PlansPage() {
   const reg = useSellerReg();
   const user = useAppStore((s) => s.user);
 
+  /* Кто смотрит страницу. Зарегистрированный продавец видит ТОЛЬКО тарифы своего
+     юрлица, покупатель — только покупательские, гость — всё (для ознакомления). */
+  const isRegisteredSeller = reg.status === "active" && !!reg.legalType;
+  const isBuyerOnly = !!user && !isRegisteredSeller;
+  const isGuest = !user && !isRegisteredSeller;
+
+  const effectiveAudience = isRegisteredSeller ? "seller" : isBuyerOnly ? "buyer" : audience;
+  const effectiveSellerType: SellerLegalType = isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType;
+
   const BUYER_PRICES: Record<BuyerPlanId, number> = { free: 0, start: 500, designer: 1000, premium: 1500 };
   const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
   const BUYER_FEATURES: Record<BuyerPlanId, string[]> = {
@@ -246,26 +256,26 @@ export function PlansPage() {
     return period === "month" ? `${m} ₽/мес` : `${Math.round((m * 12 * 0.8) / 10) * 10} ₽/год`;
   };
 
-  const activeSellerType = reg.legalType || sellerType;
-
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2 text-center">Тарифы</h1>
       <p className="text-[14px] text-ink-soft mb-8 text-center max-w-xl mx-auto">Подписки открывают AI-инструменты, приоритеты и сниженные комиссии.</p>
 
-      {/* переключатель аудиторий */}
-      <div className="flex items-center justify-center mb-8">
-        <div className="inline-flex bg-line-soft rounded-[14px] p-1.5">
-          {([["buyer", "Покупателям"], ["seller", "Продавцам"]] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setAudience(id)}
-              className={`h-12 px-8 rounded-[10px] text-[14px] font-bold transition-all duration-200 cursor-pointer ${audience === id ? "bg-dark text-cream shadow-card" : "text-ink-soft hover:text-ink"}`}>
-              {label}
-            </button>
-          ))}
+      {/* переключатель аудиторий — только для гостей (незалогиненных) */}
+      {isGuest && (
+        <div className="flex items-center justify-center mb-8">
+          <div className="inline-flex bg-line-soft rounded-[14px] p-1.5">
+            {([["buyer", "Покупателям"], ["seller", "Продавцам"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setAudience(id)}
+                className={`h-12 px-8 rounded-[10px] text-[14px] font-bold transition-all duration-200 cursor-pointer ${audience === id ? "bg-dark text-cream shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {audience === "buyer" ? (
+      {effectiveAudience === "buyer" ? (
         <>
           <div className="flex justify-center mb-8">
             <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
@@ -311,23 +321,27 @@ export function PlansPage() {
         </>
       ) : (
         <>
-          <div className="flex justify-center mb-8">
-            <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
-              {SELLER_TYPES.map((t) => (
-                <button key={t.type} onClick={() => setSellerType(t.type)}
-                  className={`h-10 px-5 rounded-[10px] text-[13px] font-bold transition-all cursor-pointer ${sellerType === t.type ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
-                  {t.short} · {t.commission}%
-                </button>
-              ))}
+          {/* переключатель юрлиц — только для гостей; зарегистрированный продавец видит только свои тарифы */}
+          {isGuest ? (
+            <div className="flex justify-center mb-8">
+              <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
+                {SELLER_TYPES.map((t) => (
+                  <button key={t.type} onClick={() => setSellerType(t.type)}
+                    className={`h-10 px-5 rounded-[10px] text-[13px] font-bold transition-all cursor-pointer ${sellerType === t.type ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                    {t.short} · {t.commission}%
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          {reg.legalType && reg.legalType !== sellerType && (
-            <p className="text-center text-[12.5px] text-ink-mute mb-4">Ваш зарегистрированный тип: <strong className="text-ink">{sellerTypeInfo(reg.legalType)?.short}</strong>. Показаны тарифы для «{sellerTypeInfo(sellerType)?.short}».</p>
+          ) : (
+            <p className="text-center text-[13px] text-ink-soft mb-6">
+              Тарифы для <strong className="text-ink">{sellerTypeInfo(effectiveSellerType)?.label}</strong>
+            </p>
           )}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {SELLER_PLANS[sellerType].map((plan, i) => {
-              const active = acc.planIds[sellerType] === plan.id;
-              const limits = sellerLimits(sellerType, plan.id);
+            {SELLER_PLANS[effectiveSellerType].map((plan, i) => {
+              const active = acc.planIds[effectiveSellerType] === plan.id;
+              const limits = sellerLimits(effectiveSellerType, plan.id);
               return (
                 <div key={plan.id} className="bg-surface rounded-2xl shadow-card p-6 flex flex-col fade-up" style={{ animationDelay: `${i * 60}ms` }}>
                   <h2 className="font-display font-bold text-[18px] text-ink">{plan.name}</h2>
@@ -341,7 +355,7 @@ export function PlansPage() {
                     ))}
                   </ul>
                   <Btn className="w-full mt-5" variant={active ? "outline" : "dark"} disabled={active}
-                    onClick={() => acc.setPlan(sellerType, plan.id)}>
+                    onClick={() => acc.setPlan(effectiveSellerType, plan.id)}>
                     {active ? "Текущий тариф" : "Подключить"}
                   </Btn>
                 </div>
@@ -642,6 +656,8 @@ export function SellerDashboardPage() {
   const [teamMember, setTeamMember] = useState({ name: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawSum, setWithdrawSum] = useState("");
+  const [sNotif, setSNotif] = useState({ orders: true, payouts: true, promo: false });
+  const [sTheme, setSTheme] = useState<"light" | "dark" | "system">("light");
 
   const lt = s.legalType || "self_employed";
   const planId = acc.planIds[lt];
@@ -709,7 +725,13 @@ export function SellerDashboardPage() {
           </div>
           <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline} · комиссия {s.commissionRate}% · списание {fmtDate(nextCharge.toISOString())}</p>
         </div>
-        <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
+        <div className="flex items-center gap-2">
+          <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
+          <button onClick={() => { setTab("settings"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="Настройки"
+            className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-soft hover:bg-line-soft hover:text-ink transition-colors cursor-pointer">
+            <Settings size={19} />
+          </button>
+        </div>
       </div>
 
       {/* Возможности текущего тарифа */}
@@ -972,25 +994,64 @@ export function SellerDashboardPage() {
 
       {/* НАСТРОЙКИ */}
       {tab === "settings" && (
-        <div className="fade-up max-w-[640px] bg-surface rounded-2xl shadow-card p-6">
-          <p className="font-display font-bold text-[16px] text-ink mb-4">Юридические данные</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
-            <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
-            <p><span className="text-ink-mute block">Форма</span><span className="font-semibold text-ink">{sellerTypeInfo(lt)?.short}</span></p>
-            <p><span className="text-ink-mute block">ИНН</span><span className="font-semibold text-ink">{s.inn || "—"}</span></p>
-            <p><span className="text-ink-mute block">Город</span><span className="font-semibold text-ink">{s.city || "—"}</span></p>
-          </div>
-          <div className="mt-5 pt-5 border-t border-line-soft">
-            <p className="text-[13px] font-semibold text-ink mb-2">Тариф: {sellerPlanById(lt, planId)?.name} ({fmt(sellerPlanById(lt, planId)?.price || 0)}/мес)</p>
+        <div className="fade-up space-y-4">
+          <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
+
+          {/* Профиль и юр. данные — всем */}
+          <SettingsSection title="Профиль и юридические данные" icon={<Settings size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-4">
+              <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
+              <p><span className="text-ink-mute block">Форма</span><span className="font-semibold text-ink">{sellerTypeInfo(lt)?.short}</span></p>
+              <p><span className="text-ink-mute block">ИНН</span><span className="font-semibold text-ink">{s.inn || "—"}</span></p>
+              <p><span className="text-ink-mute block">Город</span><span className="font-semibold text-ink">{s.city || "—"}</span></p>
+            </div>
+            {s.masterName && (
+              <div className="pt-3 border-t border-line-soft">
+                <p className="text-[13px] font-semibold text-ink mb-1">О мастере</p>
+                <p className="text-[12.5px] text-ink-soft">{s.masterName}{s.yearsExperience ? ` · ${s.yearsExperience} лет опыта` : ""}{s.achievements ? ` · ${s.achievements}` : ""}</p>
+                {s.businessStory && <p className="text-[12.5px] text-ink-soft mt-2 leading-relaxed">{s.businessStory}</p>}
+              </div>
+            )}
+          </SettingsSection>
+
+          {/* Уведомления — всем */}
+          <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
+            {([["orders", "Новые заказы и сообщения"], ["payouts", "Выплаты и финансы"], ["promo", "Акции и рекомендации платформы"]] as const).map(([k, label]) => (
+              <label key={k} className="flex items-center justify-between py-2 border-b border-line-soft last:border-0 cursor-pointer">
+                <span className="text-[13px] text-ink-soft">{label}</span>
+                <input type="checkbox" checked={sNotif[k]} onChange={(e) => setSNotif({ ...sNotif, [k]: e.target.checked })} />
+              </label>
+            ))}
+          </SettingsSection>
+
+          {/* Оформление витрины — со 2-го тарифа */}
+          <SettingsSection title="Оформление витрины" icon={<Palette size={15} />} minLevel={1} level={lvl} nextLabel="следующий тариф" accent={lvlMeta.accent}>
+            <div className="flex gap-2 flex-wrap">
+              {([["light", "Светлая"], ["dark", "Тёмная"], ["system", "Системная"]] as const).map(([id, label]) => (
+                <button key={id} onClick={() => setSTheme(id)}
+                  className={`px-4 h-10 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${sTheme === id ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[12px] text-ink-mute mt-2.5">Настройка баннера, обложки и цветов вашего магазина.</p>
+          </SettingsSection>
+
+          {/* Приватность — с 3-го тарифа */}
+          <SettingsSection title="Приватность и данные" icon={<Shield size={15} />} minLevel={2} level={lvl} nextLabel="тариф выше" accent={lvlMeta.accent}>
+            <p className="text-[13px] text-ink-soft leading-relaxed mb-3">Управление видимостью профиля, экспорт данных и удаление аккаунта.</p>
+            <Btn size="sm" variant="ghost" className="!text-error">Удалить аккаунт</Btn>
+          </SettingsSection>
+
+          {/* Интеграции — топ-тариф */}
+          <SettingsSection title="Интеграции и API" icon={<Zap size={15} />} minLevel={3} level={lvl} nextLabel="топ-тариф" accent={lvlMeta.accent}>
+            <p className="text-[13px] text-ink-soft leading-relaxed">API для синхронизации товаров, вебхуки заказов и подключение внешних систем учёта.</p>
+          </SettingsSection>
+
+          <div className="bg-surface rounded-2xl shadow-card p-5">
+            <p className="text-[13px] font-semibold text-ink mb-1 flex items-center gap-2"><CreditCard size={16} className="text-accent-deep" /> Тариф: {sellerPlanById(lt, planId)?.name} ({fmt(sellerPlanById(lt, planId)?.price || 0)}/мес)</p>
             <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Управлять подпиской</Link>
           </div>
-          {s.masterName && (
-            <div className="mt-5 pt-5 border-t border-line-soft">
-              <p className="text-[13px] font-semibold text-ink mb-1">О мастере</p>
-              <p className="text-[12.5px] text-ink-soft">{s.masterName}{s.yearsExperience ? ` · ${s.yearsExperience} лет опыта` : ""}{s.achievements ? ` · ${s.achievements}` : ""}</p>
-              {s.businessStory && <p className="text-[12.5px] text-ink-soft mt-2 leading-relaxed">{s.businessStory}</p>}
-            </div>
-          )}
         </div>
       )}
 
