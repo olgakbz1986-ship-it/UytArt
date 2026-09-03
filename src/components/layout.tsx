@@ -150,7 +150,7 @@ export function Header() {
     { to: "/plans", label: "Тарифы", icon: <Gem size={17} className="text-premium" /> },
     { to: "/about", label: "О нас", icon: null },
     { to: "/contacts", label: "Контакты", icon: <Mail size={17} className="text-accent" /> },
-    { to: "/legal", label: "Правовая информация", icon: <FileText size={17} className="text-ink-soft" /> },
+    { to: "/legal", label: "Документы", icon: <FileText size={17} className="text-ink-soft" /> },
   ];
 
   const closeMenu = () => {
