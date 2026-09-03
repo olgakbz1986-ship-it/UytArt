@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
-import { GROUPS, GROUP_IMG, CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
+import { CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { GroupImg } from "./ui";
 
@@ -222,17 +222,6 @@ export function Header() {
                 </Link>
               ))}
             </nav>
-            <div className="px-5 mt-6 pt-5 border-t border-line-soft">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-mute mb-3">Группы каталога</p>
-              <div className="flex flex-wrap gap-1.5">
-                {GROUPS.map((g) => (
-                  <Link key={g.id} to={`/catalog?group=${g.id}`} onClick={closeMenu}
-                    className="px-3 h-9 flex items-center rounded-full bg-surface border border-line-soft text-[12px] font-semibold text-ink-soft hover:border-dark hover:text-ink transition-colors duration-200">
-                    {g.emoji} {g.name}
-                  </Link>
-                ))}
-              </div>
-            </div>
             <div className="mt-auto px-5 py-6 border-t border-line-soft">
               {!user && (
                 <Link to="/auth" onClick={closeMenu} className="flex items-center justify-center gap-2 h-11 rounded-[10px] bg-dark text-cream text-sm font-bold hover:bg-dark-deep transition-colors">
