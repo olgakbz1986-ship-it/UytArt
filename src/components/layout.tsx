@@ -153,9 +153,6 @@ export function Header() {
     { to: "/about", label: "О нас" },
     { to: "/contacts", label: "Контакты" },
     { to: "/legal", label: "Документы" },
-    /* условные кабинеты: видны только владельцам */
-    ...(user ? [{ to: "/profile", label: "Личный кабинет" }] : []),
-    ...(sellerReg.status === "active" ? [{ to: "/seller/dashboard", label: "Кабинет продавца" }] : []),
   ];
 
   const closeMenu = () => {
@@ -190,14 +187,31 @@ export function Header() {
               {cartCount > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{cartCount}</span>}
             </Link>
             {user ? (
-              <div className="flex items-center gap-2">
-                <Link to="/profile" className="hidden md:flex items-center gap-2 h-11 px-3.5 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:bg-line-soft transition-colors">
-                  <User size={16} className="text-accent-deep" /> {user.name.split(" ")[0]}
-                </Link>
-                <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
-                  <LogOut size={18} />
-                </button>
-              </div>
+              /* после регистрации «Войти» заменяется именем пользователя (покупатель)
+                 или названием организации (продавец) — клик открывает соответствующий кабинет */
+              (() => {
+                const isSeller = sellerReg.status === "active";
+                const cabinetTo = isSeller ? "/seller/dashboard" : "/profile";
+                const displayName = isSeller ? sellerReg.shopName : user.name.split(" ")[0];
+                return (
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={cabinetTo}
+                      title={isSeller ? "Кабинет продавца" : "Личный кабинет"}
+                      aria-label={isSeller ? "Открыть кабинет продавца" : "Открыть личный кабинет"}
+                      className="group flex items-center gap-2 h-11 pl-1.5 pr-3 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:border-dark hover:-translate-y-px transition-all duration-200"
+                    >
+                      <span className="w-8 h-8 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px] group-hover:bg-dark-deep transition-colors">
+                        {(displayName[0] || "?").toUpperCase()}
+                      </span>
+                      <span className="max-w-[120px] sm:max-w-[160px] truncate">{displayName}</span>
+                    </Link>
+                    <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
+                      <LogOut size={18} />
+                    </button>
+                  </div>
+                );
+              })()
             ) : (
               <Link to="/auth" className="h-11 px-4 sm:px-5 rounded-[10px] bg-dark text-cream text-sm font-semibold flex items-center gap-2 hover:bg-dark-deep transition-colors">
                 <User size={16} /> <span className="hidden sm:inline">Войти</span>
