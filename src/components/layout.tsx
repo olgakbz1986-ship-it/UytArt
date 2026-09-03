@@ -217,7 +217,6 @@ export function Header() {
                 <Link key={l.to} to={l.to} onClick={closeMenu}
                   className="group flex items-center gap-3 px-3 h-[52px] rounded-[10px] text-[16px] font-bold text-ink hover:bg-surface transition-colors duration-200 fade-up"
                   style={{ animationDelay: `${60 + i * 50}ms` }}>
-                  <span className="w-8 text-center text-accent-deep font-display text-[13px]">0{i + 1}</span>
                   {l.icon}
                   {l.label}
                   <ArrowRight size={16} className="ml-auto text-ink-mute opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
