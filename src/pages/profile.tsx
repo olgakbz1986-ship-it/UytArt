@@ -110,7 +110,21 @@ export default function ProfilePage() {
      в отличие от label+display:none, который часть браузеров игнорирует. */
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const openAvatarPicker = () => avatarInputRef.current?.click();
+  const openAvatarPicker = () => {
+    const el = avatarInputRef.current;
+    if (el) {
+      el.click();
+      return;
+    }
+    /* страховка: если ref пуст — создаём input динамически */
+    const tmp = document.createElement("input");
+    tmp.type = "file";
+    tmp.accept = "image/*";
+    tmp.style.display = "none";
+    tmp.onchange = () => { onAvatarFile(tmp.files?.[0]); tmp.remove(); };
+    document.body.appendChild(tmp);
+    tmp.click();
+  };
 
   /* загрузка аватара: кроп в квадрат и сжатие до 256px (чтобы не раздувать localStorage).
      Сохраняется мгновенно при выборе файла — без необходимости жать «Сохранить». */
@@ -186,12 +200,15 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
-      {/* единый скрытый input загрузки аватара (общий для шапки и настроек) */}
+      {/* единый input загрузки аватара (общий для шапки и настроек).
+          Скрыт НЕ через display:none — Safari/WebKit блокируют программный
+          клик по input с display:none. Используем visually-hidden (вне экрана). */}
       <input
         ref={avatarInputRef}
         type="file"
         accept="image/*"
-        className="hidden"
+        aria-label="Загрузить фото профиля"
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none", clipPath: "inset(50%)" }}
         onChange={(e) => { onAvatarFile(e.target.files?.[0]); e.target.value = ""; }}
       />
       <div className="flex items-center gap-4 mb-4 flex-wrap">
