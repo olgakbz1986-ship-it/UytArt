@@ -107,10 +107,14 @@ export default function ProfilePage() {
 
   /* единая точка загрузки аватара: скрытый input + программный клик.
      Программный .click() на file input работает во всех браузерах,
-     в отличие от label+display:none, который часть браузеров игнорирует. */
+     в отличие от label+display:none, который часть браузеров игнорирует.
+     pendingInstant: true — сохранить сразу (клик по аватару в шапке),
+                     false — только черновик, применение по «Сохранить изменения». */
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const pendingInstantRef = useRef(false);
   const [dragOver, setDragOver] = useState(false);
-  const openAvatarPicker = () => {
+  const openAvatarPicker = (instant: boolean) => {
+    pendingInstantRef.current = instant;
     const el = avatarInputRef.current;
     if (el) {
       el.click();
@@ -120,15 +124,16 @@ export default function ProfilePage() {
     const tmp = document.createElement("input");
     tmp.type = "file";
     tmp.accept = "image/*";
-    tmp.style.display = "none";
-    tmp.onchange = () => { onAvatarFile(tmp.files?.[0]); tmp.remove(); };
+    tmp.style.position = "fixed";
+    tmp.style.left = "-9999px";
+    tmp.onchange = () => { onAvatarFile(tmp.files?.[0], instant); tmp.remove(); };
     document.body.appendChild(tmp);
     tmp.click();
   };
 
   /* загрузка аватара: кроп в квадрат и сжатие до 256px (чтобы не раздувать localStorage).
-     Сохраняется мгновенно при выборе файла — без необходимости жать «Сохранить». */
-  const onAvatarFile = (f: File | undefined) => {
+     instant=true — сохраняем сразу; иначе — только черновик до «Сохранить изменения». */
+  const onAvatarFile = (f: File | undefined, instant = false) => {
     if (!f || !f.type.startsWith("image/")) return;
     const url = URL.createObjectURL(f);
     const img = new Image();
@@ -142,8 +147,14 @@ export default function ProfilePage() {
       const min = Math.min(img.width, img.height);
       ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      setAvatarDraft(dataUrl);
-      updateUser({ avatar: dataUrl }); /* автосохранение */
+      if (instant) {
+        /* клик по аватару в шапке — применяем сразу, чтобы фото появилось везде */
+        setAvatarDraft(null);
+        updateUser({ avatar: dataUrl });
+      } else {
+        /* окно в настройках — черновик, применение по «Сохранить изменения» */
+        setAvatarDraft(dataUrl);
+      }
       URL.revokeObjectURL(url);
     };
     img.onerror = () => URL.revokeObjectURL(url);
@@ -155,7 +166,9 @@ export default function ProfilePage() {
   };
 
   const saveProfile = () => {
-    updateUser({ ...profile, avatar: avatarDraft ?? user?.avatar });
+    /* применяем черновик аватара (если выбран) — фото отобразится в хедере и кабинете */
+    updateUser({ ...profile, avatar: avatarDraft !== null ? avatarDraft : user?.avatar });
+    if (avatarDraft !== null) setAvatarDraft(null);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2200);
   };
@@ -209,13 +222,13 @@ export default function ProfilePage() {
         accept="image/*"
         aria-label="Загрузить фото профиля"
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none", clipPath: "inset(50%)" }}
-        onChange={(e) => { onAvatarFile(e.target.files?.[0]); e.target.value = ""; }}
+        onChange={(e) => { onAvatarFile(e.target.files?.[0], pendingInstantRef.current); e.target.value = ""; }}
       />
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        {/* кликабельный аватар: загрузка фото с мгновенным сохранением */}
-        <button type="button" onClick={openAvatarPicker} className="relative group shrink-0 cursor-pointer rounded-full" title="Загрузить фото профиля" aria-label="Загрузить фото профиля">
-          {(avatarDraft ?? user.avatar) ? (
-            <img src={avatarDraft ?? user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
+        {/* кликабельный аватар: мгновенная загрузка — фото сразу появляется в хедере и кабинете */}
+        <button type="button" onClick={() => openAvatarPicker(true)} className="relative group shrink-0 cursor-pointer rounded-full" title="Загрузить фото профиля" aria-label="Загрузить фото профиля">
+          {user.avatar ? (
+            <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
           ) : (
             <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
           )}
@@ -539,40 +552,59 @@ export default function ProfilePage() {
 
           {/* Профиль — доступен и полностью редактируем на любом тарифе */}
           <SettingsSection title="Профиль" icon={<Settings size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
-            {/* аватар (клик или перетаскивание) + полнота профиля */}
-            <div className="flex items-center gap-4 mb-5">
-              <button
-                type="button"
-                onClick={openAvatarPicker}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => { e.preventDefault(); setDragOver(false); onAvatarFile(e.dataTransfer.files?.[0]); }}
-                className={`relative group shrink-0 cursor-pointer rounded-full transition-all ${dragOver ? "scale-105" : ""}`}
-                style={dragOver ? { outline: `3px dashed ${tier.accent}`, outlineOffset: "4px" } : undefined}
-                title="Загрузить фото (кликните или перетащите файл)"
-                aria-label="Загрузить фото профиля"
-              >
-                {(avatarDraft ?? user.avatar) ? (
-                  <img src={avatarDraft ?? user.avatar} alt="Аватар" className="w-20 h-20 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
-                ) : (
-                  <span className="w-20 h-20 rounded-full flex items-center justify-center font-display font-bold text-[28px]" style={{ background: "var(--color-dark)", color: "var(--color-accent)" }}>
-                    {profile.name[0]?.toUpperCase() || "У"}
-                  </span>
-                )}
-                <span className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-dark text-cream flex items-center justify-center ring-2 ring-offset-2 ring-offset-cream group-hover:bg-accent group-hover:text-ink transition-colors">
-                  <Camera size={15} />
-                </span>
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[12.5px] font-bold text-ink">Полнота профиля</p>
-                  <p className="text-[12px] font-bold" style={{ color: tier.accent }}>{completeness}%</p>
+            {/* ОКНО ЗАГРУЗКИ ФОТО ПРОФИЛЯ: черновик применяется по «Сохранить изменения» */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); onAvatarFile(e.dataTransfer.files?.[0], false); }}
+              className={`relative rounded-2xl border-2 border-dashed p-5 mb-5 transition-all duration-200 ${dragOver ? "bg-accent-soft/60" : "bg-cream/40"}`}
+              style={{ borderColor: dragOver ? tier.accent : "var(--color-line)", transform: dragOver ? "scale(1.01)" : undefined }}
+            >
+              <div className="flex items-center gap-5 flex-wrap">
+                {/* большое превью с бейджем камеры */}
+                <div className="relative shrink-0">
+                  {(avatarDraft ?? user.avatar) ? (
+                    <img src={avatarDraft ?? user.avatar} alt="Превью аватара" className="w-28 h-28 rounded-full object-cover ring-4 ring-offset-2 ring-offset-surface transition-transform duration-200" style={{ ["--tw-ring-color" as string]: tier.accent, transform: dragOver ? "scale(1.04)" : undefined }} />
+                  ) : (
+                    <span className="w-28 h-28 rounded-full flex items-center justify-center font-display font-bold text-[40px] transition-transform duration-200" style={{ background: "var(--color-dark)", color: "var(--color-accent)", transform: dragOver ? "scale(1.04)" : undefined }}>
+                      {profile.name[0]?.toUpperCase() || "У"}
+                    </span>
+                  )}
+                  <span className="absolute bottom-1 right-1 w-9 h-9 rounded-full bg-accent text-ink flex items-center justify-center ring-2 ring-surface shadow-card"><Camera size={17} /></span>
                 </div>
-                <ProgressBar value={completeness} max={100} tone={completeness >= 80 ? "success" : "accent"} />
-                <p className="text-[11.5px] text-ink-mute mt-1.5">
-                  {completeness >= 80 ? "Отличный профиль — мастера видят вас как надёжного покупателя" : "Заполните профиль — фото, город и контакты повышают доверие мастеров"}
-                </p>
+                {/* описание, статус и действия */}
+                <div className="flex-1 min-w-[220px]">
+                  <p className="font-display font-bold text-[15px] text-ink mb-1">Фото профиля</p>
+                  <p className="text-[12px] text-ink-mute mb-3 leading-relaxed">JPG или PNG · до 5 МБ. Обрежем в квадрат и сожмём автоматически. Выбранное фото появится в шапке сайта и в личном кабинете после нажатия «Сохранить изменения».</p>
+                  {avatarDraft !== null ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-3" style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-accent-deep)" }} /> Новое фото — не сохранено
+                    </span>
+                  ) : user.avatar ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success-soft text-[#4d7327] text-[11px] font-bold mb-3"><CheckCircle2 size={12} /> Фото сохранено</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-line-soft text-ink-mute text-[11px] font-bold mb-3">Фото не загружено</span>
+                  )}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <Btn size="sm" onClick={() => openAvatarPicker(false)}><Camera size={15} /> Выбрать фото</Btn>
+                    {(avatarDraft ?? user.avatar) && (
+                      <Btn size="sm" variant="ghost" onClick={removeAvatar}><Trash2 size={14} /> Удалить</Btn>
+                    )}
+                  </div>
+                </div>
               </div>
+            </div>
+
+            {/* полнота профиля */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[12.5px] font-bold text-ink">Полнота профиля</p>
+                <p className="text-[12px] font-bold" style={{ color: tier.accent }}>{completeness}%</p>
+              </div>
+              <ProgressBar value={completeness} max={100} tone={completeness >= 80 ? "success" : "accent"} />
+              <p className="text-[11.5px] text-ink-mute mt-1.5">
+                {completeness >= 80 ? "Отличный профиль — мастера видят вас как надёжного покупателя" : "Заполните профиль — фото, город и контакты повышают доверие мастеров"}
+              </p>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
@@ -589,8 +621,8 @@ export default function ProfilePage() {
               <Btn size="sm" onClick={saveProfile}>
                 {profileSaved ? <><Check size={15} /> Сохранено</> : "Сохранить изменения"}
               </Btn>
-              {(avatarDraft ?? user.avatar) && (
-                <button onClick={removeAvatar} className="text-[12.5px] font-semibold text-ink-mute hover:text-error cursor-pointer transition-colors">Удалить фото</button>
+              {avatarDraft !== null && (
+                <span className="text-[11.5px] font-semibold" style={{ color: "var(--color-accent-deep)" }}>Не забудьте сохранить — новое фото применится после «Сохранить изменения»</span>
               )}
             </div>
           </SettingsSection>
