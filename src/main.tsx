@@ -1,3 +1,4 @@
+import "./boot-guard"; // должен быть первым: ловит ошибки загрузки модулей
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
