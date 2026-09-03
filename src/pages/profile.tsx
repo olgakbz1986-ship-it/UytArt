@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard } from "lucide-react";
+import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X } from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
@@ -14,6 +14,33 @@ import { ReviewModal, TicketModal } from "../components/review";
 type Tab = "orders" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
 
 const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
+
+/* Визуальные токены и возможности каждого уровня покупателя */
+const BUYER_TIER: Record<string, { accent: string; soft: string; tagline: string; unlocked: string[]; locked: string[]; next?: string }> = {
+  free: {
+    accent: "#6b6b66", soft: "#eae4d4", tagline: "Знакомство с платформой",
+    unlocked: ["Покупки и безопасная сделка", "2 AI-генерации в месяц", "1 индивидуальный заказ", "Бонусная программа"],
+    locked: ["Концепты и отслеживание цен", "Фильтры качества", "Скидка на заказы"],
+    next: "start",
+  },
+  start: {
+    accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Уверенный покупатель",
+    unlocked: ["15 AI-генераций", "3 индивидуальных заказа", "Фильтры качества", "Скидка 3%", "Концепты и 10 отслеживаемых цен"],
+    locked: ["Ранний доступ к коллекциям", "Скидка 5%"],
+    next: "designer",
+  },
+  designer: {
+    accent: "#c77e28", soft: "#f9ebd2", tagline: "Ценитель уникального",
+    unlocked: ["50 AI-генераций", "10 индивидуальных заказов", "Скидка 5%", "Ранний доступ к коллекциям", "Безлимит отслеживания цен"],
+    locked: ["Персональный куратор", "VIP-статус и закрытые распродажи"],
+    next: "premium",
+  },
+  premium: {
+    accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей",
+    unlocked: ["Безлимит AI-генераций и заказов", "Скидка 7%", "Персональный куратор", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
+    locked: [],
+  },
+};
 
 const ORDER_LABEL: Record<string, { label: string; tone: "honey" | "ai" | "success" | "premium" }> = {
   paid: { label: "Принят", tone: "honey" },
@@ -51,6 +78,7 @@ export default function ProfilePage() {
 
   const lim = buyerLimits(buyerPlan);
   const isPaid = buyerPlan !== "free";
+  const tier = BUYER_TIER[buyerPlan] || BUYER_TIER.free;
 
   const [tab, setTab] = useState<Tab>("orders");
   const [addr, setAddr] = useState({ label: "Дом", city: "", street: "", zip: "" });
@@ -87,14 +115,15 @@ export default function ProfilePage() {
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        <span className="w-16 h-16 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[24px]">{user.name[0]?.toUpperCase()}</span>
+        <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {user.name.split(" ")[0]}!</h1>
-            <Badge tone={isPaid ? "premium" : "neutral"}>{PLAN_NAME[buyerPlan]}</Badge>
-            {lim.vip && <Badge tone="honey"><Sparkles size={11} /> VIP</Badge>}
+            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: tier.accent }}>
+              {lim.vip && <Sparkles size={11} />}{PLAN_NAME[buyerPlan]}
+            </span>
           </div>
-          <p className="text-[13.5px] text-ink-soft mt-1">{user.email}{user.phone ? ` · ${user.phone}` : ""}</p>
+          <p className="text-[13.5px] text-ink-soft mt-1">{tier.tagline} · {user.email}{user.phone ? ` · ${user.phone}` : ""}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Улучшить тариф</Link>
@@ -112,6 +141,22 @@ export default function ProfilePage() {
           </p>
         </div>
         <ProgressBar value={Number.isFinite(lim.aiGens) ? lim.aiGens - aiLeft : 1} max={Number.isFinite(lim.aiGens) ? lim.aiGens : 1} tone="ai" />
+      </div>
+
+      {/* Возможности текущего тарифа */}
+      <div className="rounded-[14px] shadow-card px-5 py-4 mb-7 border border-line-soft" style={{ background: `linear-gradient(120deg, ${tier.soft} 0%, var(--color-surface) 60%)` }}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <p className="text-[12.5px] font-bold text-ink">Тариф «{PLAN_NAME[buyerPlan]}» — что вам доступно</p>
+          {tier.next && <Link to="/plans" className="text-[12px] font-bold underline" style={{ color: tier.accent }}>Открыть больше →</Link>}
+        </div>
+        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+          {tier.unlocked.map((f) => (
+            <p key={f} className="flex items-center gap-2 text-[12.5px] text-ink-soft"><CheckCircle2 size={13} style={{ color: tier.accent }} className="shrink-0" /> {f}</p>
+          ))}
+          {tier.locked.map((f) => (
+            <p key={f} className="flex items-center gap-2 text-[12.5px] text-ink-mute line-through decoration-[1.5px]"><X size={13} className="shrink-0" /> {f}</p>
+          ))}
+        </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar mb-8">

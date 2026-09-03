@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
 import { CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
+import { useSellerReg } from "../lib/seller";
 import { GroupImg } from "./ui";
 
 /* ---------- контурный логотип-домик ---------- */
@@ -137,6 +138,7 @@ export function Header() {
   const cart = useAppStore((s) => s.cart);
   const user = useAppStore((s) => s.user);
   const logout = useAppStore((s) => s.logout);
+  const sellerReg = useSellerReg();
   const [menuOpen, setMenuOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const nav = useNavigate();
@@ -151,6 +153,9 @@ export function Header() {
     { to: "/about", label: "О нас" },
     { to: "/contacts", label: "Контакты" },
     { to: "/legal", label: "Документы" },
+    /* условные кабинеты: видны только владельцам */
+    ...(user ? [{ to: "/profile", label: "Личный кабинет" }] : []),
+    ...(sellerReg.status === "active" ? [{ to: "/seller/dashboard", label: "Кабинет продавца" }] : []),
   ];
 
   const closeMenu = () => {

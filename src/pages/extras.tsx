@@ -229,6 +229,7 @@ export function PlansPage() {
   const setBuyerPlan = useSubStore((s) => s.setBuyerPlan);
   const acc = useSellerAccount();
   const reg = useSellerReg();
+  const user = useAppStore((s) => s.user);
 
   const BUYER_PRICES: Record<BuyerPlanId, number> = { free: 0, start: 500, designer: 1000, premium: 1500 };
   const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
@@ -300,6 +301,13 @@ export function PlansPage() {
               );
             })}
           </div>
+          {user && (
+            <div className="mt-8 flex justify-center">
+              <Link to="/profile" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
+                В личный кабинет <ArrowRight size={17} />
+              </Link>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -340,6 +348,14 @@ export function PlansPage() {
               );
             })}
           </div>
+          {/* контекстный переход в кабинет продавца */}
+          {reg.status === "active" && (
+            <div className="mt-8 flex justify-center">
+              <Link to="/seller/dashboard" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
+                В кабинет продавца <ArrowRight size={17} />
+              </Link>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -599,6 +615,18 @@ export function SellerRegisterPage() {
   );
 }
 
+/* Визуальные токены уровней продавца (по позиции тарифа: 0 free → 3 топ) */
+const SELLER_LEVEL: { accent: string; soft: string; tagline: string }[] = [
+  { accent: "#6b6b66", soft: "#eae4d4", tagline: "Старт продаж" },
+  { accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Растущая мастерская" },
+  { accent: "#c77e28", soft: "#f9ebd2", tagline: "Профессиональные продажи" },
+  { accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей" },
+];
+const levelOf = (lt: SellerLegalType, planId: string) => {
+  const idx = (SELLER_PLANS[lt] || []).findIndex((p) => p.id === planId);
+  return idx < 0 ? 0 : idx;
+};
+
 /* ============================================================
    Кабинет продавца: товары (медиа + AI), заказы, финансы,
    аналитика, команда, настройки — гейтится тарифом
@@ -618,6 +646,9 @@ export function SellerDashboardPage() {
   const lt = s.legalType || "self_employed";
   const planId = acc.planIds[lt];
   const plan = sellerLimits(lt, planId);
+  const lvl = levelOf(lt, planId);
+  const lvlMeta = SELLER_LEVEL[lvl];
+  const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
   const month = currentMonth();
   const aiUsed = acc.aiCardGens[month] || 0;
   const balance = acc.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
@@ -667,16 +698,34 @@ export function SellerDashboardPage() {
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
       {/* шапка кабинета */}
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        <span className="w-14 h-14 rounded-[16px] bg-dark text-accent flex items-center justify-center text-[26px]">{s.shopName[0]?.toUpperCase()}</span>
+        <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{s.shopName[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display font-bold text-[clamp(22px,3vw,30px)] text-ink">{s.shopName}</h1>
-            <Badge tone="ai">{sellerTypeInfo(lt)?.short} · {sellerPlanById(lt, planId)?.name}</Badge>
+            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: lvlMeta.accent }}>
+              {sellerTypeInfo(lt)?.short} · {planName}
+            </span>
             {plan.badge && <Badge tone="premium"><ShieldCheck size={11} /> {plan.badge}</Badge>}
           </div>
-          <p className="text-[12.5px] text-ink-mute mt-1">Комиссия {s.commissionRate}% · следующее списание {fmtDate(nextCharge.toISOString())}</p>
+          <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline} · комиссия {s.commissionRate}% · списание {fmtDate(nextCharge.toISOString())}</p>
         </div>
         <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
+      </div>
+
+      {/* Возможности текущего тарифа */}
+      <div className="rounded-[14px] shadow-card px-5 py-4 mb-7 border border-line-soft" style={{ background: `linear-gradient(120deg, ${lvlMeta.soft} 0%, var(--color-surface) 60%)` }}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <p className="text-[12.5px] font-bold text-ink">Тариф «{planName}» — возможности кабинета</p>
+          {lvl < 3 && <Link to="/plans" className="text-[12px] font-bold underline" style={{ color: lvlMeta.accent }}>Улучшить тариф →</Link>}
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5 text-[12.5px]">
+          <p className="flex items-center gap-2 text-ink-soft"><CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> Товары: {fmtLimit(plan.maxProducts)}</p>
+          <p className="flex items-center gap-2 text-ink-soft"><CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> AI-карточки: {fmtLimit(plan.aiCardGens)}/мес</p>
+          <p className={`flex items-center gap-2 ${plan.analytics !== "basic" ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.analytics !== "basic" ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Аналитика {plan.analytics !== "basic" ? "" : "(закрыта)"}</p>
+          <p className={`flex items-center gap-2 ${plan.team > 0 ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.team > 0 ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Команда {plan.team > 0 ? `(${fmtLimit(plan.team)})` : "(закрыта)"}</p>
+          <p className={`flex items-center gap-2 ${plan.massEdit ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.massEdit ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Массовое редактирование</p>
+          <p className={`flex items-center gap-2 ${plan.forecasts ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.forecasts ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Прогнозы продаж</p>
+        </div>
       </div>
 
       {/* лимиты */}
