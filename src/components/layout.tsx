@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, Sparkles, User, LogOut, Search, ArrowRight, X, ClipboardList, Gem, Mail } from "lucide-react";
-import { GROUPS, GROUP_IMG, OPERATOR, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
+import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
+import { CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
+import { useSellerReg } from "../lib/seller";
+import { GroupImg } from "./ui";
 
-/* ---------- логотип: одноцветный контурный домик ---------- */
+/* ---------- контурный логотип-домик ---------- */
 export function HouseMark({ size = 40, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg
-      width={size} height={size} viewBox="0 0 32 32" fill="none"
-      className={`house-mark ${className}`}
-      aria-hidden="true"
-    >
-      <path d="M16 5 L28 15 H25 V27 H7 V15 H4 Z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
-      <path d="M13 27 V20 a3 3 0 0 1 6 0 V27" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-      <path d="M21 5 V9" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={`house-mark ${className}`} aria-hidden="true">
+      <path d="M7 19L20 7l13 12" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 18v13h20V18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 31v-8a3 3 0 0 1 6 0v8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
     </svg>
   );
 }
@@ -109,7 +107,9 @@ function SmartSearch() {
                   <li key={p.id}>
                     <button onMouseDown={(e) => e.preventDefault()} onClick={() => go(`/product/${p.slug}`)}
                       className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-cream cursor-pointer transition-colors">
-                      <span className="w-11 h-11 rounded-[10px] shrink-0 overflow-hidden flex items-center justify-center text-[22px]" style={{ background: `linear-gradient(135deg, ${p.art[0]}, ${p.art[1]})` }}>{p.emoji}</span>
+                      <span className="w-11 h-11 rounded-[10px] overflow-hidden shrink-0 group">
+                        <GroupImg src={p.image} emoji={p.emoji} alt={p.name} />
+                      </span>
                       <span className="flex-1 min-w-0">
                         <span className="block text-[13.5px] font-semibold text-ink truncate">{p.name}</span>
                         <span className="block text-[11.5px] text-ink-mute">{g?.name} · {cat?.name}</span>
@@ -133,23 +133,26 @@ function SmartSearch() {
   );
 }
 
+/* ---------- шапка ---------- */
 export function Header() {
   const cart = useAppStore((s) => s.cart);
   const user = useAppStore((s) => s.user);
   const logout = useAppStore((s) => s.logout);
+  const sellerReg = useSellerReg();
   const [menuOpen, setMenuOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const nav = useNavigate();
   const cartCount = cart.reduce((s, c) => s + c.qty, 0);
 
   const links = [
-    { to: "/catalog", label: "Каталог", icon: null },
-    { to: "/market", label: "Заказы", icon: <ClipboardList size={17} className="text-accent-deep" /> },
-    { to: "/masters", label: "Мастера", icon: null },
-    { to: "/ai-assistant", label: "AI-дизайнер", icon: <Sparkles size={17} className="text-ai" /> },
-    { to: "/plans", label: "Тарифы", icon: <Gem size={17} className="text-premium" /> },
-    { to: "/about", label: "О нас", icon: null },
-    { to: "/contacts", label: "Контакты", icon: <Mail size={17} className="text-accent" /> },
+    { to: "/catalog", label: "Каталог" },
+    { to: "/market", label: "Заказы" },
+    { to: "/masters", label: "Мастера" },
+    { to: "/ai-assistant", label: "AI-дизайнер" },
+    { to: "/plans", label: "Тарифы" },
+    { to: "/about", label: "О нас" },
+    { to: "/contacts", label: "Контакты" },
+    { to: "/legal", label: "Документы" },
   ];
 
   const closeMenu = () => {
@@ -184,14 +187,35 @@ export function Header() {
               {cartCount > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{cartCount}</span>}
             </Link>
             {user ? (
-              <div className="flex items-center gap-2">
-                <Link to="/profile" className="hidden md:flex items-center gap-2 h-11 px-3.5 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:bg-line-soft transition-colors">
-                  <User size={16} className="text-accent-deep" /> {user.name.split(" ")[0]}
-                </Link>
-                <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-ink hover:bg-line-soft transition-colors cursor-pointer">
-                  <LogOut size={18} />
-                </button>
-              </div>
+              /* после регистрации «Войти» заменяется именем пользователя (покупатель)
+                 или названием организации (продавец) — клик открывает соответствующий кабинет */
+              (() => {
+                const isSeller = sellerReg.status === "active";
+                const cabinetTo = isSeller ? "/seller/dashboard" : "/profile";
+                const displayName = isSeller ? sellerReg.shopName : user.name.split(" ")[0];
+                return (
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={cabinetTo}
+                      title={isSeller ? "Кабинет продавца" : "Личный кабинет"}
+                      aria-label={isSeller ? "Открыть кабинет продавца" : "Открыть личный кабинет"}
+                      className="group flex items-center gap-2 h-11 pl-1.5 pr-3 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:border-dark hover:-translate-y-px transition-all duration-200"
+                    >
+                      {user.avatar && !isSeller ? (
+                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px] group-hover:bg-dark-deep transition-colors">
+                          {(displayName[0] || "?").toUpperCase()}
+                        </span>
+                      )}
+                      <span className="max-w-[120px] sm:max-w-[160px] truncate">{displayName}</span>
+                    </Link>
+                    <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
+                      <LogOut size={18} />
+                    </button>
+                  </div>
+                );
+              })()
             ) : (
               <Link to="/auth" className="h-11 px-4 sm:px-5 rounded-[10px] bg-dark text-cream text-sm font-semibold flex items-center gap-2 hover:bg-dark-deep transition-colors">
                 <User size={16} /> <span className="hidden sm:inline">Войти</span>
@@ -216,31 +240,17 @@ export function Header() {
                 <Link key={l.to} to={l.to} onClick={closeMenu}
                   className="group flex items-center gap-3 px-3 h-[52px] rounded-[10px] text-[16px] font-bold text-ink hover:bg-surface transition-colors duration-200 fade-up"
                   style={{ animationDelay: `${60 + i * 50}ms` }}>
-                  <span className="w-8 text-center text-accent-deep font-display text-[13px]">0{i + 1}</span>
-                  {l.icon}
                   {l.label}
                   <ArrowRight size={16} className="ml-auto text-ink-mute opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
                 </Link>
               ))}
             </nav>
-            <div className="px-5 mt-6 pt-5 border-t border-line-soft">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-mute mb-3">Группы каталога</p>
-              <div className="flex flex-wrap gap-1.5">
-                {GROUPS.map((g) => (
-                  <Link key={g.id} to={`/catalog?group=${g.id}`} onClick={closeMenu}
-                    className="px-3 h-9 flex items-center rounded-full bg-surface border border-line-soft text-[12px] font-semibold text-ink-soft hover:border-dark hover:text-ink transition-colors duration-200">
-                    {g.emoji} {g.name}
-                  </Link>
-                ))}
-              </div>
-            </div>
             <div className="mt-auto px-5 py-6 border-t border-line-soft">
               {!user && (
                 <Link to="/auth" onClick={closeMenu} className="flex items-center justify-center gap-2 h-11 rounded-[10px] bg-dark text-cream text-sm font-bold hover:bg-dark-deep transition-colors">
                   <User size={16} /> Войти или зарегистрироваться
                 </Link>
               )}
-              <p className="text-[11px] text-ink-mute text-center mt-3">{OPERATOR.short} · ИНН {OPERATOR.inn}</p>
             </div>
           </div>
         </div>
@@ -249,46 +259,51 @@ export function Header() {
   );
 }
 
+/* ---------- иконки соцсетей (инлайн-SVG, монохром) ---------- */
+function TelegramIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9.04 15.51l-.37 5.27c.53 0 .76-.23 1.04-.5l2.5-2.4 5.18 3.8c.95.52 1.63.25 1.88-.88l3.4-15.98c.3-1.4-.51-1.95-1.43-1.6L1.35 10.9c-1.36.53-1.34 1.29-.23 1.63l5.1 1.59L18.06 6.7c.56-.37 1.07-.16.65.2L9.04 15.5z" />
+    </svg>
+  );
+}
+function VkIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M13.16 17.5c-5.66 0-8.9-3.88-9.03-10.33h2.83c.09 4.73 2.17 6.73 3.82 7.14V7.17h2.67v4.09c1.63-.18 3.34-2.03 3.92-4.09h2.66c-.44 2.54-2.3 4.39-3.62 5.15 1.32.61 3.44 2.22 4.25 5.18h-2.93c-.63-1.96-2.2-3.47-4.28-3.68v3.68h-.29z" />
+    </svg>
+  );
+}
+function PinterestIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.48 2 12c0 4.24 2.64 7.86 6.36 9.31-.09-.79-.17-2 .03-2.86.18-.78 1.17-4.97 1.17-4.97s-.3-.6-.3-1.48c0-1.39.81-2.43 1.81-2.43.85 0 1.27.64 1.27 1.41 0 .86-.55 2.14-.83 3.33-.24 1 .5 1.81 1.48 1.81 1.78 0 3.14-1.87 3.14-4.58 0-2.39-1.72-4.06-4.18-4.06-2.85 0-4.52 2.14-4.52 4.35 0 .86.33 1.79.75 2.29.08.1.09.19.07.29l-.28 1.14c-.04.19-.15.23-.34.14-1.25-.58-2.03-2.41-2.03-3.88 0-3.16 2.29-6.06 6.62-6.06 3.47 0 6.17 2.47 6.17 5.78 0 3.45-2.18 6.23-5.2 6.23-1.02 0-1.97-.53-2.3-1.15l-.62 2.38c-.23.87-.84 1.96-1.25 2.62.94.29 1.94.45 2.97.45 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
+    </svg>
+  );
+}
+
+/* ---------- футер: одна строка — копирайт слева, почта и соцсети справа ---------- */
 export function Footer() {
   return (
     <footer className="bg-dark text-cream mt-16">
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-12 grid md:grid-cols-4 gap-8">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <HouseMark size={34} className="text-cream" />
-            <span className="font-display font-bold text-[18px]">УютАрт</span>
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <span className="text-[12px] text-cream/50">© 2026 УютАрт. Все права защищены</span>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <a href="mailto:info@starttechpro.ru" className="text-[12px] text-cream/70 hover:text-cream transition-colors">info@starttechpro.ru</a>
+          <div className="flex items-center gap-2">
+            <a href="https://t.me/uyutart" target="_blank" rel="noopener noreferrer" aria-label="Telegram"
+              className="w-9 h-9 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              <TelegramIcon />
+            </a>
+            <a href="https://vk.com/uyutart" target="_blank" rel="noopener noreferrer" aria-label="ВКонтакте"
+              className="w-9 h-9 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              <VkIcon />
+            </a>
+            <a href="https://pinterest.com/uyutart" target="_blank" rel="noopener noreferrer" aria-label="Pinterest"
+              className="w-9 h-9 rounded-[10px] bg-white/10 flex items-center justify-center text-cream/80 hover:bg-accent hover:text-ink transition-colors duration-200">
+              <PinterestIcon />
+            </a>
           </div>
-          <p className="text-[13px] text-cream/60 leading-relaxed mt-4 max-w-[260px]">
-            AI-маркетплейс авторского декора и товаров для дома от проверенных мастеров со всей России.
-          </p>
-          <Link to="/contacts" className="mt-5 inline-flex items-center gap-2 h-11 px-5 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">
-            <Mail size={17} /> Связаться с нами
-          </Link>
-          <p className="text-[11px] text-cream/40 mt-3">Ответим в течение рабочего дня</p>
-        </div>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-widest text-cream/40 mb-4">Покупателям</p>
-          {[["/catalog", "Каталог"], ["/market", "Биржа заказов"], ["/ai-assistant", "AI-дизайнер"], ["/plans", "Тарифы"], ["/profile", "Личный кабинет"]].map(([to, label]) => (
-            <Link key={to} to={to} className="block text-[13px] text-cream/70 hover:text-cream py-1.5 transition-colors">{label}</Link>
-          ))}
-        </div>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-widest text-cream/40 mb-4">Продавцам</p>
-          {[["/seller/register", "Стать продавцом"], ["/seller/dashboard", "Кабинет продавца"], ["/legal/seller_agreement", "Агентский договор"]].map(([to, label]) => (
-            <Link key={to} to={to} className="block text-[13px] text-cream/70 hover:text-cream py-1.5 transition-colors">{label}</Link>
-          ))}
-        </div>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-widest text-cream/40 mb-4">Право и помощь</p>
-          {[["/legal/buyer_tos", "Оферта"], ["/legal/return_policy", "Возврат товара"], ["/legal/escrow_rules", "Безопасная сделка"], ["/legal/privacy", "Конфиденциальность"], ["/legal/ip_policy", "Политика ИС"], ["/about", "О нас"], ["/contacts", "Контакты"]].map(([to, label]) => (
-            <Link key={to} to={to} className="block text-[13px] text-cream/70 hover:text-cream py-1.5 transition-colors">{label}</Link>
-          ))}
-        </div>
-      </div>
-      <div className="border-t border-white/10">
-        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-cream/50">
-          <span>© {new Date().getFullYear()} {OPERATOR.short} · ИНН {OPERATOR.inn} · {OPERATOR.status}</span>
-          <span>{OPERATOR.domain} · {OPERATOR.legalEmail}</span>
         </div>
       </div>
     </footer>

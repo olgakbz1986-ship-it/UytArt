@@ -33,7 +33,7 @@
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-quote: "Cormorant Garamond", Georgia, serif;
 
-  /* ---- тени ---- */
+  /* ---- тени (блоки разделяются тенью, не линиями) ---- */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 24px -18px rgba(0, 0, 0, 0.06);
   --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.1), 0 18px 38px -16px rgba(0, 0, 0, 0.1);
 }
@@ -52,24 +52,27 @@ body {
   -webkit-font-smoothing: antialiased;
   position: relative;
 }
-footer { padding-bottom: env(safe-area-inset-bottom); }
+footer {
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
-/* тонкая фактура бумаги (чистый CSS, без внешних ресурсов) */
+/* тонкая фактура бумаги — чистый CSS, без data-URI */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 90;
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.025;
   background-image:
-    radial-gradient(rgba(30, 58, 47, 0.035) 1px, transparent 1px),
-    radial-gradient(rgba(217, 142, 50, 0.03) 1px, transparent 1px);
-  background-size: 22px 22px, 34px 34px;
-  background-position: 0 0, 11px 17px;
+    repeating-linear-gradient(45deg, rgba(30, 58, 47, 0.4) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(217, 142, 50, 0.3) 0 1px, transparent 1px 9px);
 }
 
-::selection { background: var(--color-accent-soft); color: var(--color-dark); }
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-dark);
+}
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--color-line-soft); }
@@ -79,16 +82,29 @@ body::before {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 
+/* ---- фокус: изумрудное кольцо, без чёрных outline ---- */
 *:focus { outline: none; }
-*:focus-visible { outline: 2px solid var(--color-ai); outline-offset: 2px; border-radius: 4px; }
+*:focus-visible {
+  outline: 2px solid var(--color-ai);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 @layer base {
   .bg-surface { box-shadow: var(--shadow-card); }
 }
 
 /* премиальный сериф для hero-слогана */
-.font-lux { font-family: var(--font-quote); font-weight: 600; letter-spacing: -0.015em; }
-.font-quote { font-family: var(--font-quote); font-style: italic; font-weight: 500; }
+.font-lux {
+  font-family: var(--font-quote);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.font-quote {
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-weight: 500;
+}
 
 /* ---------- логотип: прорисовка контура ---------- */
 .house-mark { transition: transform 0.25s ease-out; }
@@ -102,7 +118,7 @@ body::before {
 .house-mark path:nth-child(3) { animation-delay: 0.45s; }
 @keyframes drawMark { to { stroke-dashoffset: 0; } }
 
-/* ---------- анимации ---------- */
+/* ---------- анимации 200–300ms ease-out ---------- */
 @keyframes kb {
   0% { transform: scale(1) translate(0, 0); }
   100% { transform: scale(1.12) translate(-1.4%, -1.6%); }
@@ -140,7 +156,11 @@ body::before {
 }
 .skeleton { background: #ebe6d9; border-radius: 10px; animation: skPulse 1.2s ease-in-out infinite; }
 
-.reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.3s ease-out, transform 0.3s ease-out; }
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
 .reveal.in { opacity: 1; transform: translateY(0); }
 
 @keyframes typingDot {
@@ -151,7 +171,7 @@ body::before {
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
-/* ---------- гамбургер ---------- */
+/* ---------- гамбургер: линии 2px×20px, крестик с поворотом ---------- */
 .burger {
   width: 44px; height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -214,6 +234,59 @@ body::before {
 input[type="checkbox"], input[type="radio"] {
   accent-color: var(--color-dark);
   width: 16px; height: 16px; cursor: pointer;
+}
+
+/* ============================================================
+   ТЁМНАЯ ТЕМА — применяется атрибутом data-theme="dark" на <html>
+   (переключается в настройках кабинетов, хранится в localStorage)
+   ============================================================ */
+[data-theme="dark"] {
+  --color-cream: #141a16;
+  --color-surface: #1c241f;
+  --color-ink: #ece8dd;
+  --color-ink-soft: #b3ac9d;
+  --color-ink-mute: #827c6f;
+  --color-line: #35413a;
+  --color-line-soft: #262f29;
+
+  --color-dark: #1e3a2f;
+  --color-dark-deep: #2c5140;
+
+  --color-accent: #d98e32;
+  --color-accent-deep: #e0a14a;
+  --color-accent-soft: #3a2f1c;
+
+  --color-ai: #4c8a6d;
+  --color-ai-soft: #20302a;
+
+  --color-success: #8fc255;
+  --color-success-soft: #26331e;
+  --color-error: #e5655f;
+  --color-error-soft: #3b2321;
+
+  --color-premium: #d4a574;
+  --color-premium-soft: #37301f;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 24px -18px rgba(0, 0, 0, 0.55);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 38px -16px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .bg-surface { border: 1px solid #262f29; }
+[data-theme="dark"] .skeleton { background: #262f29; }
+[data-theme="dark"] ::selection { background: #3a2f1c; color: #ece8dd; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #1c241f; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #35413a; border-color: #1c241f; }
+
+/* кремовый текст (в т.ч. с прозрачностью) остаётся светлым на тёмных поверхностях */
+[data-theme="dark"] [class*="text-cream"] { color: #ece8dd !important; }
+/* на янтарных кнопках — тёмный текст для контраста в обеих темах */
+[data-theme="dark"] .bg-accent[class*="text-"] { color: #241809 !important; }
+
+/* линии гамбургера и крестика — светлые на тёмном */
+[data-theme="dark"] .burger-line,
+[data-theme="dark"] .burger-cross::before,
+[data-theme="dark"] .burger-cross::after {
+  background: var(--color-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import { cityToDistrict } from "./geo";
 
 /* ============================================================
-   Раздельные регистрации продавцов: Самозанятый / ИП / ООО
+   Раздельные регистрации продавцов: самозанятый / ИП / ООО
    ============================================================ */
 
 export type SellerLegalType = "self_employed" | "ip" | "ooo";
@@ -107,6 +107,7 @@ interface SellerRegState {
   setLegalType: (t: SellerLegalType) => void;
   setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements">>) => void;
   toggleCategory: (slug: string) => void;
+  backToStep1: () => void;
   toDocs: () => void;
   addDoc: (key: string, fileName: string, size: number) => void;
   removeDoc: (key: string) => void;
@@ -155,6 +156,7 @@ export const useSellerReg = create<SellerRegState>()(
         set((s) => ({
           categories: s.categories.includes(slug) ? s.categories.filter((c) => c !== slug) : [...s.categories, slug],
         })),
+      backToStep1: () => set({ status: "inactive", docs: {} }),
       toDocs: () => set({ status: "docs", docs: {} }),
       addDoc: (key, fileName, size) =>
         set((s) => ({ docs: { ...s.docs, [key]: { fileName, size, ok: false } } })),
@@ -207,7 +209,7 @@ export interface SellerTx {
   commissionAmount: number;
   sellerPayout: number;
 }
-/* медиа-карточка товара: фото или одно видео (видео — по желанию) */
+
 export interface ProductMedia { type: "image" | "video"; url: string; name: string; }
 export interface SellerProductItem { id: string; name: string; category: string; price: number; createdAt: string; archived?: boolean; aiGenerated?: boolean; media?: ProductMedia[]; }
 

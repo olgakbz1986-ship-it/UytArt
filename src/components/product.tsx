@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Heart, ShoppingBag } from "lucide-react";
+import { Heart, ShoppingBag, Ban } from "lucide-react";
 import { Product, catBySlug, fmt, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { Badge, ProductImg, Rating } from "./ui";
@@ -24,7 +24,7 @@ export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
           {p.oldPrice && <Badge tone="honey">−{Math.round((1 - p.price / p.oldPrice) * 100)}%</Badge>}
           {p.isHit && <Badge tone="premium">Хит</Badge>}
           {p.isNew && <Badge tone="dark">Новинка</Badge>}
-          {p.is_non_returnable && <Badge tone="error">На заказ</Badge>}
+          {p.is_non_returnable && <Badge tone="error"><Ban size={10} /> На заказ</Badge>}
         </div>
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFav(p.id); }}

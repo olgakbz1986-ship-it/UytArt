@@ -14,8 +14,8 @@ export const DISTRICTS = [
 export type DistrictId = (typeof DISTRICTS)[number]["id"];
 
 /* Крупногабарит и «локальные» категории: доставка ограничена округом производства */
-const LOCAL_ONLY = new Set(["mebel-i-hranenie", "zerkala-i-ramy"]);
-const LARGE = ["osveschenie"];
+const LOCAL_ONLY = new Set(["furniture", "mirrors"]);
+const LARGE = ["lighting"];
 
 /* сможет ли продавец доставить товар в округ покупателя */
 export function canDeliver(p: Product, district: string): boolean {
@@ -32,7 +32,7 @@ export const vendorDistrictName = (p: Product): string => {
   return DISTRICTS.find((x) => x.id === d)?.name || d;
 };
 
-/* определение округа по городу */
+/* определение округа по городу (для регистрации и региональных настроек) */
 export function cityToDistrict(city: string): string {
   const c = city.trim().toLowerCase();
   if (/(санкт|петербург|петрозаводск|архангельск|вологд|калининград|мурманск|новгород|псков)/.test(c)) return "СЗФО";

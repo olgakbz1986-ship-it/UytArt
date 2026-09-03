@@ -32,13 +32,13 @@ export const currentMonth = () => {
 
 /* ---------- лимиты продавцов по юрлицу и тарифу ---------- */
 export interface SellerLimits {
-  maxProducts: number;     /* Infinity = безлимит */
-  aiCardGens: number;      /* AI-генераций карточек в месяц, Infinity = безлимит */
+  maxProducts: number;
+  aiCardGens: number;
   analytics: "basic" | "extended" | "advanced" | "full";
-  marketPriority: number;  /* 0 = общая очередь, 1-3 приоритет */
+  marketPriority: number;
   massEdit: boolean;
   bundles: boolean;
-  team: number;            /* сотрудников, 0 = нет, Infinity = безлимит */
+  team: number;
   importFile: boolean;
   brandStore: boolean;
   abTest: boolean;
@@ -79,7 +79,7 @@ export interface PriceWatch { id: string; productId: string; oldPrice: number; t
 
 interface SubState {
   buyerPlan: BuyerPlanId;
-  aiGensUsed: Record<string, number>; /* месяц -> использовано */
+  aiGensUsed: Record<string, number>;
   concepts: Concept[];
   priceWatches: PriceWatch[];
   setBuyerPlan: (p: BuyerPlanId) => void;

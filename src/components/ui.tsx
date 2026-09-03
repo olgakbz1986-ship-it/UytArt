@@ -1,41 +1,46 @@
-import { ReactNode } from "react";
-import { Star } from "lucide-react";
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { X, CheckCircle2, Lock } from "lucide-react";
 
-/* ---------- кнопка ---------- */
+/* ---------- кнопки ---------- */
 export function Btn({ children, onClick, variant = "primary", size = "md", disabled, className = "", title }: {
-  children: ReactNode; onClick?: () => void; variant?: "primary" | "outline" | "ghost" | "dark" | "ai";
+  children: ReactNode; onClick?: () => void; variant?: "primary" | "outline" | "dark" | "ghost" | "danger";
   size?: "sm" | "md" | "lg"; disabled?: boolean; className?: string; title?: string;
 }) {
-  const base = "inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] transition-all duration-200 cursor-pointer whitespace-nowrap select-none active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed";
-  const sizes = { sm: "text-[13px] px-4 h-[40px]", md: "text-sm px-5 h-[46px]", lg: "text-[15px] px-7 h-[52px]" };
+  const sizes = { sm: "h-10 px-4 text-[13px]", md: "h-[46px] px-5 text-sm", lg: "h-[52px] px-7 text-[15px]" };
   const variants = {
-    primary: "bg-accent text-ink hover:bg-accent-deep hover:text-cream shadow-[0_10px_22px_-10px_rgba(217,142,50,0.65)]",
-    dark: "bg-dark text-cream hover:bg-dark-deep",
+    primary: "bg-accent text-ink hover:bg-accent-deep hover:text-cream",
     outline: "border border-line bg-surface text-ink hover:bg-cream",
-    ghost: "text-ink-soft hover:bg-line-soft",
-    ai: "bg-ai text-cream hover:bg-ai-soft hover:text-ai border border-ai",
+    dark: "bg-dark text-cream hover:bg-dark-deep",
+    ghost: "text-ink-soft hover:text-ink hover:bg-line-soft",
+    danger: "bg-error text-white hover:bg-[#c62f2b]",
   };
   return (
-    <button title={title} onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] transition-all duration-200 ease-out cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] ${sizes[size]} ${variants[variant]} ${className}`}
+    >
       {children}
     </button>
   );
 }
 
-/* ---------- бейдж ---------- */
+/* ---------- бейджи ---------- */
 export type BadgeTone = "honey" | "dark" | "premium" | "success" | "error" | "ai" | "neutral";
 export function Badge({ children, tone = "neutral", className = "" }: { children: ReactNode; tone?: BadgeTone; className?: string }) {
   const tones: Record<BadgeTone, string> = {
     honey: "bg-accent-soft text-accent-deep",
     dark: "bg-dark text-cream",
-    premium: "bg-premium-soft text-[#8a6236]",
+    premium: "bg-premium-soft text-[#a07c50]",
     success: "bg-success-soft text-[#4d7327]",
     error: "bg-error-soft text-error",
     ai: "bg-ai-soft text-ai",
     neutral: "bg-line-soft text-ink-soft",
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${tones[tone]} ${className}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold leading-none ${tones[tone]} ${className}`}>
       {children}
     </span>
   );
@@ -46,8 +51,10 @@ export function Rating({ value, size = 13, showValue = true }: { value: number; 
   return (
     <span className="inline-flex items-center gap-1">
       <span className="inline-flex">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Star key={i} size={size} className={i < Math.round(value) ? "text-accent fill-accent" : "text-line fill-line"} />
+        {[1, 2, 3, 4, 5].map((i) => (
+          <svg key={i} width={size} height={size} viewBox="0 0 24 24" fill={i <= Math.round(value) ? "#d98e32" : "#e5e0d2"}>
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+          </svg>
         ))}
       </span>
       {showValue && <span className="text-[12px] font-bold text-ink">{value.toFixed(1)}</span>}
@@ -55,34 +62,44 @@ export function Rating({ value, size = 13, showValue = true }: { value: number; 
   );
 }
 
-/* ---------- поле ---------- */
+/* ---------- поле формы ---------- */
 export function Field({ label, children, required, error, hint, className = "" }: {
   label: string; children: ReactNode; required?: boolean; error?: string; hint?: string; className?: string;
 }) {
   return (
-    <div className={className}>
-      <p className="text-[12.5px] font-semibold text-ink mb-1.5">
+    <label className={`block ${className}`}>
+      <span className="block text-[13px] font-semibold text-ink mb-1.5">
         {label} {required && <span className="text-error">*</span>}
-        {hint && <span className="ml-1.5 font-medium text-ink-mute">{hint}</span>}
-      </p>
+      </span>
       {children}
-      {error && <p className="text-[12px] text-error mt-1.5">{error}</p>}
-    </div>
+      {hint && !error && <span className="block text-[11.5px] text-ink-mute mt-1">{hint}</span>}
+      {error && <span className="block text-[12px] font-semibold text-error mt-1">{error}</span>}
+    </label>
   );
 }
 
-/* ---------- модальное окно ---------- */
+/* ---------- модалка ---------- */
 export function Modal({ open, onClose, title, children, wide }: {
   open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", h); document.body.style.overflow = ""; };
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-      <div className="absolute inset-0 backdrop-in bg-ink/45" onClick={onClose} />
-      <div className={`relative bg-surface rounded-[16px] shadow-lift w-full ${wide ? "max-w-3xl" : "max-w-md"} max-h-[88vh] overflow-y-auto pop-in`}>
-        <div className="sticky top-0 bg-surface/95 backdrop-blur flex items-center justify-between px-6 py-4 border-b border-line-soft z-10">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="absolute inset-0 backdrop-in" style={{ background: "rgba(44,44,44,0.4)" }} onClick={onClose} />
+      <div className={`relative bg-cream rounded-2xl shadow-lift w-full max-h-[88vh] overflow-y-auto pop-in ${wide ? "max-w-3xl" : "max-w-md"}`}>
+        <div className="sticky top-0 bg-cream/95 backdrop-blur flex items-center justify-between px-6 py-3.5 border-b border-line-soft z-10">
           <h3 className="font-display font-bold text-[17px] text-ink">{title}</h3>
-          <button onClick={onClose} aria-label="Закрыть" className="w-9 h-9 rounded-[10px] flex items-center justify-center text-ink-mute hover:bg-line-soft hover:text-ink transition-colors cursor-pointer">✕</button>
+          <button onClick={onClose} aria-label="Закрыть" className="w-11 h-11 -mr-2 rounded-[10px] flex items-center justify-center hover:bg-line-soft text-ink-soft cursor-pointer transition-colors">
+            <X size={18} />
+          </button>
         </div>
         <div className="p-6">{children}</div>
       </div>
@@ -90,74 +107,71 @@ export function Modal({ open, onClose, title, children, wide }: {
   );
 }
 
-/* ---------- изображение товара с фолбэком ---------- */
-export function ProductImg({ p, variant = 0, className = "" }: { p: { image: string; art: [string, string]; emoji: string }; variant?: number; className?: string }) {
-  const positions = ["50% 38%", "50% 62%", "32% 42%", "68% 52%", "50% 80%"];
-  const hues = [0, 9, -10, 16, -18];
-  const v = variant % positions.length;
+/* ---------- изображение товара: фото с градиентным фолбэком ---------- */
+const POSITIONS = ["50% 38%", "50% 62%", "32% 42%", "68% 52%", "50% 80%"];
+const HUES = [0, 9, -10, 16, -18];
+export function ProductImg({ p, variant = 0, className = "" }: { p: { image?: string; art: [string, string]; emoji: string }; variant?: number; className?: string }) {
+  const v = variant % POSITIONS.length;
+  const [err, setErr] = useState(false);
   return (
-    <img
-      src={p.image}
-      alt=""
-      loading="lazy"
-      className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06] ${className}`}
-      style={{ objectPosition: positions[v], filter: hues[v] ? `hue-rotate(${hues[v]}deg) saturate(1.04)` : undefined }}
-      onError={(e) => {
-        const el = e.currentTarget as HTMLImageElement;
-        if (el.dataset.fb) return;
-        el.dataset.fb = "1";
-        el.style.display = "none";
-        if (el.parentElement) {
-          el.parentElement.style.background = `linear-gradient(135deg, ${p.art[0]}, ${p.art[1]})`;
-          el.parentElement.style.display = "flex";
-          el.parentElement.style.alignItems = "center";
-          el.parentElement.style.justifyContent = "center";
-          el.parentElement.innerHTML += `<span style="font-size:42px">${p.emoji}</span>`;
-        }
-      }}
-    />
+    <div className="relative w-full h-full overflow-hidden" style={{ background: `linear-gradient(135deg, ${p.art[0]}, ${p.art[1]})` }}>
+      {!err && p.image && (
+        <img
+          src={p.image}
+          alt={p.emoji}
+          loading="lazy"
+          onError={() => setErr(true)}
+          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06] ${className}`}
+          style={{ objectPosition: POSITIONS[v], filter: HUES[v] ? `hue-rotate(${HUES[v]}deg) saturate(1.04)` : undefined }}
+        />
+      )}
+      {(!p.image || err) && (
+        <div className="absolute inset-0 flex items-center justify-center text-[42px] opacity-90">
+          <span className="drop-shadow-lg">{p.emoji}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
-/* ---------- изображение группы (для плиток) ---------- */
+/* ---------- изображение группы ---------- */
 export function GroupImg({ src, emoji, alt, pos = 0, className = "" }: { src?: string; emoji: string; alt: string; pos?: number; className?: string }) {
-  const positions = ["50% 40%", "30% 50%", "70% 35%", "50% 65%", "40% 30%", "60% 60%", "50% 50%", "35% 45%"];
-  const hues = [0, 8, -8, 14, -14, 20, -20, 10];
-  const v = pos % positions.length;
-  if (!src) {
-    return <div className={`w-full h-full flex items-center justify-center text-[40px] bg-line-soft ${className}`}>{emoji}</div>;
-  }
+  const [err, setErr] = useState(false);
+  const v = pos % POSITIONS.length;
   return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06] ${className}`}
-      style={{ objectPosition: positions[v], filter: hues[v] ? `hue-rotate(${hues[v]}deg) saturate(1.05)` : undefined }}
-      onError={(e) => {
-        const el = e.currentTarget as HTMLImageElement;
-        if (el.dataset.fb) return;
-        el.dataset.fb = "1";
-        el.style.display = "none";
-        if (el.parentElement) {
-          el.parentElement.style.display = "flex";
-          el.parentElement.style.alignItems = "center";
-          el.parentElement.style.justifyContent = "center";
-          el.parentElement.classList.add("bg-line-soft");
-          el.parentElement.innerHTML += `<span style="font-size:40px">${emoji}</span>`;
-        }
-      }}
-    />
+    <div className="relative w-full h-full overflow-hidden bg-dark">
+      {!err && src && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onError={() => setErr(true)}
+          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06] ${className}`}
+          style={{ objectPosition: POSITIONS[v], filter: HUES[v] ? `hue-rotate(${HUES[v] * 2}deg) saturate(1.03)` : undefined }}
+        />
+      )}
+      {(!src || err) && (
+        <div className="absolute inset-0 flex items-center justify-center text-[46px]" style={{ background: "linear-gradient(135deg, #1e3a2f, #2d5f4c)" }}>
+          <span className="drop-shadow-lg">{emoji}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
-/* ---------- scroll-reveal ---------- */
+/* ---------- появление при скролле ---------- */
 export function Reveal({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setInView(true), { threshold: 0.12 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   return (
-    <div
-      className={`reveal in ${className}`}
-      style={{ animation: `fadeUp 0.4s ease-out ${delay}ms both` }}
-    >
+    <div ref={ref} className={`reveal ${inView ? "in" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>
       {children}
     </div>
   );
@@ -173,9 +187,49 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
       aria-label={label}
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
-      className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${checked ? "bg-ai" : "bg-line"}`}
+      className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"} ${checked ? "bg-ai" : "bg-line"}`}
     >
-      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-card transition-all duration-200 ${checked ? "left-[22px]" : "left-0.5"}`} />
+      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200 ${checked ? "left-[22px]" : "left-0.5"}`} />
     </button>
+  );
+}
+
+/* ---------- прогресс-бар ---------- */
+export function ProgressBar({ value, max, tone = "accent" }: { value: number; max: number; tone?: "accent" | "ai" | "success" }) {
+  const pct = Number.isFinite(max) && max > 0 ? Math.min(100, (value / max) * 100) : 100;
+  const colors = { accent: "bg-accent", ai: "bg-ai", success: "bg-success" };
+  return (
+    <div className="h-2 rounded-full bg-line-soft overflow-hidden">
+      <div className={`h-full rounded-full transition-all duration-500 ${colors[tone]}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/* ---------- секция настроек с гейтингом по уровню тарифа ---------- */
+export function SettingsSection({ title, icon, minLevel, level, nextLabel, accent, children }: {
+  title: string; icon: ReactNode; minLevel: number; level: number; nextLabel?: string; accent: string; children: ReactNode;
+}) {
+  const locked = level < minLevel;
+  if (locked) {
+    return (
+      <div className="bg-surface rounded-2xl shadow-card p-5 opacity-70 border border-dashed border-line">
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="w-8 h-8 rounded-[10px] bg-line-soft text-ink-mute flex items-center justify-center shrink-0">{icon}</span>
+          <p className="font-display font-bold text-[15px] text-ink-soft flex-1">{title}</p>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ink-mute"><Lock size={12} /> {nextLabel || "выше тариф"}</span>
+        </div>
+        <p className="text-[12.5px] text-ink-mute">Доступно на более высоких тарифах. <Link to="/plans" className="font-bold underline" style={{ color: accent }}>Открыть тарифы</Link></p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-surface rounded-2xl shadow-card p-5">
+      <div className="flex items-center gap-2.5 mb-4">
+        <span className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: `${accent}22`, color: accent }}>{icon}</span>
+        <p className="font-display font-bold text-[15px] text-ink flex-1">{title}</p>
+        <CheckCircle2 size={15} style={{ color: accent }} />
+      </div>
+      {children}
+    </div>
   );
 }

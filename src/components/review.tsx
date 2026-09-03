@@ -1,94 +1,70 @@
 import { useState } from "react";
-import { Star, Camera, BadgeCheck, MessageSquare, Upload, ShieldAlert, CheckCircle2, Flag } from "lucide-react";
-import { Modal, Field, Rating, Btn } from "./ui";
-import { fmtDate, type Product, vendorById } from "../data/seed";
+import { Camera, BadgeCheck, Star, MessageSquare, Upload, ShieldAlert, Flag } from "lucide-react";
+import { Product, fmtDate, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { useReviewStore, approvedReviews, type UserReview } from "../lib/review";
 import { useChatStore, TICKET_REASONS } from "../lib/chat";
 import { useComplaintStore, COMPLAINT_CATEGORIES } from "../lib/complaint";
 import { useSellerReg } from "../lib/seller";
+import { Modal, Btn, Field, Rating } from "./ui";
 
 /* ============================================================
-   Написание отзыва (только для полученного заказа)
+   Модалка отзыва: только для полученного заказа, +300 бонусов
+   за фото. Уходит на премодерацию.
    ============================================================ */
 export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
   open: boolean; onClose: () => void; product: Product; orderId: string; orderNumber: string;
 }) {
   const user = useAppStore((s) => s.user);
+  const addBonus = useAppStore((s) => s.addBonus);
   const submitReview = useReviewStore((s) => s.submitReview);
-  const hasReviewed = useReviewStore((s) => s.hasReviewed);
-
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const [done, setDone] = useState(false);
-
-  const already = hasReviewed(product.id, orderId);
 
   const submit = () => {
-    if (text.trim().length < 10) { setErr("Опишите впечатление подробнее — минимум 10 символов."); return; }
-    if (!photo) { setErr("Прикрепите фото товара — это подтверждает реальную покупку и даёт 300 бонусов."); return; }
-    setErr("");
+    if (text.trim().length < 10) { setErr("Расскажите подробнее — минимум 10 символов."); return; }
     submitReview({
       productId: product.id,
-      orderId,
-      orderNumber,
-      userId: user?.id || "guest",
+      orderId, orderNumber,
+      userId: user?.id || "anon",
       userName: user?.name || "Покупатель",
       rating,
       text: text.trim(),
-      hasPhoto: true,
-      photoName: photo,
+      hasPhoto: !!photo,
+      photoName: photo || undefined,
       receivedDate: new Date().toISOString(),
     });
-    setDone(true);
-    setTimeout(() => {
-      setDone(false); setRating(5); setText(""); setPhoto(null);
-      onClose();
-    }, 2200);
+    addBonus(photo ? 300 : 100, photo ? "Отзыв с фото в интерьере" : "Отзыв о заказе");
+    setRating(5); setText(""); setPhoto(null); setErr("");
+    onClose();
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Отзыв о товаре">
-      {done ? (
-        <div className="py-8 text-center fade-up">
-          <span className="inline-flex w-16 h-16 rounded-full bg-success-soft text-[#4d7327] items-center justify-center mb-4"><CheckCircle2 size={32} /></span>
-          <p className="font-display font-bold text-[18px] text-ink mb-1">Отзыв отправлен на премодерацию</p>
-          <p className="text-[13px] text-ink-soft">После одобрения он появится в карточке товара,<br />а 300 бонусов зачислим на ваш счёт.</p>
+    <Modal open={open} onClose={onClose} title={`Отзыв · ${product.name}`}>
+      <p className="text-[12.5px] text-ink-soft mb-4">Заказ {orderNumber}. Отзыв появится после премодерации. {photo ? "+300 бонусов за фото" : "+100 бонусов (и +300 с фото в интерьере)"}.</p>
+      <div className="mb-4">
+        <p className="text-[13px] font-semibold text-ink mb-1.5">Оценка</p>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <button key={i} onClick={() => setRating(i)} aria-label={`Оценка ${i}`} className="cursor-pointer">
+              <Star size={26} fill={i <= rating ? "#d98e32" : "none"} color={i <= rating ? "#d98e32" : "#d9d4c7"} />
+            </button>
+          ))}
         </div>
-      ) : already ? (
-        <div className="py-8 text-center">
-          <p className="font-display font-bold text-[18px] text-ink mb-1">Вы уже оставили отзыв</p>
-          <p className="text-[13px] text-ink-soft">Спасибо! Один отзыв на товар с одного заказа.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-[12.5px] text-ink-soft leading-relaxed">
-            Отзыв могут оставить только покупатели, получившие товар по заказу <strong className="text-ink">{orderNumber}</strong>. Рядом с ним появится метка «Проверенная покупка».
-          </p>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} onClick={() => setRating(n)} aria-label={`Оценка ${n}`} className="cursor-pointer">
-                <Star size={26} className={n <= rating ? "text-accent fill-accent" : "text-line fill-line"} />
-              </button>
-            ))}
-          </div>
-          <Field label="Впечатление" required hint="минимум 10 символов">
-            <textarea className="field" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Что понравилось, как изделие вписалось в интерьер…" />
-          </Field>
-          <div>
-            <p className="text-[13px] font-semibold text-ink mb-1.5">Фото в интерьере <span className="text-error">*</span> <span className="text-[11px] font-medium text-ink-mute">+300 бонусов</span></p>
-            <label className={`flex items-center gap-3 border border-dashed rounded-[10px] px-4 cursor-pointer transition-colors min-h-[52px] ${photo ? "border-success/50 bg-success-soft/40" : "border-line hover:border-dark"}`}>
-              <Camera size={18} className={photo ? "text-success" : "text-ink-mute"} />
-              <span className="text-[13px] font-semibold text-ink-soft truncate flex-1">{photo || "Прикрепить фото (обязательно)"}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)} />
-            </label>
-          </div>
-          {err && <p className="flex items-start gap-2 text-[12px] text-error bg-error-soft rounded-[10px] px-3 py-2"><ShieldAlert size={14} className="shrink-0 mt-0.5" /> {err}</p>}
-          <Btn className="w-full" onClick={submit}>Отправить отзыв</Btn>
-        </div>
-      )}
+      </div>
+      <Field label="Ваш отзыв" required error={err}>
+        <textarea className="field" rows={4} value={text} onChange={(e) => { setText(e.target.value); setErr(""); }} placeholder="Что понравилось, как качество…" />
+      </Field>
+      <div className="mt-4">
+        <label className="flex items-center gap-3 border-2 border-dashed border-line rounded-[10px] px-4 py-3 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
+          <Upload size={16} className="text-ink-mute" />
+          <span className="text-[13px] font-semibold text-ink-soft">{photo || "Прикрепить фото в интерьере (+300 бонусов)"}</span>
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto(f.name); }} />
+        </label>
+      </div>
+      <Btn className="w-full mt-5" onClick={submit}>Отправить на премодерацию</Btn>
     </Modal>
   );
 }
@@ -166,64 +142,44 @@ export function TicketModal({ open, onClose, orderId, orderNumber, kind }: {
   open: boolean; onClose: () => void; orderId: string; orderNumber: string; kind: "problem" | "return";
 }) {
   const addTicket = useChatStore((s) => s.addTicket);
-  const [reason, setReason] = useState("");
-  const [desc, setDesc] = useState("");
+  const [reason, setReason] = useState(TICKET_REASONS[0]);
+  const [description, setDescription] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const [done, setDone] = useState(false);
 
   const submit = () => {
-    if (!reason) { setErr("Выберите причину из списка."); return; }
-    if (!photo) { setErr("Прикрепите фото — без него тикет не принимается в арбитраж."); return; }
-    setErr("");
-    addTicket({ orderId, orderNumber, kind, reason, description: desc.trim(), photoName: photo });
-    setDone(true);
-    setTimeout(() => { setDone(false); setReason(""); setDesc(""); setPhoto(null); onClose(); }, 2000);
+    if (!photo) { setErr("Прикрепите фото — это обязательное условие для арбитража."); return; }
+    if (description.trim().length < 10) { setErr("Опишите проблему подробнее — минимум 10 символов."); return; }
+    addTicket({ orderId, orderNumber, kind, reason, description: description.trim(), photoName: photo });
+    setReason(TICKET_REASONS[0]); setDescription(""); setPhoto(null); setErr("");
+    onClose();
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={kind === "return" ? "Оформить возврат" : "Сообщить о проблеме"}>
-      {done ? (
-        <div className="py-8 text-center fade-up">
-          <span className="inline-flex w-16 h-16 rounded-full bg-ai-soft text-ai items-center justify-center mb-4"><CheckCircle2 size={32} /></span>
-          <p className="font-display font-bold text-[18px] text-ink mb-1">Тикет создан и передан в арбитраж</p>
-          <p className="text-[13px] text-ink-soft">Решение по заказу {orderNumber} — до 5 рабочих дней.<br />Продавец получит структурированные данные, а не переписку.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-[12.5px] text-ink-soft leading-relaxed">
-            Споры решаются <strong className="text-ink">вне чата</strong> — через структурированный тикет. Это защищает продавца от давления
-            и даёт арбитражу чёткие данные.
-          </p>
-          {kind === "return" && (
-            <p className="flex items-start gap-2 text-[12px] text-ink-soft bg-accent-soft/60 border border-accent/30 rounded-[10px] px-3.5 py-2.5">
-              <ShieldAlert size={14} className="text-accent-deep shrink-0 mt-0.5" />
-              Возврат — обязанность продавца. УютАрт — агрегатор (ст. 12 ЗоЗПП) и организует процедуру, но не возмещает стоимость товара.
-            </p>
-          )}
-          <Field label="Причина" required>
-            <select className="field" value={reason} onChange={(e) => setReason(e.target.value)}>
-              <option value="">— выберите причину —</option>
-              {TICKET_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Описание" hint="Что именно не так, при каких обстоятельствах обнаружено">
-            <textarea className="field" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Например: на кружке скол глазури у ручки, заметил при распаковке…" />
-          </Field>
-          <div>
-            <p className="text-[13px] font-semibold text-ink mb-1.5">Фото проблемы <span className="text-error">*</span></p>
-            <label className={`flex items-center gap-3 border border-dashed rounded-[10px] px-4 cursor-pointer transition-colors min-h-[52px] ${photo ? "border-success/50 bg-success-soft/40" : "border-line hover:border-dark"}`}>
-              <Upload size={18} className={photo ? "text-success" : "text-ink-mute"} />
-              <span className="text-[13px] font-semibold text-ink-soft truncate flex-1">{photo || "Прикрепить фото (обязательно)"}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)} />
-            </label>
-          </div>
-          {err && <p className="flex items-start gap-2 text-[12px] text-error bg-error-soft rounded-[10px] px-3 py-2"><ShieldAlert size={14} className="shrink-0 mt-0.5" /> {err}</p>}
-          <button onClick={submit} className="w-full h-12 rounded-[10px] bg-dark text-cream font-bold hover:bg-dark-deep transition-colors cursor-pointer">
-            Отправить в арбитраж
-          </button>
-        </div>
-      )}
+    <Modal open={open} onClose={onClose} title={kind === "return" ? `Возврат · заказ ${orderNumber}` : `Проблема · заказ ${orderNumber}`}>
+      <p className="text-[12.5px] text-ink-soft mb-4">
+        Тикет уходит в арбитраж платформы (рассмотрение 5 дней). Продавец получит его без возможности давления в переписке.
+        {kind === "return" && " Возврат — в течение 7 дней, за исключением товаров на заказ. Ответственность за товар несёт продавец."}
+      </p>
+      <Field label="Причина" required>
+        <select className="field" value={reason} onChange={(e) => setReason(e.target.value)}>
+          {TICKET_REASONS.map((r) => <option key={r}>{r}</option>)}
+        </select>
+      </Field>
+      <div className="mt-4">
+        <Field label="Описание" required>
+          <textarea className="field" rows={4} value={description} onChange={(e) => { setDescription(e.target.value); setErr(""); }} placeholder="Что случилось…" />
+        </Field>
+      </div>
+      <div className="mt-4">
+        <label className="flex items-center gap-3 border-2 border-dashed border-line rounded-[10px] px-4 py-3 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
+          <Upload size={16} className="text-ink-mute" />
+          <span className="text-[13px] font-semibold text-ink-soft">{photo || "Прикрепить фото (обязательно)"}</span>
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setPhoto(f.name); setErr(""); } }} />
+        </label>
+      </div>
+      {err && <p className="text-[12px] font-semibold text-error mt-3">{err}</p>}
+      <Btn className="w-full mt-5" onClick={submit}><ShieldAlert size={16} /> Отправить в арбитраж</Btn>
     </Modal>
   );
 }
@@ -237,65 +193,50 @@ export function ComplaintModal({ open, onClose, vendorId }: {
   const user = useAppStore((s) => s.user);
   const addComplaint = useComplaintStore((s) => s.addComplaint);
   const vendor = vendorById(vendorId);
-  const [category, setCategory] = useState("");
-  const [desc, setDesc] = useState("");
+  const [category, setCategory] = useState(COMPLAINT_CATEGORIES[0]);
+  const [description, setDescription] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const [done, setDone] = useState(false);
 
   const submit = () => {
-    if (!category) { setErr("Выберите категорию жалобы."); return; }
-    if (desc.trim().length < 20) { setErr("Опишите ситуацию подробнее — минимум 20 символов."); return; }
-    setErr("");
+    if (description.trim().length < 10) { setErr("Опишите ситуацию подробнее — минимум 10 символов."); return; }
     addComplaint({
       vendorId,
       vendorName: vendor?.name || "Продавец",
-      userId: user?.id || "guest",
+      userId: user?.id || "anon",
       userName: user?.name || "Покупатель",
       category,
-      description: desc.trim(),
+      description: description.trim(),
       photoName: photo || undefined,
     });
-    setDone(true);
-    setTimeout(() => { setDone(false); setCategory(""); setDesc(""); setPhoto(null); onClose(); }, 2200);
+    setCategory(COMPLAINT_CATEGORIES[0]); setDescription(""); setPhoto(null); setErr("");
+    onClose();
   };
 
   return (
     <Modal open={open} onClose={onClose} title={`Жалоба на «${vendor?.name || "продавца"}»`}>
-      {done ? (
-        <div className="py-8 text-center fade-up">
-          <span className="inline-flex w-16 h-16 rounded-full bg-ai-soft text-ai items-center justify-center mb-4"><CheckCircle2 size={32} /></span>
-          <p className="font-display font-bold text-[18px] text-ink mb-1">Жалоба принята</p>
-          <p className="text-[13px] text-ink-soft">Модерация рассмотрит её в течение 1–2 рабочих дней.<br />При повторных нарушениях магазин может быть заблокирован.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-[12.5px] text-ink-soft leading-relaxed">
-            Жалоба уходит в арбитраж платформы. Продавец получит её в структурированном виде — без личной переписки и давления.
-          </p>
-          <Field label="Категория жалобы" required>
-            <select className="field" value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">— выберите категорию —</option>
-              {COMPLAINT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="Описание ситуации" required hint="минимум 20 символов">
-            <textarea className="field" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Что произошло, когда, какой заказ…" />
-          </Field>
-          <div>
-            <p className="text-[13px] font-semibold text-ink mb-1.5">Подтверждающее фото <span className="text-[11px] font-medium text-ink-mute">(необязательно)</span></p>
-            <label className={`flex items-center gap-3 border border-dashed rounded-[10px] px-4 cursor-pointer transition-colors min-h-[52px] ${photo ? "border-success/50 bg-success-soft/40" : "border-line hover:border-dark"}`}>
-              <Upload size={18} className={photo ? "text-success" : "text-ink-mute"} />
-              <span className="text-[13px] font-semibold text-ink-soft truncate flex-1">{photo || "Прикрепить фото"}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)} />
-            </label>
-          </div>
-          {err && <p className="flex items-start gap-2 text-[12px] text-error bg-error-soft rounded-[10px] px-3 py-2"><Flag size={14} className="shrink-0 mt-0.5" /> {err}</p>}
-          <button onClick={submit} className="w-full h-12 rounded-[10px] bg-dark text-cream font-bold hover:bg-dark-deep transition-colors cursor-pointer">
-            Отправить жалобу
-          </button>
-        </div>
-      )}
+      <p className="text-[12.5px] text-ink-soft mb-4">
+        Жалоба уходит в арбитраж платформы. Рассмотрение — 5 рабочих дней. Ваши личные данные продавцу не раскрываются.
+      </p>
+      <Field label="Категория жалобы" required>
+        <select className="field" value={category} onChange={(e) => setCategory(e.target.value)}>
+          {COMPLAINT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+        </select>
+      </Field>
+      <div className="mt-4">
+        <Field label="Описание" required>
+          <textarea className="field" rows={4} value={description} onChange={(e) => { setDescription(e.target.value); setErr(""); }} placeholder="Что произошло…" />
+        </Field>
+      </div>
+      <div className="mt-4">
+        <label className="flex items-center gap-3 border-2 border-dashed border-line rounded-[10px] px-4 py-3 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
+          <Upload size={16} className="text-ink-mute" />
+          <span className="text-[13px] font-semibold text-ink-soft">{photo || "Прикрепить фото (необязательно)"}</span>
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto(f.name); }} />
+        </label>
+      </div>
+      {err && <p className="text-[12px] font-semibold text-error mt-3">{err}</p>}
+      <Btn className="w-full mt-5" onClick={submit}><Flag size={16} /> Отправить жалобу</Btn>
     </Modal>
   );
 }

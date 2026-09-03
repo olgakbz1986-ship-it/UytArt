@@ -26,7 +26,6 @@ export function AuthPage() {
   const [regTab, setRegTab] = useState<"buyer" | "seller">(sp.get("role") === "seller" ? "seller" : "buyer");
   const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, styles: [] as string[] });
 
-  /* ---------- быстрый вход по SMS ---------- */
   const sendCode = () => {
     if (phone.replace(/\D/g, "").length < 10) { setError("Введите номер полностью"); return; }
     setError("");
@@ -36,7 +35,7 @@ export function AuthPage() {
     if (code !== "4242") { setError("Неверный код. Для демо введите 4242"); return; }
     setBusy(true);
     setTimeout(() => {
-      login({ id: "u" + Date.now(), name: "Покупатель УютАрт", email: phone + "@uyutart.ru", phone, role: "buyer" });
+      login({ id: "u" + Date.now(), name: "Покупатель УютАрт", email: phone + "@starttechpro.ru", phone, role: "buyer" });
       nav("/profile");
     }, 500);
   };
@@ -51,7 +50,6 @@ export function AuthPage() {
     }, 500);
   };
 
-  /* ---------- 4 стадии регистрации покупателя ---------- */
   const STYLES8 = ["Сканди", "Лофт", "Джапанди", "Неоклассика", "Бохо", "Минимализм", "Прованс", "Эко"];
   const finishReg = () => {
     setBusy(true);
@@ -118,7 +116,6 @@ export function AuthPage() {
         </div>
       ) : (
         <div className="fade-up">
-          {/* переключатель Покупатель / Продавец */}
           <div className="flex items-center justify-center mb-8">
             <div className="inline-flex bg-line-soft rounded-[14px] p-1.5">
               {([["buyer", "Покупатель"], ["seller", "Продавец"]] as const).map(([id, label]) => (
@@ -134,7 +131,6 @@ export function AuthPage() {
             <SellerRegWizard embedded />
           ) : (
             <div className="max-w-[520px] mx-auto">
-              {/* прогресс стадий */}
               <div className="flex items-center gap-2 mb-7">
                 {[1, 2, 3, 4].map((s) => (
                   <span key={s} className={`h-1.5 rounded-full transition-all duration-300 flex-1 ${s <= reg.stage ? "bg-accent" : "bg-line-soft"}`} />

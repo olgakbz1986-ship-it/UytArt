@@ -1,24 +1,39 @@
 import React from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { usePrefsStore, applyTheme } from "./lib/prefs";
 import { Header, Footer } from "./components/layout";
 import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
 import { CartPage, CheckoutPage } from "./pages/checkout";
 import { AuthPage } from "./pages/auth";
 import { MastersPage, ShopPage } from "./pages/masters";
-import ProfilePage from "./pages/profile";
 import AiPage from "./pages/ai";
+import ProfilePage from "./pages/profile";
 import {
   PlansPage, MarketPage, SellerRegisterPage, SellerDashboardPage,
-  AboutPage, LegalPage, ContactsPage, NotFoundPage,
+  AboutPage, LegalIndexPage, LegalPage, ContactsPage, NotFoundPage,
 } from "./pages/extras";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    window.scrollTo({ top: 0 });
   }, [pathname]);
+  return null;
+}
+
+/* синхронизация темы с <html data-theme>; для «системной» следит за ОС */
+function ThemeSync() {
+  const theme = usePrefsStore((s) => s.theme);
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyTheme("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [theme]);
   return null;
 }
 
@@ -27,30 +42,20 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
-  componentDidCatch(error: Error) {
-    console.error("[УютАрт]", error);
-  }
   render() {
     if (this.state.error) {
       return (
-        <div className="min-h-screen flex items-center justify-center px-4">
-          <div className="max-w-[640px] text-center">
-            <p className="text-[44px] mb-3">🛠️</p>
-            <h1 className="font-display font-bold text-[26px] text-ink mb-3">Что-то пошло не так</h1>
-            <p className="text-[14px] text-ink-soft mb-5">Обновите страницу. Если не помогло — сбросьте данные приложения.</p>
-            <pre className="text-left bg-surface border border-line-soft rounded-[14px] p-4 text-[11px] overflow-auto max-h-40 text-error whitespace-pre-wrap mb-5">
-              {String(this.state.error)}
-            </pre>
-            <div className="flex gap-3 justify-center flex-wrap">
-              <button onClick={() => location.reload()} className="h-11 px-6 rounded-[10px] bg-dark text-cream font-semibold hover:bg-dark-deep transition-colors cursor-pointer">Обновить</button>
-              <button
-                onClick={() => { Object.keys(localStorage).filter((k) => k.startsWith("uyutart-")).forEach((k) => localStorage.removeItem(k)); location.reload(); }}
-                className="h-11 px-6 rounded-[10px] border border-line bg-surface font-semibold hover:bg-cream transition-colors cursor-pointer"
-              >
-                Сбросить данные
-              </button>
-            </div>
-          </div>
+        <div className="max-w-[640px] mx-auto px-4 py-24 text-center">
+          <p className="text-[56px] mb-3">🛠️</p>
+          <h1 className="font-display font-bold text-[26px] text-ink mb-2">Что-то пошло не так</h1>
+          <p className="text-[14px] text-ink-soft mb-6">Сброс данных почти наверняка вернёт сервис к жизни.</p>
+          <pre className="text-left bg-surface border border-line rounded-xl p-4 text-[11px] text-error overflow-auto max-h-40 mb-6 whitespace-pre-wrap">{String(this.state.error)}</pre>
+          <button
+            onClick={() => { localStorage.clear(); window.location.hash = "#/"; window.location.reload(); }}
+            className="h-[52px] px-7 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer"
+          >
+            Сбросить и перезапустить
+          </button>
         </div>
       );
     }
@@ -63,6 +68,7 @@ export default function App() {
     <HashRouter>
       <ErrorBoundary>
         <ScrollToTop />
+        <ThemeSync />
         <div className="min-h-screen flex flex-col">
           <Header />
           <main className="flex-1">
@@ -75,15 +81,16 @@ export default function App() {
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/masters" element={<MastersPage />} />
               <Route path="/shop/:slug" element={<ShopPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
               <Route path="/ai-assistant" element={<AiPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/market" element={<MarketPage />} />
               <Route path="/seller/register" element={<SellerRegisterPage />} />
               <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
               <Route path="/about" element={<AboutPage />} />
-              <Route path="/contacts" element={<ContactsPage />} />
+              <Route path="/legal" element={<LegalIndexPage />} />
               <Route path="/legal/:type" element={<LegalPage />} />
+              <Route path="/contacts" element={<ContactsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </main>

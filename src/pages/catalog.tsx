@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Star } from "lucide-react";
+import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare } from "lucide-react";
 import {
-  GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
+  GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup, catImage,
   vendorById, productBySlug,
 } from "../data/seed";
 import { canDeliver, DISTRICTS, DistrictId } from "../lib/geo";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { ProductGrid } from "../components/product";
-import { Badge, Btn, GroupImg, Rating } from "../components/ui";
+import { Badge, Btn, GroupImg, ProductImg, Rating } from "../components/ui";
 import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
 
@@ -44,9 +44,9 @@ export function CatalogPage() {
   const q = (sp.get("q") || "").trim().toLowerCase();
   const [sort, setSort] = useState<SortId>("popular");
   const [inStock, setInStock] = useState(false);
-  const [quality, setQuality] = useState(false);
   const [region, setRegion] = useState<DistrictId | "all">("all");
   const [showOther, setShowOther] = useState(true);
+  const [quality, setQuality] = useState(false);
 
   const buyerPlan = useSubStore((s) => s.buyerPlan);
   const lim = buyerLimits(buyerPlan);
@@ -81,11 +81,11 @@ export function CatalogPage() {
       l = l.filter((p) => catBySlug(p.categoryId)?.group === group);
     }
     if (inStock) l = l.filter((p) => p.stock > 0);
-    /* фильтр качества — доступен на платных тарифах */
-    if (quality && lim.qualityFilters) {
-      l = l.filter((p) => p.rating >= 4.7 && (vendorById(p.vendorId)?.verified ?? false));
-    }
     if (region !== "all" && !showOther) l = l.filter((p) => canDeliver(p, region));
+    /* премиум-фильтр качества: рейтинг мастера от 4.8 + ручная работа */
+    if (quality && lim.qualityFilters) {
+      l = l.filter((p) => (vendorById(p.vendorId)?.rating || 0) >= 4.8);
+    }
     switch (sort) {
       case "price-asc": return l.sort((a, b) => a.price - b.price);
       case "price-desc": return l.sort((a, b) => b.price - a.price);
@@ -93,7 +93,7 @@ export function CatalogPage() {
       case "rating": return l.sort((a, b) => b.rating - a.rating);
       default: return l.sort((a, b) => (b.isHit ? 1 : 0) + b.views / 10000 - ((a.isHit ? 1 : 0) + a.views / 10000));
     }
-  }, [group, cat, sub, q, sort, inStock, quality, region, showOther, lim.qualityFilters]);
+  }, [group, cat, sub, q, sort, inStock, region, showOther, quality, lim.qualityFilters]);
 
   return (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-6 py-8">
@@ -109,7 +109,7 @@ export function CatalogPage() {
             {q ? `По запросу «${q}»` : activeSub ? activeSub.name : activeCat ? activeCat.name : activeGroup ? activeGroup.name : "Каталог"}
           </h1>
           <p className="text-sm text-ink-soft mt-1.5 max-w-xl">
-            {q ? `Найдено ${items.length} товаров.` : activeCat ? activeCat.desc : activeGroup ? activeGroup.desc : "Авторские товары от проверенных мастеров: от декора и текстиля до одежды, техники и крепежа."}
+            {q ? `Найдено ${items.length} товаров.` : activeCat ? activeCat.desc : activeGroup ? activeGroup.desc : "От авторского декора до техники и одежды — выбирайте группу."}
           </p>
         </div>
       </div>
@@ -117,15 +117,16 @@ export function CatalogPage() {
       {/* верхний уровень — группы (при просмотре «всё») */}
       {browseMode && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-8">
-          {GROUPS.map((g, gi) => (
+          {GROUPS.map((g, i) => (
             <Link key={g.id} to={`/catalog?group=${g.id}`}
-              className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1.5 transition-all duration-300 overflow-hidden">
+              className="group relative rounded-2xl overflow-hidden shadow-card hover:shadow-lift hover:-translate-y-1.5 transition-all duration-300 block bg-surface fade-up"
+              style={{ animationDelay: `${(i % 8) * 50}ms` }}>
               <div className="aspect-[4/3]">
-                <GroupImg src={GROUP_IMG[g.id]} emoji={g.emoji} alt={g.name} pos={gi} />
+                <GroupImg src={GROUP_IMG[g.id]} emoji={g.emoji} alt={g.name} pos={i} />
               </div>
               <div className="p-4">
-                <span className="block font-bold text-[14px] text-ink leading-tight group-hover:text-accent-deep transition-colors">{g.name}</span>
-                <span className="block text-[11px] text-ink-mute mt-0.5">{catsByGroup(g.id).length} категорий</span>
+                <span className="block font-bold text-[15px] text-ink leading-tight group-hover:text-accent-deep transition-colors">{g.name}</span>
+                <span className="block text-[11.5px] text-ink-mute mt-1 leading-snug">{catsByGroup(g.id).length} категорий</span>
               </div>
             </Link>
           ))}
@@ -152,7 +153,7 @@ export function CatalogPage() {
               <Link key={c.slug} to={`/catalog?cat=${c.slug}`}
                 className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 overflow-hidden">
                 <div className="aspect-[16/10]">
-                  <GroupImg src={GROUP_IMG[c.group]} emoji={c.emoji} alt={c.name} pos={ci + 1} />
+                  <GroupImg src={catImage(c.slug)} emoji={c.emoji} alt={c.name} pos={ci + 1} />
                 </div>
                 <div className="p-3.5">
                   <span className="block font-bold text-[13.5px] text-ink leading-tight group-hover:text-accent-deep transition-colors">{c.name}</span>
@@ -193,10 +194,10 @@ export function CatalogPage() {
             </label>
             {lim.qualityFilters ? (
               <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-soft cursor-pointer select-none">
-                <input type="checkbox" checked={quality} onChange={(e) => setQuality(e.target.checked)} /> Только проверенные ★4.7+
+                <input type="checkbox" checked={quality} onChange={(e) => setQuality(e.target.checked)} /> Премиум-качество
               </label>
             ) : (
-              <Link to="/plans" className="text-[12px] font-bold text-accent-deep hover:text-accent underline">Фильтр качества — на платных тарифах</Link>
+              <Link to="/plans" className="text-[12.5px] font-bold text-premium" title="Доступно на платных тарифах">★ Премиум-фильтры</Link>
             )}
             <select value={region} onChange={(e) => setRegion(e.target.value as DistrictId | "all")} aria-label="Регион доставки"
               className="h-[44px] px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium cursor-pointer outline-none focus:border-ai">
@@ -248,6 +249,7 @@ export function ProductPage() {
   const toggleFav = useAppStore((s) => s.toggleFav);
   const favs = useAppStore((s) => s.favorites);
   const [qty, setQty] = useState(1);
+  const [variant, setVariant] = useState(0);
   const [tab, setTab] = useState<"desc" | "specs" | "delivery" | "reviews">("desc");
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -281,8 +283,16 @@ export function ProductPage() {
 
       <div className="grid lg:grid-cols-2 gap-10 items-start">
         <div>
-          <div className="rounded-2xl overflow-hidden shadow-card aspect-square group flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${p.art[0]}, ${p.art[1]})` }}>
-            <span className="text-[120px]">{p.emoji}</span>
+          <div className="rounded-2xl overflow-hidden shadow-card aspect-square group">
+            <ProductImg p={p} variant={variant} />
+          </div>
+          <div className="flex gap-2.5 mt-3.5">
+            {[0, 1, 2, 3].map((v) => (
+              <button key={v} onClick={() => setVariant(v)} aria-label={`Вариант фото ${v + 1}`}
+                className={`w-[76px] h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer group ${variant === v ? "border-accent shadow-card" : "border-transparent opacity-70 hover:opacity-100"}`}>
+                <ProductImg p={p} variant={v} />
+              </button>
+            ))}
           </div>
         </div>
 
@@ -356,8 +366,8 @@ export function ProductPage() {
       {/* вкладки */}
       <div className="mt-12">
         <div className="flex gap-1.5 border-b border-line-soft overflow-x-auto no-scrollbar">
-          {([["desc", "Описание"], ["specs", "Характеристики"], ["delivery", "Доставка"], ["reviews", "Отзывы"]] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)}
+          {[["desc", "Описание"], ["specs", "Характеристики"], ["delivery", "Доставка"], ["reviews", "Отзывы"]].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id as typeof tab)}
               className={`px-5 py-3 text-sm font-bold whitespace-nowrap border-b-[2.5px] -mb-px transition-colors cursor-pointer ${tab === id ? "border-accent text-ink" : "border-transparent text-ink-mute hover:text-ink"}`}>
               {label}
             </button>
@@ -367,7 +377,7 @@ export function ProductPage() {
           {tab === "desc" && <p className="text-[15px] leading-[1.75] text-ink-soft">{p.description}</p>}
           {tab === "specs" && (
             <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
-              {[["Материал", p.material], ["Стиль", p.style], ["Цвет", p.color], ["Размер", p.size], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Тип", custom ? "На заказ (custom-made)" : "Готовый (ready-made)"]].map(([k, v], i) => (
+              {[["Материал", p.material], ["Стиль", p.style], ["Цвет", p.color], ["Размер", p.size], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Тип", custom ? "На заказ (custom-made)" : "Готовый (ready-made)"], ["Добавлен", fmtDate(p.createdAt)]].map(([k, v], i) => (
                 <div key={k} className={`flex justify-between gap-4 px-5 py-3 text-[14px] ${i % 2 ? "bg-cream/50" : ""}`}>
                   <span className="text-ink-soft">{k}</span><span className="font-semibold text-ink text-right">{v}</span>
                 </div>

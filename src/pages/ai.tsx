@@ -1,27 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Send, Camera, ScanLine, ShoppingBag, Palette, Crown, Bookmark, RefreshCw } from "lucide-react";
-import { PRODUCTS, fmt, aiPickProducts, catBySlug, Product } from "../data/seed";
+import { Sparkles, Send, Camera, ScanLine, ShoppingBag, Palette, Upload, X } from "lucide-react";
+import { Product, PRODUCTS, aiPickProducts, fmt, fmtDate } from "../data/seed";
 import { useAppStore } from "../lib/store";
-import { useSubStore, selectAiLeft, fmtLimit, buyerLimits } from "../lib/subscriptions";
-import { Badge, Btn, GroupImg, ProductImg } from "../components/ui";
+import { useSubStore, buyerLimits, selectAiLeft, fmtLimit } from "../lib/subscriptions";
+import { Badge, Btn, ProductImg } from "../components/ui";
 
 type Mode = "chat" | "room" | "photo";
 
-const HOTSPOTS: { top: string; left: string; q: string; label: string }[] = [
-  { top: "22%", left: "18%", q: "керамика ваза", label: "Декор" },
-  { top: "55%", left: "74%", q: "текстиль плед", label: "Текстиль" },
-  { top: "70%", left: "30%", q: "свечи", label: "Свечи" },
-  { top: "34%", left: "54%", q: "светильник", label: "Свет" },
+const HOTSPOTS: { top: string; left: string; cat: string }[] = [
+  { top: "20%", left: "16%", cat: "Керамика" },
+  { top: "52%", left: "72%", cat: "Текстиль" },
+  { top: "68%", left: "28%", cat: "Свечи" },
+  { top: "32%", left: "52%", cat: "Освещение" },
 ];
-
-const STYLES = ["Сканди", "Лофт", "Джапанди", "Неоклассика"];
 
 export default function AiPage() {
   const addToCart = useAppStore((s) => s.addToCart);
   const buyerPlan = useSubStore((s) => s.buyerPlan);
-  const aiLeft = useSubStore(selectAiLeft);
   const consumeAiGen = useSubStore((s) => s.consumeAiGen);
+  const aiGensLeft = useSubStore(selectAiLeft);
   const addConcept = useSubStore((s) => s.addConcept);
   const lim = buyerLimits(buyerPlan);
 
@@ -30,42 +28,39 @@ export default function AiPage() {
   const [thinking, setThinking] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([]);
   const [results, setResults] = useState<Product[]>([]);
-
   const [roomImg, setRoomImg] = useState<string | null>(null);
-  const [roomStyle, setRoomStyle] = useState(STYLES[0]);
+  const [roomUrl, setRoomUrl] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [spotsReady, setSpotsReady] = useState(false);
   const [spotOpen, setSpotOpen] = useState<number | null>(null);
-  const [saved, setSaved] = useState(false);
-
+  const [spotProducts, setSpotProducts] = useState<Product[]>([]);
   const [photoImg, setPhotoImg] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [limitHit, setLimitHit] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, thinking]);
 
-  const blocked = aiLeft <= 0;
-  const UpgradeNote = () => (
-    <p className="flex items-start gap-2 text-[12.5px] text-ink bg-accent-soft border border-accent/40 rounded-[10px] px-3.5 py-2.5">
-      <Crown size={14} className="text-accent-deep shrink-0 mt-0.5" />
-      <span>Лимит AI-генераций на тарифе «{buyerPlan === "free" ? "Базовый" : buyerPlan}» исчерпан. <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link> — до безлимита.</span>
-    </p>
-  );
+  const tryConsume = () => {
+    const ok = consumeAiGen();
+    setLimitHit(!ok);
+    return ok;
+  };
 
   /* ---------- чат ---------- */
   const send = () => {
     const q = input.trim();
     if (!q || thinking) return;
-    if (!consumeAiGen()) return;
+    if (!tryConsume()) return;
     setMessages((m) => [...m, { role: "user", text: q }]);
     setInput("");
     setThinking(true);
     setTimeout(() => {
       const r = aiPickProducts(q);
       setResults(r);
-      setMessages((m) => [...m, { role: "ai", text: `Подобрал ${r.length} предметов по запросу «${q}» — с учётом региональной логики. Каждый можно добавить в корзину.` }]);
+      setMessages((m) => [...m, { role: "ai", text: `Подобрал ${r.length} предметов по запросу «${q}». Смотрите справа — каждый можно добавить в корзину.` }]);
       setThinking(false);
     }, 1100);
   };
@@ -73,35 +68,39 @@ export default function AiPage() {
   /* ---------- фото комнаты ---------- */
   const onRoomFile = (f: File | undefined) => {
     if (!f) return;
-    setRoomImg(URL.createObjectURL(f));
+    const url = URL.createObjectURL(f);
+    setRoomImg(f.name);
+    setRoomUrl(url);
     setSpotsReady(false);
     setSpotOpen(null);
-    setSaved(false);
   };
   const analyzeRoom = () => {
-    if (scanning || spotsReady || !roomImg) return;
-    if (!consumeAiGen()) return;
+    if (scanning || spotsReady || !roomUrl) return;
+    if (!tryConsume()) return;
     setScanning(true);
-    setTimeout(() => { setScanning(false); setSpotsReady(true); }, 1500);
+    setTimeout(() => { setScanning(false); setSpotsReady(true); }, 1600);
   };
-  const regenerate = () => {
-    if (!consumeAiGen()) return;
-    setSpotsReady(false);
-    setScanning(true);
-    setTimeout(() => { setScanning(false); setSpotsReady(true); setSaved(false); }, 1200);
+  const openSpot = (i: number) => {
+    if (spotOpen === i) { setSpotOpen(null); return; }
+    setSpotOpen(i);
+    setSpotProducts(aiPickProducts(HOTSPOTS[i].cat, 4));
+  };
+  const saveConcept = () => {
+    if (!roomImg) return;
+    addConcept({ style: "Мой интерьер", roomName: roomImg, image: roomUrl || undefined });
   };
 
   /* ---------- поиск по фото ---------- */
   const onPhotoFile = (f: File | undefined) => {
     if (!f) return;
-    if (!consumeAiGen()) return;
     setPhotoImg(URL.createObjectURL(f));
     setSearching(true);
     setResults([]);
     setTimeout(() => {
-      setResults([...PRODUCTS].sort(() => 0.5 - Math.random()).slice(0, 6));
+      const shuffled = [...PRODUCTS].sort(() => 0.5 - Math.random()).slice(0, 6);
+      setResults(shuffled);
       setSearching(false);
-    }, 1400);
+    }, 1500);
   };
 
   return (
@@ -111,33 +110,35 @@ export default function AiPage() {
           <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-accent-deep mb-2 flex items-center gap-2"><Sparkles size={14} /> YandexGPT · Yandex Vision</p>
           <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink">AI-дизайнер интерьера</h1>
         </div>
-        <Badge tone={blocked ? "error" : "ai"}>
-          <Sparkles size={11} /> Генераций в этом месяце: {fmtLimit(aiLeft)} из {fmtLimit(lim.aiGens)}
-        </Badge>
+        <Badge tone="ai">Осталось генераций: {fmtLimit(aiGensLeft)}{Number.isFinite(lim.aiGens) ? ` из ${lim.aiGens}` : ""}</Badge>
       </div>
 
-      {/* переключатель режимов */}
+      {limitHit && (
+        <div className="flex items-center gap-2.5 bg-premium-soft border border-premium/40 rounded-[10px] px-4 py-3 mb-6 fade-up">
+          <Sparkles size={16} className="text-[#a07c50] shrink-0" />
+          <p className="text-[13px] text-ink flex-1">Лимит AI-генераций на этот месяц исчерпан. <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link></p>
+        </div>
+      )}
+
       <div className="inline-flex bg-line-soft rounded-[12px] p-1.5 mb-7">
-        {([["chat", "Диалог", Palette], ["room", "Фото комнаты", ScanLine], ["photo", "Поиск по фото", Camera]] as const).map(([id, label, Ic]) => (
+        {([["chat", "Диалог"], ["room", "Фото комнаты"], ["photo", "Поиск по фото"]] as const).map(([id, label]) => (
           <button key={id} onClick={() => setMode(id)}
-            className={`flex items-center gap-2 h-11 px-4 sm:px-5 rounded-[10px] text-[13px] font-bold transition-all duration-200 cursor-pointer ${mode === id ? "bg-dark text-cream shadow-card" : "text-ink-soft hover:text-ink"}`}>
-            <Ic size={15} /> <span className="hidden sm:inline">{label}</span>
+            className={`h-11 px-6 rounded-[10px] text-sm font-bold transition-all duration-200 cursor-pointer ${mode === id ? "bg-dark text-cream shadow-card" : "text-ink-soft hover:text-ink"}`}>
+            {label}
           </button>
         ))}
       </div>
 
-      {blocked && <div className="mb-6"><UpgradeNote /></div>}
-
-      {/* ================= диалог ================= */}
+      {/* ДИАЛОГ */}
       {mode === "chat" && (
         <div className="grid lg:grid-cols-[1fr_380px] gap-6 items-start">
-          <div className="bg-surface rounded-2xl shadow-card flex flex-col" style={{ height: "min(620px, calc(100vh - 230px))" }}>
+          <div className="bg-surface rounded-2xl shadow-card flex flex-col" style={{ height: "min(620px, calc(100vh - 260px))" }}>
             <div ref={listRef} className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center text-center px-6">
-                  <span className="w-16 h-16 rounded-2xl bg-ai-soft text-ai flex items-center justify-center mb-5 float-y"><Sparkles size={30} /></span>
+                  <span className="w-16 h-16 rounded-2xl bg-ai-soft text-ai flex items-center justify-center mb-5"><Sparkles size={30} /></span>
                   <p className="font-display font-bold text-[19px] text-ink mb-2">Опишите интерьер мечты</p>
-                  <p className="text-[13.5px] text-ink-soft max-w-sm mb-6">Например: «уютная гостиная в сканди, бюджет 15 000 ₽» — и я соберу подборку реальных товаров.</p>
+                  <p className="text-[13.5px] text-ink-soft max-w-sm mb-6">Например: «уютная гостиная в скандинавском стиле, бюджет 15 000 ₽» — и я соберу подборку реальных товаров.</p>
                   <div className="flex flex-wrap justify-center gap-2 max-w-md">
                     {["Гостиная в сканди", "Спальня джапанди", "Кабинет в лофте", "Кухня прованс"].map((t) => (
                       <button key={t} onClick={() => setInput(t)} className="px-3.5 py-2 rounded-full border border-line text-[12.5px] font-semibold text-ink-soft hover:border-ai hover:text-ai hover:bg-ai-soft transition-all duration-200 cursor-pointer">{t}</button>
@@ -170,10 +171,9 @@ export default function AiPage() {
                   onKeyDown={(e) => e.key === "Enter" && send()}
                   placeholder="Опишите комнату, стиль, бюджет…"
                   aria-label="Запрос к AI-дизайнеру"
-                  disabled={blocked}
                 />
-                <button onClick={send} aria-label="Отправить" disabled={!input.trim() || thinking || blocked}
-                  className="w-[46px] h-[46px] shrink-0 rounded-[10px] bg-accent text-ink flex items-center justify-center hover:bg-accent-deep transition-colors cursor-pointer disabled:opacity-40">
+                <button onClick={send} aria-label="Отправить" disabled={!input.trim() || thinking}
+                  className="w-[46px] h-[46px] shrink-0 rounded-[10px] bg-accent text-ink flex items-center justify-center hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer disabled:opacity-40">
                   <Send size={17} />
                 </button>
               </div>
@@ -181,19 +181,14 @@ export default function AiPage() {
           </div>
 
           <aside className="bg-surface rounded-2xl shadow-card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-ink-mute">Рекомендации · {results.length}</p>
-              {results.length > 0 && (
-                <Btn size="sm" variant="outline" onClick={() => results.forEach((p) => addToCart(p.id))}>Всё в корзину</Btn>
-              )}
-            </div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-ink-mute mb-3">Рекомендации · {results.length}</p>
             {results.length === 0 ? (
               <p className="text-[13px] text-ink-soft py-8 text-center">Здесь появятся подобранные товары с ценами.</p>
             ) : (
               <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
                 {results.map((p, i) => (
                   <div key={p.id} className="flex gap-3 p-2 rounded-xl border border-line-soft hover:border-ai/50 transition-colors fade-up" style={{ animationDelay: `${i * 50}ms` }}>
-                    <Link to={`/product/${p.slug}`} className="w-[64px] h-[56px] rounded-[10px] overflow-hidden shrink-0 group"><ProductImg p={p} /></Link>
+                    <span className="w-[64px] h-[56px] rounded-[10px] overflow-hidden shrink-0 group"><ProductImg p={p} /></span>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12.5px] font-semibold text-ink line-clamp-2 leading-snug">{p.name}</p>
                       <p className="font-display font-bold text-[13px] text-ink mt-1">{fmt(p.price)}</p>
@@ -203,17 +198,18 @@ export default function AiPage() {
                     </button>
                   </div>
                 ))}
+                <Btn className="w-full mt-2" size="sm" onClick={() => results.forEach((p) => addToCart(p.id))}>Добавить весь набор</Btn>
               </div>
             )}
           </aside>
         </div>
       )}
 
-      {/* ================= фото комнаты ================= */}
+      {/* ФОТО КОМНАТЫ */}
       {mode === "room" && (
         <div className="grid lg:grid-cols-[1fr_380px] gap-6 items-start">
           <div className="bg-surface rounded-2xl shadow-card p-6">
-            {!roomImg ? (
+            {!roomUrl ? (
               <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-line rounded-2xl px-6 py-20 text-center cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
                 <ScanLine size={34} className="text-ai" />
                 <span className="font-bold text-[15px] text-ink">Загрузите фото своей комнаты</span>
@@ -222,37 +218,27 @@ export default function AiPage() {
               </label>
             ) : (
               <div>
-                <div className="relative rounded-2xl overflow-hidden">
-                  <img src={roomImg} alt="Ваша комната" className="w-full max-h-[520px] object-cover" />
+                <div className="relative rounded-2xl overflow-hidden bg-dark">
+                  <img src={roomUrl} alt="Ваша комната" className="w-full max-h-[520px] object-cover" />
                   {scanning && (
-                    <div className="absolute inset-0 bg-dark/40 flex flex-col items-center justify-center gap-3 text-cream">
+                    <div className="absolute inset-0 bg-dark/50 flex flex-col items-center justify-center gap-3 text-cream">
                       <ScanLine size={34} className="animate-pulse" />
-                      <p className="font-bold text-[14px]">Генерируем дизайн «{roomStyle}», сохраняя геометрию…</p>
+                      <p className="font-bold text-[14px]">Анализируем пространство…</p>
                     </div>
                   )}
                   {spotsReady && HOTSPOTS.map((h, i) => (
-                    <button key={i} onClick={() => setSpotOpen(spotOpen === i ? null : i)} aria-label={`Подбор: ${h.label}`}
-                      className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
+                    <button key={i} onClick={() => openSpot(i)} aria-label={`Подбор: ${h.cat}`}
+                      className={`absolute w-9 h-9 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center text-[12px] font-extrabold cursor-pointer transition-all ${spotOpen === i ? "bg-accent text-ink scale-110" : "bg-accent/90 text-ink hover:bg-accent"}`}
                       style={{ top: h.top, left: h.left }}>
-                      <span className={`absolute inset-0 rounded-full pulse-ring ${spotOpen === i ? "bg-accent-deep" : "bg-accent"} transition-colors`} />
-                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-ink">{i + 1}</span>
+                      {i + 1}
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2.5 mt-4 flex-wrap items-center">
-                  {!spotsReady ? (
-                    <Btn onClick={analyzeRoom} disabled={scanning || blocked}><ScanLine size={16} /> {scanning ? "Генерируем…" : "Сгенерировать дизайн"}</Btn>
-                  ) : (
-                    <>
-                      <Btn variant="outline" onClick={regenerate} disabled={blocked}><RefreshCw size={15} /> Перегенерировать</Btn>
-                      <Btn variant="outline" onClick={() => { setSaved(false); setRoomStyle(STYLES[(STYLES.indexOf(roomStyle) + 1) % STYLES.length]); }}><Palette size={15} /> Другой стиль: {STYLES[(STYLES.indexOf(roomStyle) + 1) % STYLES.length]}</Btn>
-                      <Btn onClick={() => { addConcept({ style: roomStyle, roomName: "Моя комната", image: roomImg }); setSaved(true); }} disabled={saved}>
-                        <Bookmark size={15} /> {saved ? "Сохранено ✓" : "В «Мои концепты»"}
-                      </Btn>
-                    </>
-                  )}
-                  <label className="inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] h-[46px] px-5 text-sm border border-line bg-surface hover:bg-cream transition-colors cursor-pointer ml-auto">
-                    <Camera size={16} /> Другое фото
+                <div className="flex gap-3 mt-4 flex-wrap">
+                  {!spotsReady && <Btn onClick={analyzeRoom} disabled={scanning}><ScanLine size={16} /> {scanning ? "Анализируем…" : "Расставить горячие точки"}</Btn>}
+                  {spotsReady && <Btn variant="outline" onClick={saveConcept}><Palette size={16} /> Сохранить концепт</Btn>}
+                  <label className="inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] h-[46px] px-5 text-sm border border-line bg-surface hover:bg-cream transition-colors cursor-pointer">
+                    <Upload size={16} /> Другое фото
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => onRoomFile(e.target.files?.[0])} />
                   </label>
                 </div>
@@ -262,17 +248,17 @@ export default function AiPage() {
 
           <aside className="bg-surface rounded-2xl shadow-card p-5">
             <p className="text-[11px] font-bold uppercase tracking-widest text-ink-mute mb-3">
-              {spotOpen === null ? `Стиль: ${roomStyle}` : HOTSPOTS[spotOpen].label}
+              {spotOpen === null ? "Горячие точки" : HOTSPOTS[spotOpen].cat}
             </p>
             {!spotsReady ? (
-              <p className="text-[13px] text-ink-soft py-8 text-center">Загрузите фото и запустите генерацию — здесь появятся точки с товарами.</p>
+              <p className="text-[13px] text-ink-soft py-8 text-center">Загрузите фото и запустите анализ — здесь появятся точки с товарами.</p>
             ) : spotOpen === null ? (
               <div className="space-y-2">
                 {HOTSPOTS.map((h, i) => (
-                  <button key={i} onClick={() => setSpotOpen(i)} className="w-full flex items-center gap-3 p-3 rounded-xl border border-line-soft hover:border-ai/50 transition-colors cursor-pointer text-left">
+                  <button key={i} onClick={() => openSpot(i)} className="w-full flex items-center gap-3 p-3 rounded-xl border border-line-soft hover:border-ai/50 transition-colors cursor-pointer text-left">
                     <span className="w-7 h-7 rounded-full bg-accent text-ink text-[11px] font-extrabold flex items-center justify-center shrink-0">{i + 1}</span>
                     <span>
-                      <span className="block text-[13px] font-bold text-ink">{h.label}</span>
+                      <span className="block text-[13px] font-bold text-ink">{h.cat}</span>
                       <span className="block text-[11.5px] text-ink-mute">нажмите, чтобы увидеть товары</span>
                     </span>
                   </button>
@@ -280,9 +266,9 @@ export default function AiPage() {
               </div>
             ) : (
               <div className="space-y-2.5">
-                {aiPickProducts(HOTSPOTS[spotOpen].q, 3).map((p) => (
+                {spotProducts.map((p) => (
                   <div key={p.id} className="flex gap-3 p-2 rounded-xl border border-line-soft">
-                    <Link to={`/product/${p.slug}`} className="w-[64px] h-[56px] rounded-[10px] overflow-hidden shrink-0 group"><ProductImg p={p} /></Link>
+                    <span className="w-[64px] h-[56px] rounded-[10px] overflow-hidden shrink-0 group"><ProductImg p={p} /></span>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12.5px] font-semibold text-ink line-clamp-2 leading-snug">{p.name}</p>
                       <p className="font-display font-bold text-[13px] text-ink mt-1">{fmt(p.price)}</p>
@@ -292,21 +278,18 @@ export default function AiPage() {
                     </button>
                   </div>
                 ))}
-                <Btn size="sm" className="w-full" onClick={() => aiPickProducts(HOTSPOTS[spotOpen].q, 3).forEach((p) => addToCart(p.id))}>
-                  Купить весь образ целиком
-                </Btn>
               </div>
             )}
           </aside>
         </div>
       )}
 
-      {/* ================= поиск по фото ================= */}
+      {/* ПОИСК ПО ФОТО */}
       {mode === "photo" && (
         <div>
           <div className="bg-surface rounded-2xl shadow-card p-6 mb-6">
             {!photoImg ? (
-              <label className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed border-line rounded-2xl px-6 py-16 text-center transition-colors ${blocked ? "opacity-50 pointer-events-none" : "cursor-pointer hover:border-ai hover:bg-ai-soft/40"}`}>
+              <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-line rounded-2xl px-6 py-16 text-center cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
                 <Camera size={34} className="text-ai" />
                 <span className="font-bold text-[15px] text-ink">Загрузите фото понравившегося предмета</span>
                 <span className="text-[13px] text-ink-soft max-w-sm">Скриншот из интернета или фото из магазина — AI найдёт максимально похожие товары у наших мастеров.</span>
@@ -319,7 +302,7 @@ export default function AiPage() {
                   <p className="font-bold text-[15px] text-ink mb-1">{searching ? "Ищем похожие товары…" : "Похожие товары найдены"}</p>
                   <p className="text-[13px] text-ink-soft mb-4">{searching ? "Сравниваем форму, материал и стиль по Yandex Vision." : "Слева — что вы искали, ниже — что предлагают мастера."}</p>
                   <label className="inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] h-11 px-5 text-sm border border-line bg-surface hover:bg-cream transition-colors cursor-pointer">
-                    <Camera size={16} /> Другое фото
+                    <Upload size={16} /> Другое фото
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => onPhotoFile(e.target.files?.[0])} />
                   </label>
                 </div>
@@ -335,13 +318,12 @@ export default function AiPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
               {results.map((p, i) => (
                 <div key={p.id} className="bg-surface rounded-2xl shadow-card overflow-hidden fade-up" style={{ animationDelay: `${i * 60}ms` }}>
-                  <div className="relative aspect-square group">
-                    <GroupImg src={p.image} emoji={p.emoji} alt={p.name} pos={i} />
+                  <div className="relative aspect-[4/4.6] group">
+                    <ProductImg p={p} variant={i % 5} />
                     <Badge tone="success" className="absolute top-2 left-2">{96 - i * 4}% сходство</Badge>
                   </div>
                   <div className="p-3">
                     <p className="text-[12px] font-semibold text-ink line-clamp-2 leading-snug">{p.name}</p>
-                    <p className="text-[11px] text-ink-mute mt-0.5">{catBySlug(p.categoryId)?.name}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="font-display font-bold text-[13px] text-ink">{fmt(p.price)}</span>
                       <button onClick={() => addToCart(p.id)} aria-label="В корзину" className="w-8 h-8 rounded-full bg-dark text-cream flex items-center justify-center hover:bg-accent hover:text-ink transition-colors cursor-pointer">
@@ -358,7 +340,7 @@ export default function AiPage() {
 
       <p className="flex items-center gap-2 text-[12px] text-ink-mute mt-8">
         <Sparkles size={13} className="text-ai" />
-        AI-подбор — экспериментальный сервис. Распознавание фото доступно при согласии на AI-профилирование.
+        AI-подбор — экспериментальный сервис и не является профессиональной рекомендацией. {fmtDate(new Date().toISOString())}
       </p>
     </div>
   );
