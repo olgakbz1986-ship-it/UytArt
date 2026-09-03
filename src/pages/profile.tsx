@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check } from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
@@ -105,6 +105,13 @@ export default function ProfilePage() {
   const [ticketFor, setTicketFor] = useState<{ order: Order; kind: "problem" | "return" } | null>(null);
   const [reviewFor, setReviewFor] = useState<Order | null>(null);
 
+  /* единая точка загрузки аватара: скрытый input + программный клик.
+     Программный .click() на file input работает во всех браузерах,
+     в отличие от label+display:none, который часть браузеров игнорирует. */
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const openAvatarPicker = () => avatarInputRef.current?.click();
+
   /* загрузка аватара: кроп в квадрат и сжатие до 256px (чтобы не раздувать localStorage).
      Сохраняется мгновенно при выборе файла — без необходимости жать «Сохранить». */
   const onAvatarFile = (f: File | undefined) => {
@@ -179,9 +186,17 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
+      {/* единый скрытый input загрузки аватара (общий для шапки и настроек) */}
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { onAvatarFile(e.target.files?.[0]); e.target.value = ""; }}
+      />
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         {/* кликабельный аватар: загрузка фото с мгновенным сохранением */}
-        <label className="relative group shrink-0 cursor-pointer" title="Загрузить фото профиля">
+        <button type="button" onClick={openAvatarPicker} className="relative group shrink-0 cursor-pointer rounded-full" title="Загрузить фото профиля" aria-label="Загрузить фото профиля">
           {(avatarDraft ?? user.avatar) ? (
             <img src={avatarDraft ?? user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
           ) : (
@@ -190,8 +205,7 @@ export default function ProfilePage() {
           <span className="absolute inset-0 rounded-full bg-dark/0 group-hover:bg-dark/45 flex items-center justify-center transition-colors">
             <Camera size={20} className="text-cream opacity-0 group-hover:opacity-100 transition-opacity" />
           </span>
-          <input type="file" accept="image/*" className="hidden" onChange={(e) => onAvatarFile(e.target.files?.[0])} />
-        </label>
+        </button>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {user.name.split(" ")[0]}!</h1>
@@ -508,9 +522,19 @@ export default function ProfilePage() {
 
           {/* Профиль — доступен и полностью редактируем на любом тарифе */}
           <SettingsSection title="Профиль" icon={<Settings size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
-            {/* аватар + полнота профиля */}
+            {/* аватар (клик или перетаскивание) + полнота профиля */}
             <div className="flex items-center gap-4 mb-5">
-              <label className="relative group shrink-0 cursor-pointer" title="Загрузить фото">
+              <button
+                type="button"
+                onClick={openAvatarPicker}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); onAvatarFile(e.dataTransfer.files?.[0]); }}
+                className={`relative group shrink-0 cursor-pointer rounded-full transition-all ${dragOver ? "scale-105" : ""}`}
+                style={dragOver ? { outline: `3px dashed ${tier.accent}`, outlineOffset: "4px" } : undefined}
+                title="Загрузить фото (кликните или перетащите файл)"
+                aria-label="Загрузить фото профиля"
+              >
                 {(avatarDraft ?? user.avatar) ? (
                   <img src={avatarDraft ?? user.avatar} alt="Аватар" className="w-20 h-20 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
                 ) : (
@@ -521,8 +545,7 @@ export default function ProfilePage() {
                 <span className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-dark text-cream flex items-center justify-center ring-2 ring-offset-2 ring-offset-cream group-hover:bg-accent group-hover:text-ink transition-colors">
                   <Camera size={15} />
                 </span>
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => onAvatarFile(e.target.files?.[0])} />
-              </label>
+              </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[12.5px] font-bold text-ink">Полнота профиля</p>
