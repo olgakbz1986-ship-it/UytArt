@@ -2,7 +2,14 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { PRODUCTS } from "../data/seed";
 
-export interface User { id: string; name: string; email: string; phone?: string; role: "buyer" | "seller"; }
+export interface User {
+  id: string; name: string; email: string; phone?: string;
+  role: "buyer" | "seller";
+  avatar?: string;   /* data-URL, до 256px */
+  city?: string;
+  birth?: string;
+  about?: string;
+}
 export interface Address { id: string; label: string; city: string; street: string; zip: string; isDefault?: boolean; }
 export interface CartItem { productId: string; qty: number; }
 export interface BonusEntry { id: string; date: string; amount: number; reason: string; }

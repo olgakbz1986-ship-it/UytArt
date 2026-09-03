@@ -236,6 +236,59 @@ input[type="checkbox"], input[type="radio"] {
   width: 16px; height: 16px; cursor: pointer;
 }
 
+/* ============================================================
+   ТЁМНАЯ ТЕМА — применяется атрибутом data-theme="dark" на <html>
+   (переключается в настройках кабинетов, хранится в localStorage)
+   ============================================================ */
+[data-theme="dark"] {
+  --color-cream: #141a16;
+  --color-surface: #1c241f;
+  --color-ink: #ece8dd;
+  --color-ink-soft: #b3ac9d;
+  --color-ink-mute: #827c6f;
+  --color-line: #35413a;
+  --color-line-soft: #262f29;
+
+  --color-dark: #1e3a2f;
+  --color-dark-deep: #2c5140;
+
+  --color-accent: #d98e32;
+  --color-accent-deep: #e0a14a;
+  --color-accent-soft: #3a2f1c;
+
+  --color-ai: #4c8a6d;
+  --color-ai-soft: #20302a;
+
+  --color-success: #8fc255;
+  --color-success-soft: #26331e;
+  --color-error: #e5655f;
+  --color-error-soft: #3b2321;
+
+  --color-premium: #d4a574;
+  --color-premium-soft: #37301f;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 24px -18px rgba(0, 0, 0, 0.55);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 38px -16px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .bg-surface { border: 1px solid #262f29; }
+[data-theme="dark"] .skeleton { background: #262f29; }
+[data-theme="dark"] ::selection { background: #3a2f1c; color: #ece8dd; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #1c241f; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #35413a; border-color: #1c241f; }
+
+/* кремовый текст (в т.ч. с прозрачностью) остаётся светлым на тёмных поверхностях */
+[data-theme="dark"] [class*="text-cream"] { color: #ece8dd !important; }
+/* на янтарных кнопках — тёмный текст для контраста в обеих темах */
+[data-theme="dark"] .bg-accent[class*="text-"] { color: #241809 !important; }
+
+/* линии гамбургера и крестика — светлые на тёмном */
+[data-theme="dark"] .burger-line,
+[data-theme="dark"] .burger-cross::before,
+[data-theme="dark"] .burger-cross::after {
+  background: var(--color-ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

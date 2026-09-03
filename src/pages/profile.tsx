@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield } from "lucide-react";
+import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check } from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
 import { useMarketStore } from "./extras";
-import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection } from "../components/ui";
+import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } from "../components/ui";
+import { usePrefsStore } from "../lib/prefs";
 import { ChatModal } from "../components/chat";
 import { ReviewModal, TicketModal } from "../components/review";
 
@@ -83,18 +84,65 @@ export default function ProfilePage() {
   const lim = buyerLimits(buyerPlan);
   const isPaid = buyerPlan !== "free";
 
-  /* настройки (доступность секций зависит от уровня тарифа) */
-  const [notif, setNotif] = useState({ email: true, push: true, telegram: false });
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
-  const [privacy, setPrivacy] = useState({ aiProfiling: false, digest: true });
+  /* настройки: тема, уведомления и приватность — глобальные и персистентные */
+  const theme = usePrefsStore((s) => s.theme);
+  const setTheme = usePrefsStore((s) => s.setTheme);
+  const notif = usePrefsStore((s) => s.buyerNotif);
+  const setNotif = usePrefsStore((s) => s.setBuyerNotif);
+  const privacy = usePrefsStore((s) => s.buyerPrivacy);
+  const setPrivacy = usePrefsStore((s) => s.setBuyerPrivacy);
   const tier = BUYER_TIER[buyerPlan] || BUYER_TIER.free;
 
   const [tab, setTab] = useState<Tab>("orders");
   const [addr, setAddr] = useState({ label: "Дом", city: "", street: "", zip: "" });
-  const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "", phone: user?.phone || "" });
+  const [profile, setProfile] = useState({
+    name: user?.name || "", email: user?.email || "", phone: user?.phone || "",
+    city: user?.city || "", birth: user?.birth || "", about: user?.about || "",
+  });
+  const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [ticketFor, setTicketFor] = useState<{ order: Order; kind: "problem" | "return" } | null>(null);
   const [reviewFor, setReviewFor] = useState<Order | null>(null);
+
+  /* загрузка аватара: кроп в квадрат и сжатие до 256px (чтобы не раздувать localStorage) */
+  const onAvatarFile = (f: File | undefined) => {
+    if (!f || !f.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      const size = 256;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const min = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
+      setAvatarDraft(canvas.toDataURL("image/jpeg", 0.85));
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  };
+
+  const saveProfile = () => {
+    updateUser({ ...profile, avatar: avatarDraft ?? user?.avatar });
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2200);
+  };
+
+  /* полнота профиля для премиального индикатора */
+  const completeness = (() => {
+    const checks = [
+      profile.name.trim().length >= 2,
+      profile.email.includes("@"),
+      profile.phone.trim().length >= 6,
+      profile.city.trim().length >= 2,
+      profile.birth.trim().length > 0,
+      !!(avatarDraft ?? user?.avatar),
+    ];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  })();
 
   if (!user) {
     return (
@@ -124,7 +172,11 @@ export default function ProfilePage() {
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
+        {(avatarDraft ?? user.avatar) ? (
+          <img src={avatarDraft ?? user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
+        ) : (
+          <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
+        )}
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {user.name.split(" ")[0]}!</h1>
@@ -136,10 +188,6 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Улучшить тариф</Link>
-          <button onClick={() => { setTab("settings"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="Настройки"
-            className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-soft hover:bg-line-soft hover:text-ink transition-colors cursor-pointer">
-            <Settings size={19} />
-          </button>
           <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
             <LogOut size={18} />
           </button>
@@ -443,24 +491,68 @@ export default function ProfilePage() {
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · уровень тарифа <strong style={{ color: tier.accent }}>{PLAN_NAME[buyerPlan]}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 
-          {/* Профиль — всем */}
+          {/* Профиль — доступен и полностью редактируем на любом тарифе */}
           <SettingsSection title="Профиль" icon={<Settings size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
-            <div className="space-y-3.5">
-              <Field label="Имя"><input className="field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></Field>
-              <Field label="Email"><input className="field" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></Field>
+            {/* аватар + полнота профиля */}
+            <div className="flex items-center gap-4 mb-5">
+              <label className="relative group shrink-0 cursor-pointer" title="Загрузить фото">
+                {(avatarDraft ?? user.avatar) ? (
+                  <img src={avatarDraft ?? user.avatar} alt="Аватар" className="w-20 h-20 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
+                ) : (
+                  <span className="w-20 h-20 rounded-full flex items-center justify-center font-display font-bold text-[28px]" style={{ background: "var(--color-dark)", color: "var(--color-accent)" }}>
+                    {profile.name[0]?.toUpperCase() || "У"}
+                  </span>
+                )}
+                <span className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-dark text-cream flex items-center justify-center ring-2 ring-offset-2 ring-offset-cream group-hover:bg-accent group-hover:text-ink transition-colors">
+                  <Camera size={15} />
+                </span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => onAvatarFile(e.target.files?.[0])} />
+              </label>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[12.5px] font-bold text-ink">Полнота профиля</p>
+                  <p className="text-[12px] font-bold" style={{ color: tier.accent }}>{completeness}%</p>
+                </div>
+                <ProgressBar value={completeness} max={100} tone={completeness >= 80 ? "success" : "accent"} />
+                <p className="text-[11.5px] text-ink-mute mt-1.5">
+                  {completeness >= 80 ? "Отличный профиль — мастера видят вас как надёжного покупателя" : "Заполните профиль — фото, город и контакты повышают доверие мастеров"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
+              <Field label="Имя и фамилия"><input className="field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Анна Смирнова" /></Field>
+              <Field label="Email"><input className="field" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
               <Field label="Телефон"><input className="field" placeholder="+7 (___) ___-__-__" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></Field>
-              <Btn size="sm" onClick={() => updateUser(profile)}>Сохранить изменения</Btn>
+              <Field label="Город"><input className="field" value={profile.city} onChange={(e) => setProfile({ ...profile, city: e.target.value })} placeholder="Москва" /></Field>
+              <Field label="Дата рождения"><input className="field" type="date" value={profile.birth} onChange={(e) => setProfile({ ...profile, birth: e.target.value })} /></Field>
+              <div className="sm:col-span-2">
+                <Field label="О себе"><textarea className="field" rows={3} value={profile.about} onChange={(e) => setProfile({ ...profile, about: e.target.value })} placeholder="Пара слов о ваших вкусах — поможет мастерам и AI-подбору" /></Field>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-4">
+              <Btn size="sm" onClick={saveProfile}>
+                {profileSaved ? <><Check size={15} /> Сохранено</> : "Сохранить изменения"}
+              </Btn>
+              {avatarDraft && (
+                <button onClick={() => setAvatarDraft(null)} className="text-[12.5px] font-semibold text-ink-mute hover:text-error cursor-pointer transition-colors">Отменить фото</button>
+              )}
             </div>
           </SettingsSection>
 
           {/* Уведомления — всем */}
           <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
-            {([["email", "Email — статусы заказов и чеки"], ["push", "Push — снижение цен и бонусы"], ["telegram", "Telegram-бот — важное"]] as const).map(([k, label]) => (
-              <label key={k} className="flex items-center justify-between py-2 border-b border-line-soft last:border-0 cursor-pointer">
-                <span className="text-[13px] text-ink-soft">{label}</span>
-                <input type="checkbox" checked={notif[k]} onChange={(e) => setNotif({ ...notif, [k]: e.target.checked })} />
-              </label>
-            ))}
+            <div className="space-y-3.5">
+              {([["email", "Email", "Статусы заказов, чеки и ответы мастеров"], ["push", "Push", "Снижение цен, бонусы и акции"], ["telegram", "Telegram-бот", "Самое важное в мессенджер"]] as const).map(([k, t, d]) => (
+                <div key={k} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold text-ink">{t}</p>
+                    <p className="text-[11.5px] text-ink-mute">{d}</p>
+                  </div>
+                  <Switch checked={notif[k]} onChange={(v) => setNotif({ [k]: v })} label={t} />
+                </div>
+              ))}
+            </div>
           </SettingsSection>
 
           {/* Тема — со «Старт» */}
@@ -477,13 +569,18 @@ export default function ProfilePage() {
 
           {/* Приватность — с «Дизайнер» */}
           <SettingsSection title="Приватность и данные" icon={<Shield size={15} />} minLevel={2} level={tier.level} nextLabel="тариф «Дизайнер»" accent={tier.accent}>
-            {([["aiProfiling", "AI-профилирование для персональных подборок"], ["digest", "Еженедельный дайджест новинок"]] as const).map(([k, label]) => (
-              <label key={k} className="flex items-center justify-between py-2 border-b border-line-soft last:border-0 cursor-pointer">
-                <span className="text-[13px] text-ink-soft">{label}</span>
-                <input type="checkbox" checked={privacy[k]} onChange={(e) => setPrivacy({ ...privacy, [k]: e.target.checked })} />
-              </label>
-            ))}
-            <Btn size="sm" variant="ghost" className="mt-3 !text-error">Удалить аккаунт</Btn>
+            <div className="space-y-3.5">
+              {([["aiProfiling", "AI-профилирование", "Персональные подборки на основе ваших предпочтений"], ["digest", "Дайджест новинок", "Еженедельная подборка нового от мастеров"]] as const).map(([k, t, d]) => (
+                <div key={k} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold text-ink">{t}</p>
+                    <p className="text-[11.5px] text-ink-mute">{d}</p>
+                  </div>
+                  <Switch checked={privacy[k]} onChange={(v) => setPrivacy({ [k]: v })} label={t} />
+                </div>
+              ))}
+            </div>
+            <Btn size="sm" variant="ghost" className="mt-4 !text-error">Удалить аккаунт</Btn>
           </SettingsSection>
 
           {/* Куратор — «Премиум» */}

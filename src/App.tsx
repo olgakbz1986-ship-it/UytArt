@@ -1,6 +1,7 @@
 import React from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { usePrefsStore, applyTheme } from "./lib/prefs";
 import { Header, Footer } from "./components/layout";
 import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
@@ -19,6 +20,20 @@ function ScrollToTop() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [pathname]);
+  return null;
+}
+
+/* синхронизация темы с <html data-theme>; для «системной» следит за ОС */
+function ThemeSync() {
+  const theme = usePrefsStore((s) => s.theme);
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyTheme("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [theme]);
   return null;
 }
 
@@ -53,6 +68,7 @@ export default function App() {
     <HashRouter>
       <ErrorBoundary>
         <ScrollToTop />
+        <ThemeSync />
         <div className="min-h-screen flex flex-col">
           <Header />
           <main className="flex-1">

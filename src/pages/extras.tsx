@@ -6,7 +6,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings,
+  Lock, Bell, Shield, Settings, Check,
 } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
@@ -18,8 +18,9 @@ import {
 import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
-import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection } from "../components/ui";
+import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
 import { Markdown } from "../components/markdown";
+import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
    Биржа индивидуальных заказов (пункт меню «Заказы»)
@@ -656,8 +657,24 @@ export function SellerDashboardPage() {
   const [teamMember, setTeamMember] = useState({ name: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawSum, setWithdrawSum] = useState("");
-  const [sNotif, setSNotif] = useState({ orders: true, payouts: true, promo: false });
-  const [sTheme, setSTheme] = useState<"light" | "dark" | "system">("light");
+
+  /* настройки: тема и уведомления — глобальные и персистентные */
+  const sTheme = usePrefsStore((st) => st.theme);
+  const setSTheme = usePrefsStore((st) => st.setTheme);
+  const sNotif = usePrefsStore((st) => st.sellerNotif);
+  const setSNotif = usePrefsStore((st) => st.setSellerNotif);
+
+  /* редактируемый профиль магазина и мастера */
+  const [sProf, setSProf] = useState({
+    shopName: s.shopName, contactName: s.contactName, email: s.email, phone: s.phone, city: s.city,
+    masterName: s.masterName, yearsExperience: s.yearsExperience, achievements: s.achievements, businessStory: s.businessStory,
+  });
+  const [sProfSaved, setSProfSaved] = useState(false);
+  const saveSProf = () => {
+    s.setInfo(sProf);
+    setSProfSaved(true);
+    setTimeout(() => setSProfSaved(false), 2200);
+  };
 
   const lt = s.legalType || "self_employed";
   const planId = acc.planIds[lt];
@@ -727,10 +744,6 @@ export function SellerDashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
-          <button onClick={() => { setTab("settings"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="Настройки"
-            className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-soft hover:bg-line-soft hover:text-ink transition-colors cursor-pointer">
-            <Settings size={19} />
-          </button>
         </div>
       </div>
 
@@ -997,31 +1010,53 @@ export function SellerDashboardPage() {
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 
-          {/* Профиль и юр. данные — всем */}
+          {/* Профиль и юр. данные — доступны и редактируемы на любом тарифе */}
           <SettingsSection title="Профиль и юридические данные" icon={<Settings size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-4">
+            {/* юридические данные (из регистрации, только чтение) */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-5">
               <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
               <p><span className="text-ink-mute block">Форма</span><span className="font-semibold text-ink">{sellerTypeInfo(lt)?.short}</span></p>
               <p><span className="text-ink-mute block">ИНН</span><span className="font-semibold text-ink">{s.inn || "—"}</span></p>
-              <p><span className="text-ink-mute block">Город</span><span className="font-semibold text-ink">{s.city || "—"}</span></p>
+              <p><span className="text-ink-mute block">Регион производства</span><span className="font-semibold text-ink">{s.production_region}</span></p>
             </div>
-            {s.masterName && (
-              <div className="pt-3 border-t border-line-soft">
-                <p className="text-[13px] font-semibold text-ink mb-1">О мастере</p>
-                <p className="text-[12.5px] text-ink-soft">{s.masterName}{s.yearsExperience ? ` · ${s.yearsExperience} лет опыта` : ""}{s.achievements ? ` · ${s.achievements}` : ""}</p>
-                {s.businessStory && <p className="text-[12.5px] text-ink-soft mt-2 leading-relaxed">{s.businessStory}</p>}
-              </div>
-            )}
+
+            {/* контакты магазина — редактируемые */}
+            <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-2.5">Контакты магазина</p>
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
+              <Field label="Название магазина"><input className="field" value={sProf.shopName} onChange={(e) => setSProf({ ...sProf, shopName: e.target.value })} /></Field>
+              <Field label="Контактное лицо"><input className="field" value={sProf.contactName} onChange={(e) => setSProf({ ...sProf, contactName: e.target.value })} /></Field>
+              <Field label="Email"><input className="field" type="email" value={sProf.email} onChange={(e) => setSProf({ ...sProf, email: e.target.value })} /></Field>
+              <Field label="Телефон"><input className="field" value={sProf.phone} onChange={(e) => setSProf({ ...sProf, phone: e.target.value })} /></Field>
+              <Field label="Город"><input className="field" value={sProf.city} onChange={(e) => setSProf({ ...sProf, city: e.target.value })} /></Field>
+            </div>
+
+            {/* о мастере — редактируемое */}
+            <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mt-5 mb-2.5">О мастере</p>
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
+              <Field label="Имя мастера / бренд"><input className="field" value={sProf.masterName} onChange={(e) => setSProf({ ...sProf, masterName: e.target.value })} /></Field>
+              <Field label="Лет опыта"><input className="field" inputMode="numeric" value={sProf.yearsExperience} onChange={(e) => setSProf({ ...sProf, yearsExperience: e.target.value.replace(/\D/g, "") })} /></Field>
+              <div className="sm:col-span-2"><Field label="Достижения"><input className="field" value={sProf.achievements} onChange={(e) => setSProf({ ...sProf, achievements: e.target.value })} placeholder="Награды, публикации, выставки" /></Field></div>
+              <div className="sm:col-span-2"><Field label="История бизнеса"><textarea className="field" rows={3} value={sProf.businessStory} onChange={(e) => setSProf({ ...sProf, businessStory: e.target.value })} placeholder="Как начиналась мастерская, взлёты и падения" /></Field></div>
+            </div>
+
+            <Btn size="sm" className="mt-4" onClick={saveSProf}>
+              {sProfSaved ? <><Check size={15} /> Сохранено</> : "Сохранить изменения"}
+            </Btn>
           </SettingsSection>
 
           {/* Уведомления — всем */}
           <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
-            {([["orders", "Новые заказы и сообщения"], ["payouts", "Выплаты и финансы"], ["promo", "Акции и рекомендации платформы"]] as const).map(([k, label]) => (
-              <label key={k} className="flex items-center justify-between py-2 border-b border-line-soft last:border-0 cursor-pointer">
-                <span className="text-[13px] text-ink-soft">{label}</span>
-                <input type="checkbox" checked={sNotif[k]} onChange={(e) => setSNotif({ ...sNotif, [k]: e.target.checked })} />
-              </label>
-            ))}
+            <div className="space-y-3.5">
+              {([["orders", "Новые заказы и сообщения", "Мгновенно о каждом заказе и вопросе покупателя"], ["payouts", "Выплаты и финансы", "Статусы выплат и поступления средств"], ["promo", "Акции платформы", "Рекомендации и промо-инструменты"]] as const).map(([k, t, d]) => (
+                <div key={k} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold text-ink">{t}</p>
+                    <p className="text-[11.5px] text-ink-mute">{d}</p>
+                  </div>
+                  <Switch checked={sNotif[k]} onChange={(v) => setSNotif({ [k]: v })} label={t} />
+                </div>
+              ))}
+            </div>
           </SettingsSection>
 
           {/* Оформление витрины — со 2-го тарифа */}

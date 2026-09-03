@@ -201,9 +201,13 @@ export function Header() {
                       aria-label={isSeller ? "Открыть кабинет продавца" : "Открыть личный кабинет"}
                       className="group flex items-center gap-2 h-11 pl-1.5 pr-3 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:border-dark hover:-translate-y-px transition-all duration-200"
                     >
-                      <span className="w-8 h-8 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px] group-hover:bg-dark-deep transition-colors">
-                        {(displayName[0] || "?").toUpperCase()}
-                      </span>
+                      {user.avatar && !isSeller ? (
+                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px] group-hover:bg-dark-deep transition-colors">
+                          {(displayName[0] || "?").toUpperCase()}
+                        </span>
+                      )}
                       <span className="max-w-[120px] sm:max-w-[160px] truncate">{displayName}</span>
                     </Link>
                     <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
