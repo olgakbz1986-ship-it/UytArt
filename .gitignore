@@ -1,1 +1,12 @@
-(empty)
+```
+# Build artifacts
+dist/
+build/
+# Dependencies
+node_modules/
+# Compiled files
+*.js
+*.css
+*.svg
+*.html
+```
