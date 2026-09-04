@@ -34,18 +34,18 @@ export const GROUPS = [
 export const groupById = (id: string) => GROUPS.find((g) => g.id === id);
 
 export const GROUP_IMG: Record<string, string> = {
-  decor_home: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=1200&h=800&fit=crop&q=80",
-  clothing_shoes: "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1200&h=800&fit=crop&q=80",
-  accessories: "https://images.unsplash.com/photo-1576053139778-7e32f2ae3cfd?w=1200&h=800&fit=crop&q=80",
-  tech: "https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=1200&h=800&fit=crop&q=80",
-  hardware: "https://images.unsplash.com/photo-1530124566582-d62e74d2e6c1?w=1200&h=800&fit=crop&q=80",
-  home_garden: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=1200&h=800&fit=crop&q=80",
-  beauty: "https://images.unsplash.com/photo-1556228720-19de77ddce5e?w=1200&h=800&fit=crop&q=80",
-  hobby: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?w=1200&h=800&fit=crop&q=80",
-  construction: "https://images.unsplash.com/photo-1518709414768-a88981a4515d?w=1200&h=800&fit=crop&q=80",
-  finishing: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=1200&h=800&fit=crop&q=80",
-  furniture_textile: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=1200&h=800&fit=crop&q=80",
-  plumbing_comms: "https://images.unsplash.com/photo-1585704032915-c843f6785388?w=1200&h=800&fit=crop&q=80",
+  decor_home: "/img/decor_home.jpg",
+  clothing_shoes: "/img/clothing_shoes.jpg",
+  accessories: "/img/accessories.jpg",
+  tech: "/img/tech.jpg",
+  hardware: "/img/hardware.jpg",
+  home_garden: "/img/home_garden.jpg",
+  beauty: "/img/beauty.jpg",
+  hobby: "/img/hobby.jpg",
+  construction: "/img/construction.jpg",
+  finishing: "/img/finishing.jpg",
+  furniture_textile: "/img/furniture_textile.jpg",
+  plumbing_comms: "/img/plumbing_comms.jpg",
 };
 
 /* ---------- категории с подкатегориями ---------- */
