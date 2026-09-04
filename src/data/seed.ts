@@ -1,6 +1,6 @@
 /* ============================================================
    УютАрт — слой данных.
-   8 групп каталога → 41 категория → подкатегории → ~230 товаров.
+   12 групп каталога → категории → подкатегории → товары.
    ============================================================ */
 
 export const OPERATOR = {
@@ -16,28 +16,36 @@ export const OPERATOR = {
 
 export type ProductType = "ready_made" | "custom_made";
 
-/* ---------- 8 групп каталога ---------- */
+/* ---------- 12 групп каталога ---------- */
 export const GROUPS = [
-  { id: "home", name: "Декор и дом", emoji: "🏠", desc: "Текстиль, керамика, свет и мебель" },
-  { id: "fashion", name: "Одежда и обувь", emoji: "👗", desc: "Авторская одежда и обувь" },
-  { id: "accessories", name: "Аксессуары", emoji: "👜", desc: "Сумки, украшения, часы" },
-  { id: "tech", name: "Техника", emoji: "📱", desc: "Гаджеты, аудио, умный дом" },
-  { id: "hardware", name: "Фурнитура", emoji: "🔧", desc: "Инструменты, крепёж, замки" },
-  { id: "lifestyle", name: "Быт и сад", emoji: "🪴", desc: "Посуда, хранение, сад" },
-  { id: "beauty", name: "Красота", emoji: "🧴", desc: "Уход и косметика" },
-  { id: "hobby", name: "Хобби", emoji: "🎨", desc: "Творчество и игры" },
+  { id: "decor_home", name: "Декор и дом", emoji: "🏠", desc: "Вазы, статуэтки, картины, зеркала, свечи" },
+  { id: "clothing_shoes", name: "Одежда и обувь", emoji: "👗", desc: "Женская, мужская, детская одежда и обувь" },
+  { id: "accessories", name: "Аксессуары", emoji: "👜", desc: "Сумки, украшения, часы, ремни, очки" },
+  { id: "tech", name: "Техника", emoji: "📱", desc: "Бытовая техника, компьютеры, смартфоны, аудио" },
+  { id: "hardware", name: "Фурнитура", emoji: "🔧", desc: "Крепёж, мебельная, дверная, оконная фурнитура" },
+  { id: "home_garden", name: "Быт и сад", emoji: "🪴", desc: "Уборка, хранение, сад, товары для животных" },
+  { id: "beauty", name: "Красота", emoji: "🧴", desc: "Уход за лицом, телом, волосами, косметика" },
+  { id: "hobby", name: "Хобби", emoji: "🎨", desc: "Рисование, рукоделие, игры, канцелярия" },
+  { id: "construction", name: "Стройматериалы и конструкции", emoji: "🧱", desc: "Кирпич, цемент, пиломатериалы, кровля, двери, окна" },
+  { id: "finishing", name: "Отделка и ремонт", emoji: "🎨", desc: "Обои, штукатурка, краски, напольные покрытия, плитка" },
+  { id: "furniture_textile", name: "Мебель и текстиль", emoji: "🛋️", desc: "Диваны, кровати, шкафы, шторы, постельное бельё" },
+  { id: "plumbing_comms", name: "Сантехника и коммуникации", emoji: "🚿", desc: "Ванны, раковины, унитазы, смесители, электрика, освещение" },
 ];
 export const groupById = (id: string) => GROUPS.find((g) => g.id === id);
 
 export const GROUP_IMG: Record<string, string> = {
-  home: "https://image.qwenlm.ai/generated-images/74dccccd-f86c-4f10-b4ac-ebf41c899d76/_result.png",
-  fashion: "https://image.qwenlm.ai/generated-images/dfa43fe6-81d0-4256-b409-8b85ae11fd3b/_result.png",
-  accessories: "https://image.qwenlm.ai/generated-images/be1a669a-e043-4389-8f66-1348de232e30/_result.png",
-  tech: "https://image.qwenlm.ai/generated-images/3b39ac23-cc8a-4d8b-a251-5986b0767844/_result.png",
-  hardware: "https://image.qwenlm.ai/generated-images/d6739337-de1d-4aa8-a8f6-4c75ef66a4f1/_result.png",
-  lifestyle: "https://image.qwenlm.ai/generated-images/8f059882-4120-4d53-86de-2aed9be0e14a/_result.png",
-  beauty: "https://image.qwenlm.ai/generated-images/326026d2-bc84-400e-ae46-0bf5612faf8d/_result.png",
-  hobby: "https://image.qwenlm.ai/generated-images/9a330681-dd17-4dbb-92e3-8b476ca6eea5/_result.png",
+  decor_home: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop",
+  clothing_shoes: "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=800&h=600&fit=crop",
+  accessories: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800&h=600&fit=crop",
+  tech: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&h=600&fit=crop",
+  hardware: "https://images.unsplash.com/photo-1581147036324-c17ac41dfa6c?w=800&h=600&fit=crop",
+  home_garden: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop",
+  beauty: "https://images.unsplash.com/photo-1596462502278-27bfdd403348?w=800&h=600&fit=crop",
+  hobby: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800&h=600&fit=crop",
+  construction: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=800&h=600&fit=crop",
+  finishing: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&h=600&fit=crop",
+  furniture_textile: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&h=600&fit=crop",
+  plumbing_comms: "https://images.unsplash.com/photo-1584622050111-993a426fbf0a?w=800&h=600&fit=crop",
 };
 
 /* ---------- категории с подкатегориями ---------- */
@@ -49,62 +57,167 @@ const sub = (list: string[]): SubCategory[] =>
   list.map((name) => ({ slug: name.toLowerCase().replace(/[^а-яa-z0-9]+/gi, "-").replace(/^-+|-+$/g, ""), name }));
 
 export const CATEGORIES: Category[] = [
-  /* --- Декор и дом (12) --- */
-  { slug: "textile", name: "Текстиль", emoji: "🧶", group: "home", desc: "Лён, хлопок и шерсть северных мануфактур.", subs: sub(["Подушки", "Пледы", "Шторы", "Ковры", "Скатерти", "Полотенца", "Постельное бельё", "Чехлы"]) },
-  { slug: "ceramics", name: "Керамика", emoji: "🏺", group: "home", desc: "Кружки, вазы и сервизы ручного обжига.", subs: sub(["Кружки", "Тарелки", "Вазы", "Чайники", "Пиалы", "Сервизы", "Кувшины", "Маслёнки"]) },
-  { slug: "lighting", name: "Освещение", emoji: "💡", group: "home", desc: "Авторские лампы и светильники.", subs: sub(["Настольные лампы", "Торшеры", "Подвесные", "Бра", "Ночники", "Гирлянды"]) },
-  { slug: "mirrors", name: "Зеркала", emoji: "🪞", group: "home", desc: "Зеркала в рамах из ротанга и дуба.", subs: sub(["В раме", "Настенные", "Напольные", "Настольные", "С подсветкой"]) },
-  { slug: "wood", name: "Дерево и плетение", emoji: "🪵", group: "home", desc: "Доски, корзины и шкатулки.", subs: sub(["Разделочные доски", "Корзины", "Шкатулки", "Подносы", "Полки", "Кашпо"]) },
-  { slug: "candles", name: "Свечи и ароматы", emoji: "🕯️", group: "home", desc: "Соевый воск и эфирные масла.", subs: sub(["Соевые свечи", "Диффузоры", "Саше", "Благовония", "Подсвечники"]) },
-  { slug: "art", name: "Картины и постеры", emoji: "🖼️", group: "home", desc: "Живопись, гравюры, постеры.", subs: sub(["Картины", "Постеры", "Гравюры", "Абстракции", "Иллюстрации"]) },
-  { slug: "wall", name: "Декор для стен", emoji: "🪢", group: "home", desc: "Панно, макраме, часы.", subs: sub(["Панно", "Макраме", "Часы", "Наклейки", "Молдинги"]) },
-  { slug: "kitchen", name: "Кухонный декор", emoji: "🍽️", group: "home", desc: "Приборы, доски, фартуки.", subs: sub(["Приборы", "Доски", "Ёмкости", "Прихватки", "Фартуки", "Органайзеры"]) },
-  { slug: "bathroom", name: "Декор для ванной", emoji: "🛁", group: "home", desc: "Дозаторы, корзины, шторки.", subs: sub(["Дозаторы", "Мыльницы", "Корзины", "Шторки", "Коврики"]) },
-  { slug: "smart", name: "Умный дом", emoji: "🔌", group: "home", desc: "Розетки, датчики, замки.", subs: sub(["Умные розетки", "Датчики", "Термостаты", "Камеры", "Замки", "Помощники"]) },
-  { slug: "furniture", name: "Мебель", emoji: "🪑", group: "home", desc: "Массив дуба и сосны.", subs: sub(["Табуреты", "Стеллажи", "Тумбы", "Пуфы", "Консоли", "Столики"]) },
+  /* --- Декор и дом (10 подкатегорий) --- */
+  { slug: "vases-cachepots", name: "Вазы и кашпо", emoji: "🏺", group: "decor_home", desc: "Декоративные вазы и цветочные кашпо.", subs: sub([]) },
+  { slug: "figurines-sculptures", name: "Статуэтки и скульптуры", emoji: "🗿", group: "decor_home", desc: "Декоративные фигурки и авторские скульптуры.", subs: sub([]) },
+  { slug: "paintings-posters-panels", name: "Картины, постеры и панно", emoji: "🖼️", group: "decor_home", desc: "Живопись, постеры и декоративные панно.", subs: sub([]) },
+  { slug: "mirrors-frames", name: "Зеркала и рамы", emoji: "🪞", group: "decor_home", desc: "Зеркала в рамах и багетные изделия.", subs: sub([]) },
+  { slug: "candles-holders", name: "Свечи и подсвечники", emoji: "🕯️", group: "decor_home", desc: "Ароматические свечи и декоративные подсвечники.", subs: sub([]) },
+  { slug: "decorative-figures-souvenirs", name: "Декоративные фигурки и сувениры", emoji: "🎁", group: "decor_home", desc: "Авторские сувениры и интерьерные фигурки.", subs: sub([]) },
+  { slug: "wall-ceiling-decor", name: "Настенный и потолочный декор", emoji: "🎨", group: "decor_home", desc: "Декор для стен и потолков.", subs: sub([]) },
+  { slug: "3d-panels-author-decor", name: "3D-панели и авторский декор", emoji: "🧱", group: "decor_home", desc: "Объёмные панели и уникальный декор.", subs: sub([]) },
+  { slug: "photo-frames-albums", name: "Фоторамки и альбомы", emoji: "📷", group: "decor_home", desc: "Рамки для фото и фотоальбомы.", subs: sub([]) },
+  { slug: "home-aromas", name: "Ароматы для дома", emoji: "🌸", group: "decor_home", desc: "Диффузоры, саше и ароматизаторы.", subs: sub([]) },
 
-  /* --- Одежда и обувь (5) --- */
-  { slug: "women", name: "Женская одежда", emoji: "👗", group: "fashion", desc: "Платья, костюмы, блузы.", subs: sub(["Платья", "Костюмы", "Блузы", "Юбки", "Трикотаж"]) },
-  { slug: "men", name: "Мужская одежда", emoji: "👔", group: "fashion", desc: "Рубашки, брюки, свитеры.", subs: sub(["Рубашки", "Брюки", "Свитеры", "Футболки"]) },
-  { slug: "shoes", name: "Обувь", emoji: "👞", group: "fashion", desc: "Ручная обувь из кожи.", subs: sub(["Туфли", "Ботинки", "Кроссовки", "Сандалии"]) },
-  { slug: "outerwear", name: "Верхняя одежда", emoji: "🧥", group: "fashion", desc: "Пальто, куртки, жилеты.", subs: sub(["Пальто", "Куртки", "Жилеты", "Плащи"]) },
-  { slug: "kids", name: "Детская одежда", emoji: "🧒", group: "fashion", desc: "Одежда для детей.", subs: sub(["Для малышей", "Для школьников", "Комбинезоны"]) },
+  /* --- Одежда и обувь (10 подкатегорий) --- */
+  { slug: "womens-clothing", name: "Женская одежда", emoji: "👗", group: "clothing_shoes", desc: "Платья, блузы, костюмы и другая женская одежда.", subs: sub([]) },
+  { slug: "mens-clothing", name: "Мужская одежда", emoji: "👔", group: "clothing_shoes", desc: "Рубашки, брюки, свитеры и другая мужская одежда.", subs: sub([]) },
+  { slug: "kids-clothing", name: "Детская одежда", emoji: "🧒", group: "clothing_shoes", desc: "Одежда для детей всех возрастов.", subs: sub([]) },
+  { slug: "womens-shoes", name: "Обувь женская", emoji: "👠", group: "clothing_shoes", desc: "Туфли, ботинки, сапоги для женщин.", subs: sub([]) },
+  { slug: "mens-shoes", name: "Обувь мужская", emoji: "👞", group: "clothing_shoes", desc: "Туфли, ботинки, кроссовки для мужчин.", subs: sub([]) },
+  { slug: "kids-shoes", name: "Обувь детская", emoji: "👟", group: "clothing_shoes", desc: "Обувь для детей и подростков.", subs: sub([]) },
+  { slug: "sport-clothing-shoes", name: "Спортивная одежда и обувь", emoji: "🏃", group: "clothing_shoes", desc: "Одежда и обувь для спорта и активного отдыха.", subs: sub([]) },
+  { slug: "outerwear", name: "Верхняя одежда", emoji: "🧥", group: "clothing_shoes", desc: "Пальто, куртки, пуховики и плащи.", subs: sub([]) },
+  { slug: "underwear-socks", name: "Нижнее бельё и носки", emoji: "🩲", group: "clothing_shoes", desc: "Бельё, носки и колготки.", subs: sub([]) },
+  { slug: "workwear", name: "Спецодежда", emoji: "🦺", group: "clothing_shoes", desc: "Рабочая и защитная одежда.", subs: sub([]) },
 
-  /* --- Аксессуары (5) --- */
-  { slug: "bags", name: "Сумки", emoji: "👜", group: "accessories", desc: "Сумки из натуральной кожи.", subs: sub(["Тоуты", "Кросс-боди", "Рюкзаки", "Клатчи"]) },
-  { slug: "belts", name: "Ремни", emoji: "🪢", group: "accessories", desc: "Ремни ручной прошивки.", subs: sub(["Кожаные", "Плетёные", "С пряжкой"]) },
-  { slug: "jewelry", name: "Украшения", emoji: "💍", group: "accessories", desc: "Серебро, латунь, камни.", subs: sub(["Кольца", "Серьги", "Браслеты", "Подвески"]) },
-  { slug: "hats", name: "Шапки и шарфы", emoji: "🧣", group: "accessories", desc: "Вязаные шапки и шарфы.", subs: sub(["Шапки", "Шарфы", "Береты", "Перчатки"]) },
-  { slug: "watches", name: "Часы", emoji: "⌚", group: "accessories", desc: "Механика и минимализм.", subs: sub(["Механические", "Кварцевые", "Ремешки"]) },
+  /* --- Аксессуары (10 подкатегорий) --- */
+  { slug: "bags-backpacks-clutches", name: "Сумки, рюкзаки и клатчи", emoji: "👜", group: "accessories", desc: "Сумки, рюкзаки, клатчи и поясные сумки.", subs: sub([]) },
+  { slug: "jewelry", name: "Украшения", emoji: "💍", group: "accessories", desc: "Золотые, серебряные и бижутерные украшения.", subs: sub([]) },
+  { slug: "costume-jewelry", name: "Бижутерия", emoji: "📿", group: "accessories", desc: "Декоративные украшения и аксессуары.", subs: sub([]) },
+  { slug: "wristwatches", name: "Часы наручные", emoji: "⌚", group: "accessories", desc: "Механические, кварцевые и умные часы.", subs: sub([]) },
+  { slug: "belts-sashes", name: "Ремни и пояса", emoji: "🪢", group: "accessories", desc: "Кожаные и текстильные ремни.", subs: sub([]) },
+  { slug: "scarves-shawls-pashminas", name: "Шарфы, платки и палантины", emoji: "🧣", group: "accessories", desc: "Шарфы, палантины и шейные платки.", subs: sub([]) },
+  { slug: "headwear", name: "Головные уборы", emoji: "🧢", group: "accessories", desc: "Шапки, кепки, шляпы и береты.", subs: sub([]) },
+  { slug: "glasses-frames", name: "Очки и оправы", emoji: "👓", group: "accessories", desc: "Оптические и солнцезащитные очки.", subs: sub([]) },
+  { slug: "wallets-portmonees", name: "Кошельки и портмоне", emoji: "💼", group: "accessories", desc: "Кошельки, портмоне и визитницы.", subs: sub([]) },
+  { slug: "umbrellas-caness", name: "Зонты и трости", emoji: "☂️", group: "accessories", desc: "Зонты, трости и аксессуары от дождя.", subs: sub([]) },
 
-  /* --- Техника (5) --- */
-  { slug: "gadgets", name: "Гаджеты", emoji: "📱", group: "tech", desc: "Смартфоны и аксессуары.", subs: sub(["Смартфоны", "Чехлы", "Зарядки", "Держатели"]) },
-  { slug: "audio", name: "Аудио", emoji: "🎧", group: "tech", desc: "Наушники и колонки.", subs: sub(["Наушники", "Колонки", "Винил", "Усилители"]) },
-  { slug: "smarthome", name: "Умные устройства", emoji: "🏡", group: "tech", desc: "Датчики и хабы.", subs: sub(["Хабы", "Лампочки", "Розетки", "Камеры"]) },
-  { slug: "computers", name: "Компьютеры", emoji: "💻", group: "tech", desc: "Ноутбуки и периферия.", subs: sub(["Ноутбуки", "Клавиатуры", "Мыши", "Мониторы"]) },
-  { slug: "photo", name: "Фото и видео", emoji: "📷", group: "tech", desc: "Камеры и объективы.", subs: sub(["Камеры", "Объективы", "Штативы", "Свет"]) },
+  /* --- Техника (10 подкатегорий) --- */
+  { slug: "large-appliances", name: "Бытовая техника крупная", emoji: "🧊", group: "tech", desc: "Холодильники, стиральные машины, плиты.", subs: sub([]) },
+  { slug: "small-appliances", name: "Бытовая техника мелкая", emoji: "🫖", group: "tech", desc: "Утюги, пылесосы, фены и мелкая техника.", subs: sub([]) },
+  { slug: "kitchen-appliances", name: "Кухонная техника", emoji: "🍳", group: "tech", desc: "Миксеры, блендеры, мультиварки и кухонные приборы.", subs: sub([]) },
+  { slug: "tvs-audio", name: "Телевизоры и аудиотехника", emoji: "📺", group: "tech", desc: "ТВ, домашние кинотеатры, Hi-Fi системы.", subs: sub([]) },
+  { slug: "computers-laptops", name: "Компьютеры и ноутбуки", emoji: "💻", group: "tech", desc: "ПК, ноутбуки, моноблоки и рабочие станции.", subs: sub([]) },
+  { slug: "smartphones-tablets", name: "Смартфоны и планшеты", emoji: "📱", group: "tech", desc: "Мобильные устройства и планшетные ПК.", subs: sub([]) },
+  { slug: "headphones-speakers", name: "Наушники и колонки", emoji: "🎧", group: "tech", desc: "Наушники, гарнитуры, Bluetooth-колонки.", subs: sub([]) },
+  { slug: "photo-video", name: "Фото- и видеотехника", emoji: "📷", group: "tech", desc: "Камеры, объективы, экшн-камеры и аксессуары.", subs: sub([]) },
+  { slug: "gaming-consoles-electronics", name: "Игровые приставки и электроника", emoji: "🎮", group: "tech", desc: "Консоли, геймпады, VR-устройства.", subs: sub([]) },
+  { slug: "smart-home", name: "Умный дом", emoji: "🏠", group: "tech", desc: "Умные розетки, датчики, хабы и системы управления.", subs: sub([]) },
 
-  /* --- Фурнитура (5) --- */
-  { slug: "tools", name: "Инструменты", emoji: "🔨", group: "hardware", desc: "Ручной и электроинструмент.", subs: sub(["Ручные", "Электро", "Измерительные", "Наборы"]) },
-  { slug: "fasteners", name: "Крепёж", emoji: "🔩", group: "hardware", desc: "Саморезы, болты, анкеры.", subs: sub(["Саморезы", "Болты", "Анкеры", "Уголки"]) },
-  { slug: "locks", name: "Замки и ручки", emoji: "🔑", group: "hardware", desc: "Дверная фурнитура.", subs: sub(["Замки", "Ручки", "Петли", "Доводчики"]) },
-  { slug: "plumbing", name: "Сантехника", emoji: "🚿", group: "hardware", desc: "Смесители и фитинги.", subs: sub(["Смесители", "Фитинги", "Шланги", "Сифоны"]) },
-  { slug: "electric", name: "Электрика", emoji: "⚡", group: "hardware", desc: "Розетки и выключатели.", subs: sub(["Розетки", "Выключатели", "Кабели", "Автоматы"]) },
+  /* --- Фурнитура (10 подкатегорий) --- */
+  { slug: "fasteners-hardware", name: "Крепёж и метизы", emoji: "🔩", group: "hardware", desc: "Болты, гайки, саморезы, анкеры.", subs: sub([]) },
+  { slug: "furniture-fittings", name: "Мебельная фурнитура", emoji: "🪑", group: "hardware", desc: "Петли, направляющие, ручки для мебели.", subs: sub([]) },
+  { slug: "door-fittings", name: "Дверная фурнитура", emoji: "🚪", group: "hardware", desc: "Замки, ручки, петли для дверей.", subs: sub([]) },
+  { slug: "window-fittings", name: "Оконная фурнитура", emoji: "🪟", group: "hardware", desc: "Ручки, петли, уплотнители для окон.", subs: sub([]) },
+  { slug: "plumbing-fittings", name: "Сантехническая фурнитура", emoji: "🔧", group: "hardware", desc: "Фитинги, переходники, сифоны.", subs: sub([]) },
+  { slug: "electrical-installations", name: "Электроустановочные изделия", emoji: "⚡", group: "hardware", desc: "Розетки, выключатели, распредкоробки.", subs: sub([]) },
+  { slug: "hand-tools", name: "Инструменты ручные", emoji: "🔨", group: "hardware", desc: "Молотки, отвёртки, ключи, плоскогубцы.", subs: sub([]) },
+  { slug: "power-tools", name: "Инструменты электро", emoji: "🪚", group: "hardware", desc: "Дрели, шуруповёрты, пилы, шлифмашины.", subs: sub([]) },
+  { slug: "consumables", name: "Расходные материалы", emoji: "📦", group: "hardware", desc: "Свёрла, диски, наждачная бумага.", subs: sub([]) },
+  { slug: "measuring-tools", name: "Измерительный инструмент", emoji: "📏", group: "hardware", desc: "Рулетки, уровни, штангенциркули.", subs: sub([]) },
 
-  /* --- Быт и сад (5) --- */
-  { slug: "garden", name: "Сад", emoji: "🌿", group: "lifestyle", desc: "Инвентарь и кашпо.", subs: sub(["Инвентарь", "Кашпо", "Семена", "Грунт"]) },
-  { slug: "tableware", name: "Посуда", emoji: "🍲", group: "lifestyle", desc: "Кастрюли, сковороды, формы.", subs: sub(["Кастрюли", "Сковороды", "Формы", "Ножи"]) },
-  { slug: "storage", name: "Хранение", emoji: "📦", group: "lifestyle", desc: "Органайзеры и контейнеры.", subs: sub(["Органайзеры", "Контейнеры", "Коробки", "Вешалки"]) },
-  { slug: "cleaning", name: "Уборка и уход", emoji: "🧹", group: "lifestyle", desc: "Щётки и средства.", subs: sub(["Щётки", "Тряпки", "Средства", "Губки"]) },
-  { slug: "pets", name: "Товары для питомцев", emoji: "🐾", group: "lifestyle", desc: "Лежанки и миски.", subs: sub(["Лежанки", "Миски", "Игрушки", "Когтеточки"]) },
+  /* --- Быт и сад (10 подкатегорий) --- */
+  { slug: "cleaning-products", name: "Товары для уборки", emoji: "🧹", group: "home_garden", desc: "Щётки, швабры, тряпки, вёдра.", subs: sub([]) },
+  { slug: "storage-organization", name: "Хранение и организация пространства", emoji: "📦", group: "home_garden", desc: "Контейнеры, органайзеры, коробки.", subs: sub([]) },
+  { slug: "household-tableware", name: "Посуда хозяйственная", emoji: "🍲", group: "home_garden", desc: "Кастрюли, сковороды, формы для выпечки.", subs: sub([]) },
+  { slug: "garden-furniture", name: "Садовая мебель", emoji: "🪑", group: "home_garden", desc: "Скамейки, столы, стулья для сада.", subs: sub([]) },
+  { slug: "garden-tools", name: "Садовый инвентарь", emoji: "🌿", group: "home_garden", desc: "Лопаты, грабли, секаторы, тяпки.", subs: sub([]) },
+  { slug: "irrigation-systems", name: "Системы полива", emoji: "💧", group: "home_garden", desc: "Шланги, распылители, автополив.", subs: sub([]) },
+  { slug: "greenhouses-hotbeds", name: "Теплицы и парники", emoji: "🏡", group: "home_garden", desc: "Теплицы, парники, укрытия для растений.", subs: sub([]) },
+  { slug: "bbq-grills", name: "Барбекю и мангалы", emoji: "🔥", group: "home_garden", desc: "Мангалы, грили, коптильни.", subs: sub([]) },
+  { slug: "pet-products", name: "Товары для животных", emoji: "🐾", group: "home_garden", desc: "Лежанки, миски, игрушки, переноски.", subs: sub([]) },
+  { slug: "pet-food", name: "Корма для животных", emoji: "🦴", group: "home_garden", desc: "Сухие и влажные корма, лакомства.", subs: sub([]) },
 
-  /* --- Красота (2) --- */
-  { slug: "care", name: "Уход", emoji: "🧼", group: "beauty", desc: "Мыло, кремы, масла.", subs: sub(["Мыло", "Кремы", "Масла", "Скрабы"]) },
-  { slug: "cosmetics", name: "Косметика", emoji: "💄", group: "beauty", desc: "Декоративная косметика.", subs: sub(["Для лица", "Для губ", "Для глаз", "Кисти"]) },
+  /* --- Красота (10 подкатегорий) --- */
+  { slug: "face-care", name: "Уход за лицом", emoji: "🧴", group: "beauty", desc: "Кремы, сыворотки, маски для лица.", subs: sub([]) },
+  { slug: "body-care", name: "Уход за телом", emoji: "🛁", group: "beauty", desc: "Гели, лосьоны, скрабы для тела.", subs: sub([]) },
+  { slug: "hair-care", name: "Уход за волосами", emoji: "💇", group: "beauty", desc: "Шампуни, кондиционеры, маски для волос.", subs: sub([]) },
+  { slug: "decorative-cosmetics", name: "Декоративная косметика", emoji: "💄", group: "beauty", desc: "Помады, туши, тени, тональные средства.", subs: sub([]) },
+  { slug: "perfumes-aromas", name: "Парфюмерия и ароматы", emoji: "🌺", group: "beauty", desc: "Духи, туалетная вода, одеколоны.", subs: sub([]) },
+  { slug: "handmade-soap", name: "Мыло ручной работы", emoji: "🧼", group: "beauty", desc: "Авторское мыло и мыльные наборы.", subs: sub([]) },
+  { slug: "natural-organic-cosmetics", name: "Натуральная и органическая косметика", emoji: "🌿", group: "beauty", desc: "Эко-косметика и натуральные средства.", subs: sub([]) },
+  { slug: "beauty-accessories", name: "Аксессуары для красоты", emoji: "💅", group: "beauty", desc: "Кисти, спонжи, расчёски, зеркала.", subs: sub([]) },
+  { slug: "manicure-pedicure", name: "Маникюр и педикюр", emoji: "💅", group: "beauty", desc: "Лаки, инструменты, наборы для ногтей.", subs: sub([]) },
+  { slug: "mens-cosmetics-care", name: "Мужская косметика и уход", emoji: "🧔", group: "beauty", desc: "Средства для бритья, ухода за бородой.", subs: sub([]) },
 
-  /* --- Хобби (2) --- */
-  { slug: "craft", name: "Творчество", emoji: "🎨", group: "hobby", desc: "Краски, холсты, наборы.", subs: sub(["Краски", "Холсты", "Наборы", "Инструменты"]) },
-  { slug: "games", name: "Игры", emoji: "🎲", group: "hobby", desc: "Настольные игры и пазлы.", subs: sub(["Настольные", "Пазлы", "Головоломки"]) },
+  /* --- Хобби (10 подкатегорий) --- */
+  { slug: "drawing-painting-materials", name: "Материалы для рисования и живописи", emoji: "🎨", group: "hobby", desc: "Краски, холсты, кисти, карандаши.", subs: sub([]) },
+  { slug: "needlework", name: "Рукоделие", emoji: "🧶", group: "hobby", desc: "Наборы для вышивания, вязания, шитья.", subs: sub([]) },
+  { slug: "sculpture-modeling", name: "Лепка и моделирование", emoji: "🏺", group: "hobby", desc: "Пластилин, глина, полимерная глина.", subs: sub([]) },
+  { slug: "craft-kits", name: "Наборы для творчества", emoji: "✂️", group: "hobby", desc: "Готовые наборы для создания поделок.", subs: sub([]) },
+  { slug: "board-games-puzzles", name: "Настольные игры и головоломки", emoji: "🎲", group: "hobby", desc: "Настольные игры, пазлы, кубики Рубика.", subs: sub([]) },
+  { slug: "kids-toys", name: "Игрушки детские", emoji: "🧸", group: "hobby", desc: "Мягкие игрушки, куклы, машинки.", subs: sub([]) },
+  { slug: "educational-toys", name: "Игрушки развивающие", emoji: "🔤", group: "hobby", desc: "Обучающие игры, конструкторы, сортеры.", subs: sub([]) },
+  { slug: "collectibles", name: "Коллекционные изделия", emoji: "🏆", group: "hobby", desc: "Фигурки, монеты, марки для коллекционирования.", subs: sub([]) },
+  { slug: "stationery-paper", name: "Канцелярия и бумага", emoji: "📝", group: "hobby", desc: "Блокноты, ручки, бумага, конверты.", subs: sub([]) },
+  { slug: "fishing-hunting", name: "Товары для рыбалки и охоты", emoji: "🎣", group: "hobby", desc: "Удочки, снасти, экипировка.", subs: sub([]) },
+
+  /* --- Стройматериалы и конструкции (13 подкатегорий) --- */
+  { slug: "bricks-wall-blocks", name: "Кирпич и стеновые блоки", emoji: "🧱", group: "construction", desc: "Кирпич, газоблоки, пеноблоки.", subs: sub([]) },
+  { slug: "cement-dry-mixes-plasters", name: "Цемент, смеси и штукатурки сухие", emoji: "🏗️", group: "construction", desc: "Цемент, штукатурки, кладочные смеси.", subs: sub([]) },
+  { slug: "lumber-boards", name: "Пиломатериалы и доски", emoji: "🪵", group: "construction", desc: "Доски, брус, рейки, фанера.", subs: sub([]) },
+  { slug: "roofing-materials", name: "Кровельные материалы", emoji: "🏠", group: "construction", desc: "Черепица, профнастил, рубероид.", subs: sub([]) },
+  { slug: "gutter-systems", name: "Водосточные системы", emoji: "💧", group: "construction", desc: "Желоба, трубы, воронки водостока.", subs: sub([]) },
+  { slug: "entrance-doors", name: "Двери входные", emoji: "🚪", group: "construction", desc: "Металлические и деревянные входные двери.", subs: sub([]) },
+  { slug: "interior-doors", name: "Двери межкомнатные", emoji: "🚪", group: "construction", desc: "Межкомнатные двери и перегородки.", subs: sub([]) },
+  { slug: "pvc-windows", name: "Окна ПВХ", emoji: "🪟", group: "construction", desc: "Пластиковые окна и профили.", subs: sub([]) },
+  { slug: "wooden-windows", name: "Окна деревянные", emoji: "🪵", group: "construction", desc: "Деревянные окна и рамы.", subs: sub([]) },
+  { slug: "gates-fences", name: "Ворота, калитки и заборы", emoji: "🚧", group: "construction", desc: "Ворота, ограждения, заборы.", subs: sub([]) },
+  { slug: "insulation", name: "Утеплители", emoji: "🧣", group: "construction", desc: "Минвата, пенопласт, утеплители.", subs: sub([]) },
+  { slug: "metal-rolling-rebar", name: "Металлопрокат и арматура", emoji: "🔩", group: "construction", desc: "Арматура, уголки, швеллеры.", subs: sub([]) },
+  { slug: "dry-building-mixes", name: "Сухие строительные смеси", emoji: "🧪", group: "construction", desc: "Шпатлёвки, клеи, затирки.", subs: sub([]) },
+
+  /* --- Отделка и ремонт (12 подкатегорий) --- */
+  { slug: "wallpapers-frescos", name: "Обои и фрески", emoji: "🎨", group: "finishing", desc: "Обои, фотообои, фрески.", subs: sub([]) },
+  { slug: "decorative-plaster", name: "Декоративная штукатурка", emoji: "🖌️", group: "finishing", desc: "Фактурные и гладкие штукатурки.", subs: sub([]) },
+  { slug: "interior-paints", name: "Краски интерьерные", emoji: "🎨", group: "finishing", desc: "Краски для внутренних работ.", subs: sub([]) },
+  { slug: "facade-paints", name: "Краски фасадные", emoji: "🏡", group: "finishing", desc: "Краски для наружных работ.", subs: sub([]) },
+  { slug: "varnishes-stains", name: "Лаки и пропитки", emoji: "🪵", group: "finishing", desc: "Лаки, морилки, защитные пропитки.", subs: sub([]) },
+  { slug: "flooring", name: "Напольные покрытия", emoji: "🪵", group: "finishing", desc: "Ламинат, паркет, линолеум, ковролин.", subs: sub([]) },
+  { slug: "ceramic-tiles-porcelain", name: "Керамическая плитка и керамогранит", emoji: "🔲", group: "finishing", desc: "Плитка, мозаика, керамогранит.", subs: sub([]) },
+  { slug: "drywall-profiles", name: "Гипсокартон и профили", emoji: "📐", group: "finishing", desc: "ГКЛ, профили, комплектующие.", subs: sub([]) },
+  { slug: "stretch-ceilings", name: "Натяжные потолки и комплектующие", emoji: "✨", group: "finishing", desc: "Натяжные потолки, профили, заглушки.", subs: sub([]) },
+  { slug: "moldings-baseboards-cornices", name: "Молдинги, плинтусы и карнизы", emoji: "📏", group: "finishing", desc: "Декоративные молдинги и плинтусы.", subs: sub([]) },
+  { slug: "adhesives-sealants", name: "Клеи и герметики", emoji: "🧴", group: "finishing", desc: "Клеи, герметики, жидкие гвозди.", subs: sub([]) },
+  { slug: "primers-impregnations", name: "Грунтовки и пропитки", emoji: "💧", group: "finishing", desc: "Грунтовки, антисептики, пропитки.", subs: sub([]) },
+
+  /* --- Мебель и текстиль (14 подкатегорий) --- */
+  { slug: "sofas-armchairs", name: "Диваны и кресла", emoji: "🛋️", group: "furniture_textile", desc: "Диваны, кресла, пуфы.", subs: sub([]) },
+  { slug: "beds-mattresses", name: "Кровати и матрасы", emoji: "🛏️", group: "furniture_textile", desc: "Кровати, матрасы, основания.", subs: sub([]) },
+  { slug: "wardrobes-shelves", name: "Шкафы и стеллажи", emoji: "🚪", group: "furniture_textile", desc: "Шкафы-купе, стеллажи, комоды.", subs: sub([]) },
+  { slug: "tables-chairs", name: "Столы и стулья", emoji: "🪑", group: "furniture_textile", desc: "Обеденные, письменные столы, стулья.", subs: sub([]) },
+  { slug: "kitchen-sets", name: "Кухонные гарнитуры", emoji: "🍽️", group: "furniture_textile", desc: "Кухонные гарнитуры и модули.", subs: sub([]) },
+  { slug: "kids-furniture", name: "Детская мебель", emoji: "🧸", group: "furniture_textile", desc: "Детские кровати, столы, шкафы.", subs: sub([]) },
+  { slug: "office-furniture", name: "Офисная мебель", emoji: "💼", group: "furniture_textile", desc: "Офисные столы, кресла, тумбы.", subs: sub([]) },
+  { slug: "garden-outdoor-furniture", name: "Садовая и дачная мебель", emoji: "🏡", group: "furniture_textile", desc: "Мебель для сада и дачи.", subs: sub([]) },
+  { slug: "curtains-tulle", name: "Шторы и тюль", emoji: "🎭", group: "furniture_textile", desc: "Шторы, тюль, портьеры.", subs: sub([]) },
+  { slug: "throws-bedspreads", name: "Пледы и покрывала", emoji: "🧶", group: "furniture_textile", desc: "Пледы, покрывала, накидки.", subs: sub([]) },
+  { slug: "decorative-pillows", name: "Декоративные подушки", emoji: "🛋️", group: "furniture_textile", desc: "Декоративные подушки и наволочки.", subs: sub([]) },
+  { slug: "bed-linen", name: "Постельное бельё", emoji: "🛏️", group: "furniture_textile", desc: "Комплекты постельного белья.", subs: sub([]) },
+  { slug: "towels", name: "Полотенца", emoji: "🧖", group: "furniture_textile", desc: "Полотенца для ванной, кухни, пляжа.", subs: sub([]) },
+  { slug: "tablecloths-napkins", name: "Скатерти и салфетки", emoji: "🍽️", group: "furniture_textile", desc: "Скатерти, салфетки, раннеры.", subs: sub([]) },
+  { slug: "rugs-carpets", name: "Ковры и коврики", emoji: "🧶", group: "furniture_textile", desc: "Ковры, паласы, коврики.", subs: sub([]) },
+
+  /* --- Сантехника и коммуникации (17 подкатегорий) --- */
+  { slug: "bathtubs-shower-enclosures", name: "Ванны и душевые кабины", emoji: "🛁", group: "plumbing_comms", desc: "Ванны, душевые кабины и поддоны.", subs: sub([]) },
+  { slug: "shower-systems-heads", name: "Душевые системы и лейки", emoji: "🚿", group: "plumbing_comms", desc: "Душевые системы, лейки, стойки.", subs: sub([]) },
+  { slug: "sinks-pedestals", name: "Раковины и пьедесталы", emoji: "🚰", group: "plumbing_comms", desc: "Умывальники, раковины, пьедесталы.", subs: sub([]) },
+  { slug: "vanity-units", name: "Тумбы под раковину", emoji: "🗄️", group: "plumbing_comms", desc: "Тумбы и мойдодыры для ванной.", subs: sub([]) },
+  { slug: "toilets-installations", name: "Унитазы и инсталляции", emoji: "🚽", group: "plumbing_comms", desc: "Унитазы, бачки, инсталляции.", subs: sub([]) },
+  { slug: "bidets-urinals", name: "Биде и писсуары", emoji: "🚽", group: "plumbing_comms", desc: "Биде, писсуары, гигиенические души.", subs: sub([]) },
+  { slug: "bathroom-faucets", name: "Смесители для ванной", emoji: "🚰", group: "plumbing_comms", desc: "Смесители для ванны и душа.", subs: sub([]) },
+  { slug: "kitchen-faucets", name: "Смесители для кухни", emoji: "🚰", group: "plumbing_comms", desc: "Кухонные смесители и фильтры.", subs: sub([]) },
+  { slug: "radiators-heating", name: "Радиаторы отопления", emoji: "🔥", group: "plumbing_comms", desc: "Батареи, радиаторы, конвекторы.", subs: sub([]) },
+  { slug: "boilers-water-heaters", name: "Котлы и водонагреватели", emoji: "♨️", group: "plumbing_comms", desc: "Котлы, бойлеры, водонагреватели.", subs: sub([]) },
+  { slug: "pipes-fittings", name: "Трубы и фитинги", emoji: "🔧", group: "plumbing_comms", desc: "Трубы, фитинги, соединения.", subs: sub([]) },
+  { slug: "sewer-systems", name: "Канализационные системы", emoji: "🕳️", group: "plumbing_comms", desc: "Канализационные трубы, люки, септики.", subs: sub([]) },
+  { slug: "ventilation-air-conditioning", name: "Вентиляция и кондиционирование", emoji: "💨", group: "plumbing_comms", desc: "Вентиляция, кондиционеры, рекуператоры.", subs: sub([]) },
+  { slug: "sockets-switches", name: "Розетки и выключатели", emoji: "🔌", group: "plumbing_comms", desc: "Электроустановочные изделия.", subs: sub([]) },
+  { slug: "cables-wiring", name: "Кабель и проводка", emoji: "⚡", group: "plumbing_comms", desc: "Кабели, провода, шнуры.", subs: sub([]) },
+  { slug: "panels-circuit-breakers", name: "Щитки и автоматы", emoji: "🔋", group: "plumbing_comms", desc: "Электрощиты, автоматы, УЗО.", subs: sub([]) },
+  { slug: "chandeliers-lighting", name: "Люстры и светильники", emoji: "💡", group: "plumbing_comms", desc: "Люстры, бра, точечные светильники.", subs: sub([]) },
+  { slug: "garden-outdoor-lighting", name: "Садовое и уличное освещение", emoji: "🌙", group: "plumbing_comms", desc: "Уличные фонари, садовые светильники.", subs: sub([]) },
 ];
 export const catBySlug = (slug: string) => CATEGORIES.find((c) => c.slug === slug);
 export const catsByGroup = (group: string) => CATEGORIES.filter((c) => c.group === group);
