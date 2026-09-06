@@ -566,8 +566,8 @@ export default function ProfilePage() {
               <div className="flex items-center gap-5 flex-wrap">
                 {/* большое превью с бейджем камеры */}
                 <div className="relative shrink-0">
-                  {(avatarDraft ?? user.avatar) ? (
-                    <img src={avatarDraft ?? user.avatar} alt="Превью аватара" className="w-28 h-28 rounded-full object-cover ring-4 ring-offset-2 ring-offset-surface transition-transform duration-200" style={{ ["--tw-ring-color" as string]: tier.accent, transform: dragOver ? "scale(1.04)" : undefined }} />
+                  {(avatarDraft ?? session.avatar) ? (
+                    <img src={avatarDraft ?? session.avatar} alt="Превью аватара" className="w-28 h-28 rounded-full object-cover ring-4 ring-offset-2 ring-offset-surface transition-transform duration-200" style={{ ["--tw-ring-color" as string]: tier.accent, transform: dragOver ? "scale(1.04)" : undefined }} />
                   ) : (
                     <span className="w-28 h-28 rounded-full flex items-center justify-center font-display font-bold text-[40px] transition-transform duration-200" style={{ background: "var(--color-dark)", color: "var(--color-accent)", transform: dragOver ? "scale(1.04)" : undefined }}>
                       {profile.name[0]?.toUpperCase() || "У"}
@@ -583,14 +583,14 @@ export default function ProfilePage() {
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-3" style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}>
                       <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-accent-deep)" }} /> Новое фото — не сохранено
                     </span>
-                  ) : user.avatar ? (
+                  ) : session.avatar ? (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success-soft text-[#4d7327] text-[11px] font-bold mb-3"><CheckCircle2 size={12} /> Фото сохранено</span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-line-soft text-ink-mute text-[11px] font-bold mb-3">Фото не загружено</span>
                   )}
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <Btn size="sm" onClick={() => openAvatarPicker(false)}><Camera size={15} /> Выбрать фото</Btn>
-                    {(avatarDraft ?? user.avatar) && (
+                    {(avatarDraft ?? session.avatar) && (
                       <Btn size="sm" variant="ghost" onClick={removeAvatar}><Trash2 size={14} /> Удалить</Btn>
                     )}
                   </div>

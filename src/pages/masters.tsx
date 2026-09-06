@@ -70,7 +70,7 @@ export function MastersPage() {
 export function ShopPage() {
   const { slug = "" } = useParams();
   const vendor = vendorById(slug);
-  const user = useAppStore((s) => s.user);
+  const session = useAppStore((s) => s.session);
   const [tab, setTab] = useState<"goods" | "about" | "reviews">("goods");
   const [complaintOpen, setComplaintOpen] = useState(false);
   const goods = useMemo(() => PRODUCTS.filter((p) => p.vendorId === vendor?.id), [vendor]);
