@@ -15,7 +15,7 @@ import { Modal, Btn, Field, Rating } from "./ui";
 export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
   open: boolean; onClose: () => void; product: Product; orderId: string; orderNumber: string;
 }) {
-  const user = useAppStore((s) => s.user);
+  const session = useAppStore((s) => s.session);
   const addBonus = useAppStore((s) => s.addBonus);
   const submitReview = useReviewStore((s) => s.submitReview);
   const [rating, setRating] = useState(5);
@@ -28,8 +28,8 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
     submitReview({
       productId: product.id,
       orderId, orderNumber,
-      userId: user?.id || "anon",
-      userName: user?.name || "Покупатель",
+      userId: session?.id || "anon",
+      userName: session?.name || "Покупатель",
       rating,
       text: text.trim(),
       hasPhoto: !!photo,
@@ -190,7 +190,7 @@ export function TicketModal({ open, onClose, orderId, orderNumber, kind }: {
 export function ComplaintModal({ open, onClose, vendorId }: {
   open: boolean; onClose: () => void; vendorId: string;
 }) {
-  const user = useAppStore((s) => s.user);
+  const session = useAppStore((s) => s.session);
   const addComplaint = useComplaintStore((s) => s.addComplaint);
   const vendor = vendorById(vendorId);
   const [category, setCategory] = useState(COMPLAINT_CATEGORIES[0]);
@@ -203,8 +203,8 @@ export function ComplaintModal({ open, onClose, vendorId }: {
     addComplaint({
       vendorId,
       vendorName: vendor?.name || "Продавец",
-      userId: user?.id || "anon",
-      userName: user?.name || "Покупатель",
+      userId: session?.id || "anon",
+      userName: session?.name || "Покупатель",
       category,
       description: description.trim(),
       photoName: photo || undefined,
