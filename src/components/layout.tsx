@@ -136,7 +136,7 @@ function SmartSearch() {
 /* ---------- шапка ---------- */
 export function Header() {
   const cart = useAppStore((s) => s.cart);
-  const user = useAppStore((s) => s.user);
+  const session = useAppStore((s) => s.session);
   const logout = useAppStore((s) => s.logout);
   const sellerReg = useSellerReg();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -186,13 +186,13 @@ export function Header() {
               <ShoppingBag size={21} />
               {cartCount > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{cartCount}</span>}
             </Link>
-            {user ? (
+            {session ? (
               /* после регистрации «Войти» заменяется именем пользователя (покупатель)
                  или названием организации (продавец) — клик открывает соответствующий кабинет */
               (() => {
-                const isSeller = sellerReg.status === "active";
+                const isSeller = sellerReg.status === "active" && session.role === "seller";
                 const cabinetTo = isSeller ? "/seller/dashboard" : "/profile";
-                const displayName = isSeller ? sellerReg.shopName : user.name.split(" ")[0];
+                const displayName = isSeller ? sellerReg.shopName : session.name.split(" ")[0];
                 return (
                   <div className="flex items-center gap-2">
                     <Link
@@ -201,8 +201,8 @@ export function Header() {
                       aria-label={isSeller ? "Открыть кабинет продавца" : "Открыть личный кабинет"}
                       className="group flex items-center gap-2 h-11 pl-1.5 pr-3 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:border-dark hover:-translate-y-px transition-all duration-200"
                     >
-                      {user.avatar && !isSeller ? (
-                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      {session.avatar && !isSeller ? (
+                        <img src={session.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
                       ) : (
                         <span className="w-8 h-8 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px] group-hover:bg-dark-deep transition-colors">
                           {(displayName[0] || "?").toUpperCase()}

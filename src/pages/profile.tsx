@@ -55,7 +55,7 @@ const ORDER_LABEL: Record<string, { label: string; tone: "honey" | "ai" | "succe
 };
 
 export default function ProfilePage() {
-  const user = useAppStore((s) => s.user);
+  const session = useAppStore((s) => s.session);
   const logout = useAppStore((s) => s.logout);
   const updateUser = useAppStore((s) => s.updateUser);
   const orders = useAppStore((s) => s.orders);
@@ -96,8 +96,8 @@ export default function ProfilePage() {
   const [tab, setTab] = useState<Tab>("orders");
   const [addr, setAddr] = useState({ label: "Дом", city: "", street: "", zip: "" });
   const [profile, setProfile] = useState({
-    name: user?.name || "", email: user?.email || "", phone: user?.phone || "",
-    city: user?.city || "", birth: user?.birth || "", about: user?.about || "",
+    name: session?.name || "", email: session?.email || "", phone: session?.phone || "",
+    city: "", birth: "", about: "",
   });
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -167,7 +167,7 @@ export default function ProfilePage() {
 
   const saveProfile = () => {
     /* применяем черновик аватара (если выбран) — фото отобразится в хедере и кабинете */
-    updateUser({ ...profile, avatar: avatarDraft !== null ? avatarDraft : user?.avatar });
+    updateUser({ ...profile, avatar: avatarDraft !== null ? avatarDraft : session?.avatar });
     if (avatarDraft !== null) setAvatarDraft(null);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2200);
@@ -179,19 +179,17 @@ export default function ProfilePage() {
       profile.name.trim().length >= 2,
       profile.email.includes("@"),
       profile.phone.trim().length >= 6,
-      profile.city.trim().length >= 2,
-      profile.birth.trim().length > 0,
-      !!(avatarDraft ?? user?.avatar),
+      !!(avatarDraft ?? session?.avatar),
     ];
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   })();
 
-  if (!user) {
+  if (!session || session.role !== "buyer") {
     return (
       <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
         <p className="text-[56px] mb-3">👤</p>
-        <h1 className="font-display font-bold text-[28px] text-ink mb-2">Вы не вошли в аккаунт</h1>
-        <p className="text-[14px] text-ink-soft mb-7">Войдите, чтобы видеть заказы, избранное и бонусы.</p>
+        <h1 className="font-display font-bold text-[28px] text-ink mb-2">Кабинет покупателя недоступен</h1>
+        <p className="text-[14px] text-ink-soft mb-7">Войдите как покупатель или зарегистрируйтесь.</p>
         <Link to="/auth" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">Войти</Link>
       </div>
     );
@@ -227,10 +225,10 @@ export default function ProfilePage() {
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         {/* кликабельный аватар: мгновенная загрузка — фото сразу появляется в хедере и кабинете */}
         <button type="button" onClick={() => openAvatarPicker(true)} className="relative group shrink-0 cursor-pointer rounded-full" title="Загрузить фото профиля" aria-label="Загрузить фото профиля">
-          {user.avatar ? (
-            <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
+          {session.avatar ? (
+            <img src={session.avatar} alt={session.name} className="w-16 h-16 rounded-full object-cover ring-2 ring-offset-2 ring-offset-cream" style={{ ["--tw-ring-color" as string]: tier.accent }} />
           ) : (
-            <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{user.name[0]?.toUpperCase()}</span>
+            <span className="w-16 h-16 rounded-full flex items-center justify-center font-display font-bold text-[24px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: tier.accent }}>{session.name[0]?.toUpperCase()}</span>
           )}
           <span className="absolute inset-0 rounded-full bg-dark/0 group-hover:bg-dark/45 flex items-center justify-center transition-colors">
             <Camera size={20} className="text-cream opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -238,12 +236,12 @@ export default function ProfilePage() {
         </button>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {user.name.split(" ")[0]}!</h1>
+            <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {session.name.split(" ")[0]}!</h1>
             <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: tier.accent }}>
               {lim.vip && <Sparkles size={11} />}{PLAN_NAME[buyerPlan]}
             </span>
           </div>
-          <p className="text-[13.5px] text-ink-soft mt-1">{tier.tagline} · {user.email}{user.phone ? ` · ${user.phone}` : ""}</p>
+          <p className="text-[13.5px] text-ink-soft mt-1">{tier.tagline} · {session.email}{session.phone ? ` · ${session.phone}` : ""}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Улучшить тариф</Link>
@@ -279,14 +277,19 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-8">
-        {TABS.filter((t) => t.show).map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 min-h-[44px] rounded-full text-[13.5px] font-bold whitespace-nowrap transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-            <t.icon size={15} /> {t.label}
-          </button>
-        ))}
-      </div>
+      <div className="grid lg:grid-cols-[240px_1fr] gap-6 items-start">
+        {/* Вертикальная навигация */}
+        <nav className="flex flex-col gap-2 fade-up">
+          {TABS.filter((t) => t.show).map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
+              <t.icon size={17} /> {t.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Контент кабинета */}
+        <div className="min-w-0">
 
       {/* ЗАКАЗЫ */}
       {tab === "orders" && (
@@ -680,7 +683,7 @@ export default function ProfilePage() {
             <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Управлять подпиской</Link>
           </div>
         </div>
-      )}
+      )}</div></div>
 
       {/* модалки */}
       {chatOrder && <ChatModal open onClose={() => setChatOrder(null)} kind="order" order={chatOrder} />}
