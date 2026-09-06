@@ -103,7 +103,7 @@ export function ShopPage() {
               <span className="text-[13px] text-ink-mute">{vendor.reviewsCount} отзывов · {vendor.sales.toLocaleString("ru-RU")} продаж</span>
             </div>
           </div>
-          {user && (
+          {session && (
             <button onClick={() => setComplaintOpen(true)} className="flex items-center gap-2 h-11 px-4 rounded-[10px] border border-line text-[13px] font-semibold text-ink-soft hover:text-error hover:border-error transition-colors cursor-pointer">
               <Flag size={15} /> Пожаловаться
             </button>

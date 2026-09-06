@@ -85,7 +85,7 @@ export function MarketPage() {
   const visible = orders.filter((o) => o.status === "published" || o.myOwn).filter((o) => filterType === "all" || o.type === filterType);
 
   const publish = () => {
-    if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
+    if (!session) { setFErr("Войдите, чтобы разместить заказ."); return; }
     if (overLimit) { setFErr(`Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
     addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: ref?.name, refType: ref?.type });
@@ -236,8 +236,8 @@ export function PlansPage() {
   /* Кто смотрит страницу. Зарегистрированный продавец видит ТОЛЬКО тарифы своего
      юрлица, покупатель — только покупательские, гость — всё (для ознакомления). */
   const isRegisteredSeller = reg.status === "active" && !!reg.legalType;
-  const isBuyerOnly = !!user && !isRegisteredSeller;
-  const isGuest = !user && !isRegisteredSeller;
+  const isBuyerOnly = !!session && !isRegisteredSeller;
+  const isGuest = !session && !isRegisteredSeller;
 
   const effectiveAudience = isRegisteredSeller ? "seller" : isBuyerOnly ? "buyer" : audience;
   const effectiveSellerType: SellerLegalType = isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType;
@@ -312,7 +312,7 @@ export function PlansPage() {
               );
             })}
           </div>
-          {user && (
+          {session && (
             <div className="mt-8 flex justify-center">
               <Link to="/profile" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
                 В личный кабинет <ArrowRight size={17} />
@@ -1651,7 +1651,7 @@ export function LegalPage() {
    ============================================================ */
 export function ContactsPage() {
   const session = useAppStore((s) => s.session);
-  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", topic: "Вопрос по заказу", message: "" });
+  const [form, setForm] = useState({ name: session?.name || "", email: session?.email || "", topic: "Вопрос по заказу", message: "" });
   const [sent, setSent] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
