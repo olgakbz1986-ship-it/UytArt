@@ -57,7 +57,7 @@ export const useMarketStore = create<MarketState>()(
 );
 
 export function MarketPage() {
-  const session = useAppStore((s) => s.session);
+  const user = useAppStore((s) => s.session);
   const buyerPlan = useSubStore((s) => s.buyerPlan);
   const lim = buyerLimits(buyerPlan);
   const orders = useMarketStore((s) => s.orders);
@@ -85,7 +85,7 @@ export function MarketPage() {
   const visible = orders.filter((o) => o.status === "published" || o.myOwn).filter((o) => filterType === "all" || o.type === filterType);
 
   const publish = () => {
-    if (!session) { setFErr("Войдите, чтобы разместить заказ."); return; }
+    if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
     if (overLimit) { setFErr(`Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
     addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: ref?.name, refType: ref?.type });
@@ -231,13 +231,13 @@ export function PlansPage() {
   const setBuyerPlan = useSubStore((s) => s.setBuyerPlan);
   const acc = useSellerAccount();
   const reg = useSellerReg();
-  const session = useAppStore((s) => s.session);
+  const user = useAppStore((s) => s.session);
 
   /* Кто смотрит страницу. Зарегистрированный продавец видит ТОЛЬКО тарифы своего
      юрлица, покупатель — только покупательские, гость — всё (для ознакомления). */
   const isRegisteredSeller = reg.status === "active" && !!reg.legalType;
-  const isBuyerOnly = !!session && !isRegisteredSeller;
-  const isGuest = !session && !isRegisteredSeller;
+  const isBuyerOnly = !!user && !isRegisteredSeller;
+  const isGuest = !user && !isRegisteredSeller;
 
   const effectiveAudience = isRegisteredSeller ? "seller" : isBuyerOnly ? "buyer" : audience;
   const effectiveSellerType: SellerLegalType = isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType;
@@ -312,7 +312,7 @@ export function PlansPage() {
               );
             })}
           </div>
-          {session && (
+          {user && (
             <div className="mt-8 flex justify-center">
               <Link to="/profile" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
                 В личный кабинет <ArrowRight size={17} />
@@ -649,7 +649,7 @@ const levelOf = (lt: SellerLegalType, planId: string) => {
 export function SellerDashboardPage() {
   const s = useSellerReg();
   const acc = useSellerAccount();
-  const session = useAppStore((st) => st.session);
+  const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
   const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
   const [media, setMedia] = useState<ProductMedia[]>([]);
@@ -1650,8 +1650,8 @@ export function LegalPage() {
    Контакты: 3 сценария поддержки + FAQ + форма
    ============================================================ */
 export function ContactsPage() {
-  const session = useAppStore((s) => s.session);
-  const [form, setForm] = useState({ name: session?.name || "", email: session?.email || "", topic: "Вопрос по заказу", message: "" });
+  const user = useAppStore((s) => s.session);
+  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", topic: "Вопрос по заказу", message: "" });
   const [sent, setSent] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 

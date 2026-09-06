@@ -17,7 +17,7 @@ export function ChatModal({ open, onClose, kind, product, order }: {
   product?: Product;
   order?: Order;
 }) {
-  const session = useAppStore((s) => s.session);
+  const user = useAppStore((s) => s.session);
   const ensure = useChatStore((s) => s.ensure);
   const send = useChatStore((s) => s.send);
   const archive = useChatStore((s) => s.archive);
@@ -56,7 +56,7 @@ export function ChatModal({ open, onClose, kind, product, order }: {
 
   const doSend = (text: string, role: "buyer" | "seller") => {
     if (!text.trim()) return;
-    const name = role === "buyer" ? (session?.name || "Покупатель") : (product ? "Мастер" : "Продавец");
+    const name = role === "buyer" ? (user?.name || "Покупатель") : (product ? "Мастер" : "Продавец");
     const res = send(key, role, name, text.trim());
     if (res.blocked) setWarn("Общение и оплата происходят только внутри УютАрт для гарантии безопасной сделки и защиты от мошенников.");
     else setWarn(null);
