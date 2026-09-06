@@ -17,7 +17,7 @@ export function ChatModal({ open, onClose, kind, product, order }: {
   product?: Product;
   order?: Order;
 }) {
-  const user = useAppStore((s) => s.user);
+  const user = useAppStore((s) => s.session);
   const ensure = useChatStore((s) => s.ensure);
   const send = useChatStore((s) => s.send);
   const archive = useChatStore((s) => s.archive);

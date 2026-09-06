@@ -15,7 +15,7 @@ import { Modal, Btn, Field, Rating } from "./ui";
 export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
   open: boolean; onClose: () => void; product: Product; orderId: string; orderNumber: string;
 }) {
-  const user = useAppStore((s) => s.user);
+  const user = useAppStore((s) => s.session);
   const addBonus = useAppStore((s) => s.addBonus);
   const submitReview = useReviewStore((s) => s.submitReview);
   const [rating, setRating] = useState(5);
@@ -190,7 +190,7 @@ export function TicketModal({ open, onClose, orderId, orderNumber, kind }: {
 export function ComplaintModal({ open, onClose, vendorId }: {
   open: boolean; onClose: () => void; vendorId: string;
 }) {
-  const user = useAppStore((s) => s.user);
+  const user = useAppStore((s) => s.session);
   const addComplaint = useComplaintStore((s) => s.addComplaint);
   const vendor = vendorById(vendorId);
   const [category, setCategory] = useState(COMPLAINT_CATEGORIES[0]);

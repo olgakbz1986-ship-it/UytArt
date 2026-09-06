@@ -57,7 +57,7 @@ export const useMarketStore = create<MarketState>()(
 );
 
 export function MarketPage() {
-  const user = useAppStore((s) => s.user);
+  const user = useAppStore((s) => s.session);
   const buyerPlan = useSubStore((s) => s.buyerPlan);
   const lim = buyerLimits(buyerPlan);
   const orders = useMarketStore((s) => s.orders);
@@ -231,7 +231,7 @@ export function PlansPage() {
   const setBuyerPlan = useSubStore((s) => s.setBuyerPlan);
   const acc = useSellerAccount();
   const reg = useSellerReg();
-  const user = useAppStore((s) => s.user);
+  const user = useAppStore((s) => s.session);
 
   /* Кто смотрит страницу. Зарегистрированный продавец видит ТОЛЬКО тарифы своего
      юрлица, покупатель — только покупательские, гость — всё (для ознакомления). */
@@ -649,7 +649,7 @@ const levelOf = (lt: SellerLegalType, planId: string) => {
 export function SellerDashboardPage() {
   const s = useSellerReg();
   const acc = useSellerAccount();
-  const user = useAppStore((st) => st.user);
+  const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
   const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
   const [media, setMedia] = useState<ProductMedia[]>([]);
@@ -1650,7 +1650,7 @@ export function LegalPage() {
    Контакты: 3 сценария поддержки + FAQ + форма
    ============================================================ */
 export function ContactsPage() {
-  const user = useAppStore((s) => s.user);
+  const user = useAppStore((s) => s.session);
   const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", topic: "Вопрос по заказу", message: "" });
   const [sent, setSent] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);

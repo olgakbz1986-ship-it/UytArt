@@ -2,14 +2,34 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { PRODUCTS } from "../data/seed";
 
+export type SellerType = "self_employed" | "ip" | "ooo";
+export type UserRole = "buyer" | "seller";
+
 export interface User {
   id: string; name: string; email: string; phone?: string;
-  role: "buyer" | "seller";
+  role: UserRole;
+  sellerType?: SellerType; /* только для role="seller" */
   avatar?: string;   /* data-URL, до 256px */
   city?: string;
   birth?: string;
   about?: string;
+  region?: string;
+  tariff?: string; /* ID тарифа */
 }
+
+/* Единый объект активной сессии */
+export interface ActiveSession {
+  userId: string;
+  role: UserRole;
+  sellerType?: SellerType;
+  name: string;
+  email: string;
+  phone?: string;
+  region?: string;
+  tariff?: string;
+  avatar?: string;
+}
+
 export interface Address { id: string; label: string; city: string; street: string; zip: string; isDefault?: boolean; }
 export interface CartItem { productId: string; qty: number; }
 export interface BonusEntry { id: string; date: string; amount: number; reason: string; }
@@ -37,7 +57,10 @@ export const NEXT_STATUS: Record<OrderStatus, OrderStatus> = {
 };
 
 interface AppState {
-  user: User | null;
+  /* Реестр всех аккаунтов пользователя (по email) */
+  accounts: Record<string, User[]>; /* key = email */
+  /* Единая активная сессия */
+  session: ActiveSession | null;
   cart: CartItem[];
   favorites: string[];
   addresses: Address[];
@@ -45,8 +68,9 @@ interface AppState {
   bonusBalance: number;
   bonusHistory: BonusEntry[];
 
-  login: (u: User) => void;
+  login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
+  setActiveAccount: (email: string, role: UserRole, sellerType?: SellerType) => void;
   updateUser: (patch: Partial<User>) => void;
   addToCart: (productId: string, qty?: number) => void;
   setQty: (productId: string, qty: number) => void;
@@ -63,8 +87,9 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
-      user: null,
+    (set, get) => ({
+      accounts: {},
+      session: null,
       cart: [],
       favorites: [],
       addresses: [
@@ -91,9 +116,72 @@ export const useAppStore = create<AppState>()(
         { id: "b2", date: new Date(Date.now() - 30 * 864e5).toISOString(), amount: 50, reason: "Подтверждение получения" },
       ],
 
-      login: (u) => set({ user: u }),
-      logout: () => set({ user: null }),
-      updateUser: (patch) => set((s) => ({ user: s.user ? { ...s.user, ...patch } : null })),
+      /* Вход: сохраняем аккаунт в реестр по email, опционально делаем активным */
+      login: (u, makeActive = true) => set((s) => {
+        const emailKey = u.email.toLowerCase();
+        const existing = s.accounts[emailKey] || [];
+        const existsIdx = existing.findIndex((x) => x.id === u.id);
+        let updatedAccounts: Record<string, User[]>;
+        if (existsIdx >= 0) {
+          updatedAccounts = { ...s.accounts, [emailKey]: [...existing.slice(0, existsIdx), u, ...existing.slice(existsIdx + 1)] };
+        } else {
+          updatedAccounts = { ...s.accounts, [emailKey]: [...existing, u] };
+        }
+        let newSession: ActiveSession | null = s.session;
+        if (makeActive) {
+          newSession = {
+            userId: u.id,
+            role: u.role,
+            sellerType: u.sellerType,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            region: u.region,
+            tariff: u.tariff,
+            avatar: u.avatar,
+          };
+        }
+        return { accounts: updatedAccounts, session: newSession };
+      }),
+
+      /* Выход: полная очистка активной сессии */
+      logout: () => set({ session: null }),
+
+      /* Переключение на другой аккаунт из реестра по email+role */
+      setActiveAccount: (email, role, sellerType) => set((s) => {
+        const emailKey = email.toLowerCase();
+        const list = s.accounts[emailKey] || [];
+        const found = list.find((u) => u.role === role && (!sellerType || u.sellerType === sellerType));
+        if (!found) return s;
+        return {
+          session: {
+            userId: found.id,
+            role: found.role,
+            sellerType: found.sellerType,
+            name: found.name,
+            email: found.email,
+            phone: found.phone,
+            region: found.region,
+            tariff: found.tariff,
+            avatar: found.avatar,
+          },
+        };
+      }),
+
+      updateUser: (patch) => set((s) => {
+        if (!s.session) return s;
+        const emailKey = s.session.email.toLowerCase();
+        const list = s.accounts[emailKey] || [];
+        const idx = list.findIndex((u) => u.id === s.session!.userId);
+        if (idx < 0) return s;
+        const updatedUser = { ...list[idx], ...patch };
+        const updatedList = [...list];
+        updatedList[idx] = updatedUser;
+        return {
+          accounts: { ...s.accounts, [emailKey]: updatedList },
+          session: { ...s.session, ...patch },
+        };
+      }),
 
       addToCart: (productId, qty = 1) =>
         set((s) => {
