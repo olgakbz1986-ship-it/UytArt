@@ -246,7 +246,7 @@ export function Header() {
               ))}
             </nav>
             <div className="mt-auto px-5 py-6 border-t border-line-soft">
-              {!user && (
+              {!session && (
                 <Link to="/auth" onClick={closeMenu} className="flex items-center justify-center gap-2 h-11 rounded-[10px] bg-dark text-cream text-sm font-bold hover:bg-dark-deep transition-colors">
                   <User size={16} /> Войти или зарегистрироваться
                 </Link>
