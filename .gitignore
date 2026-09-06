@@ -12,9 +12,18 @@ node_modules/
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
 
-# Editors
+# Build artifacts
+dist/
+build/
+*.pyc
+__pycache__/
+
+# Logs
+*.log
+
+# IDE
 .vscode/
 .idea/
 

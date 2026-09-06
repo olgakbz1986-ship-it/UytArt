@@ -1,0 +1,10 @@
+
+> dev
+> vite --port 3000
+
+
+  VITE v6.4.3  ready in 550 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: http://21.0.8.98:3000/
+  ➜  press h + enter to show help
