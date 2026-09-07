@@ -70,12 +70,12 @@ export default function ProfilePage() {
   const bonusHistory = useAppStore((s) => s.bonusHistory);
   const nav = useNavigate();
 
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
   const concepts = useSubStore((s) => s.concepts);
   const removeConcept = useSubStore((s) => s.removeConcept);
   const priceWatches = useSubStore((s) => s.priceWatches);
   const removePriceWatch = useSubStore((s) => s.removePriceWatch);
-  const aiLeft = useSubStore(selectAiLeft);
+  const aiLeft = useSubStore((s) => selectAiLeft(s, session?.userId || "guest"));
   const tickets = useChatStore((s) => s.tickets);
   const complaints = useComplaintStore((s) => s.complaints);
   const marketOrders = useMarketStore((s) => s.orders);

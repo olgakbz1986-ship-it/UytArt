@@ -1,60 +1,46 @@
 ```
-# Dependencies
-node_modules/
-
-# Build artifacts
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
 dist/
+build/
+target/
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
 
 # Environment
 .env
 .env.local
 .env.*
 
-# Editor
+# Editors
 .vscode/
 .idea/
-
-# Logs
-*.log
-
-# Temp files
-*.tmp
 *.swp
 *.swo
-
-# OS
-.DS_Store
-Thumbs.db
 
 # Coverage
 coverage/
 htmlcov/
 .coverage
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.nox/
-$py.class
-.spyderproject
-.spyproject
-.ropeproject
-/site-packages/
-*.so
-*.Zip
-
-# Vite
-.vite/
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # Compressed files
 *.zip
@@ -80,4 +66,26 @@ $py.class
 *.tar.xz
 *.tar.zst
 
+# Python specific
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Node.js specific
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+.next/
+.nuxt/
+public/dist/
 ```

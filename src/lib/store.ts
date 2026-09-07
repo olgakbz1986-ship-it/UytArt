@@ -226,6 +226,6 @@ export const useAppStore = create<AppState>()(
           bonusHistory: [{ id: "b-" + Date.now(), date: new Date().toISOString(), amount, reason }, ...s.bonusHistory],
         })),
     }),
-    { name: "uyutart-app-v2" }
+    { name: "uyutart-app-v3" }
   )
 );
