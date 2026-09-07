@@ -220,30 +220,38 @@ export function MarketPage() {
 }
 
 /* ============================================================
-   Тарифы: покупатели (4 тарифа, Месяц/Год) и продавцы (3 юрлица)
+   Тарифы: покупатели (4 тарифа) и продавцы (3 юрлица)
+   Страница отображает тарифы ТОЛЬКО по роли активной сессии.
    ============================================================ */
 export function PlansPage() {
-  const [audience, setAudience] = useState<"buyer" | "seller">("buyer");
-  const [period, setPeriod] = useState<"month" | "year">("month");
-  const [sellerType, setSellerType] = useState<SellerLegalType>("self_employed");
-
+  const session = useAppStore((s) => s.session);
+  const login = useAppStore((s) => s.login);
+  
   const buyerPlan = useSubStore((s) => s.buyerPlan);
   const setBuyerPlan = useSubStore((s) => s.setBuyerPlan);
   const acc = useSellerAccount();
   const reg = useSellerReg();
-  const user = useAppStore((s) => s.session);
 
-  /* Кто смотрит страницу. Зарегистрированный продавец видит ТОЛЬКО тарифы своего
-     юрлица, покупатель — только покупательские, гость — всё (для ознакомления). */
+  /* Состояния для переключателей (используются только гостями) */
+  const [audience, setAudience] = useState<"buyer" | "seller">("buyer");
+  const [sellerType, setSellerType] = useState<SellerLegalType>("self_employed");
+
+  /* Определяем роль для отображения тарифов строго из активной сессии */
+  const role = session?.role || null;
+  const sessSellerType = session?.sellerType || null;
+  
+  /* Если пользователь зарегистрирован как продавец — показываем только его тарифы */
   const isRegisteredSeller = reg.status === "active" && !!reg.legalType;
-  const isBuyerOnly = !!user && !isRegisteredSeller;
-  const isGuest = !user && !isRegisteredSeller;
-
-  const effectiveAudience = isRegisteredSeller ? "seller" : isBuyerOnly ? "buyer" : audience;
-  const effectiveSellerType: SellerLegalType = isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType;
+  
+  /* Для гостя показываем переключатель, для залогиненного — только его линейку */
+  const showBuyerTariffs = role === "buyer" || (!role && !isRegisteredSeller);
+  const showSellerTariffs = (role === "seller" && sessSellerType) || isRegisteredSeller || (!role && !showBuyerTariffs);
+  
+  /* Эффективный тип юрлица: из сессии или из регистрации, или выбранный гостем */
+  const effectiveSellerType: SellerLegalType = sessSellerType || (isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType);
 
   const BUYER_PRICES: Record<BuyerPlanId, number> = { free: 0, start: 500, designer: 1000, premium: 1500 };
-  const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
+  const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Бесплатный", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
   const BUYER_FEATURES: Record<BuyerPlanId, string[]> = {
     free: ["2 AI-генерации в месяц", "1 индивидуальный заказ", "Базовый поиск", "Без уведомлений о ценах"],
     start: ["15 AI-генераций", "3 индивидуальных заказа", "Фильтры качества", "Скидка 3% на заказы", "10 отслеживаемых цен"],
@@ -257,13 +265,15 @@ export function PlansPage() {
     return period === "month" ? `${m} ₽/мес` : `${Math.round((m * 12 * 0.8) / 10) * 10} ₽/год`;
   };
 
+  const [period, setPeriod] = useState<"month" | "year">("month");
+
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2 text-center">Тарифы</h1>
       <p className="text-[14px] text-ink-soft mb-8 text-center max-w-xl mx-auto">Подписки открывают AI-инструменты, приоритеты и сниженные комиссии.</p>
 
       {/* переключатель аудиторий — только для гостей (незалогиненных) */}
-      {isGuest && (
+      {!session && !isRegisteredSeller && (
         <div className="flex items-center justify-center mb-8">
           <div className="inline-flex bg-line-soft rounded-[14px] p-1.5">
             {([["buyer", "Покупателям"], ["seller", "Продавцам"]] as const).map(([id, label]) => (
@@ -276,7 +286,7 @@ export function PlansPage() {
         </div>
       )}
 
-      {effectiveAudience === "buyer" ? (
+      {showBuyerTariffs && !showSellerTariffs ? (
         <>
           <div className="flex justify-center mb-8">
             <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
@@ -312,18 +322,18 @@ export function PlansPage() {
               );
             })}
           </div>
-          {user && (
+          {session && session.role === "buyer" && (
             <div className="mt-8 flex justify-center">
               <Link to="/profile" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
-                В личный кабинет <ArrowRight size={17} />
+                В личный кабинет покупателя <ArrowRight size={17} />
               </Link>
             </div>
           )}
         </>
-      ) : (
+      ) : showSellerTariffs ? (
         <>
           {/* переключатель юрлиц — только для гостей; зарегистрированный продавец видит только свои тарифы */}
-          {isGuest ? (
+          {!session && !isRegisteredSeller ? (
             <div className="flex justify-center mb-8">
               <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
                 {SELLER_TYPES.map((t) => (
@@ -363,7 +373,6 @@ export function PlansPage() {
               );
             })}
           </div>
-          {/* контекстный переход в кабинет продавца */}
           {reg.status === "active" && (
             <div className="mt-8 flex justify-center">
               <Link to="/seller/dashboard" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
@@ -372,7 +381,7 @@ export function PlansPage() {
             </div>
           )}
         </>
-      )}
+      ) : null}
     </div>
   );
 }

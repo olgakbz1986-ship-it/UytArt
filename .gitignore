@@ -1,19 +1,21 @@
-```
 # Dependencies
 node_modules/
-
-# Vite cache
-node_modules/.vite/
-```
-# Logs
-server.log
-*.log
 
 # Build artifacts
 dist/
 build/
 
-# Environment
+# Logs and temp files
+*.log
+
+# Environment files
 .env
 .env.local
 .env.*.local
+
+# Editor directories and files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
