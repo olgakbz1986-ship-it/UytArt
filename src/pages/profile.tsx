@@ -197,16 +197,16 @@ export default function ProfilePage() {
 
   const favProducts = favorites.map((id) => productById(id)).filter(Boolean) as NonNullable<ReturnType<typeof productById>>[];
 
-  const TABS: { id: Tab; label: string; icon: typeof Package; show: boolean }[] = [
-    { id: "orders", label: "Заказы", icon: Package, show: true },
-    { id: "favorites", label: "Избранное", icon: Heart, show: true },
-    { id: "concepts", label: "Мои концепты", icon: Sparkles, show: isPaid },
-    { id: "prices", label: "Отслеживание цен", icon: BellRing, show: isPaid },
-    { id: "custom", label: "Индивидуальные заказы", icon: ClipboardList, show: isPaid },
-    { id: "addresses", label: "Адреса", icon: MapPin, show: true },
-    { id: "bonus", label: "Бонусы", icon: Gift, show: true },
-    { id: "complaints", label: "Жалобы", icon: Flag, show: true },
-    { id: "settings", label: "Настройки", icon: Settings, show: true },
+  const TABS: { id: Tab; label: string; icon: typeof Package; locked?: boolean }[] = [
+    { id: "orders", label: "Заказы", icon: Package },
+    { id: "favorites", label: "Избранное", icon: Heart },
+    { id: "concepts", label: "Мои концепты", icon: Sparkles, locked: !isPaid },
+    { id: "prices", label: "Отслеживание цен", icon: BellRing, locked: !isPaid },
+    { id: "custom", label: "Индивидуальные заказы", icon: ClipboardList, locked: !isPaid },
+    { id: "addresses", label: "Адреса", icon: MapPin },
+    { id: "bonus", label: "Бонусы", icon: Gift },
+    { id: "complaints", label: "Жалобы", icon: Flag },
+    { id: "settings", label: "Настройки", icon: Settings },
   ];
 
   return (
@@ -222,7 +222,7 @@ export default function ProfilePage() {
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none", clipPath: "inset(50%)" }}
         onChange={(e) => { onAvatarFile(e.target.files?.[0], pendingInstantRef.current); e.target.value = ""; }}
       />
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+      <div className={`flex items-center gap-4 mb-4 flex-wrap ${tier.level === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : tier.level === 2 ? "border-b-2 border-[#c77e28] pb-3" : tier.level === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
         {/* кликабельный аватар: мгновенная загрузка — фото сразу появляется в хедере и кабинете */}
         <button type="button" onClick={() => openAvatarPicker(true)} className="relative group shrink-0 cursor-pointer rounded-full" title="Загрузить фото профиля" aria-label="Загрузить фото профиля">
           {session.avatar ? (
@@ -236,12 +236,12 @@ export default function ProfilePage() {
         </button>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] text-ink">Здравствуйте, {session.name.split(" ")[0]}!</h1>
-            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: tier.accent }}>
+            <h1 className={`font-display font-bold text-[clamp(24px,3vw,32px)] ${tier.level === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>Здравствуйте, {session.name.split(" ")[0]}!</h1>
+            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: tier.accent, border: tier.level === 3 ? "2px solid #d4af37" : "none" }}>
               {lim.vip && <Sparkles size={11} />}{PLAN_NAME[buyerPlan]}
             </span>
           </div>
-          <p className="text-[13.5px] text-ink-soft mt-1">{tier.tagline} · {session.email}{session.phone ? ` · ${session.phone}` : ""}</p>
+          <p className="text-[13.5px] text-ink-soft mt-1">{tier.tagline} · {session.email}{session.region ? ` · ${session.region}` : ""}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Улучшить тариф</Link>
@@ -280,10 +280,10 @@ export default function ProfilePage() {
       <div className="grid lg:grid-cols-[240px_1fr] gap-6 items-start">
         {/* Вертикальная навигация */}
         <nav className="flex flex-col gap-2 fade-up">
-          {TABS.filter((t) => t.show).map((t) => (
+          {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-              <t.icon size={17} /> {t.label}
+              <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
             </button>
           ))}
         </nav>

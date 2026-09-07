@@ -244,8 +244,8 @@ export function PlansPage() {
   const isRegisteredSeller = reg.status === "active" && !!reg.legalType;
   
   /* Для гостя показываем переключатель, для залогиненного — только его линейку */
-  const showBuyerTariffs = role === "buyer" || (!role && !isRegisteredSeller);
-  const showSellerTariffs = (role === "seller" && sessSellerType) || isRegisteredSeller || (!role && !showBuyerTariffs);
+  const showBuyerTariffs = role === "buyer" || (!role && audience === "buyer");
+  const showSellerTariffs = (role === "seller" && !!sessSellerType) || (!role && audience === "seller");
   
   /* Эффективный тип юрлица: из сессии или из регистрации, или выбранный гостем */
   const effectiveSellerType: SellerLegalType = sessSellerType || (isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType);
@@ -273,7 +273,7 @@ export function PlansPage() {
       <p className="text-[14px] text-ink-soft mb-8 text-center max-w-xl mx-auto">Подписки открывают AI-инструменты, приоритеты и сниженные комиссии.</p>
 
       {/* переключатель аудиторий — только для гостей (незалогиненных) */}
-      {!session && !isRegisteredSeller && (
+      {!session && (
         <div className="flex items-center justify-center mb-8">
           <div className="inline-flex bg-line-soft rounded-[14px] p-1.5">
             {([["buyer", "Покупателям"], ["seller", "Продавцам"]] as const).map(([id, label]) => (
@@ -646,6 +646,7 @@ const SELLER_LEVEL: { accent: string; soft: string; tagline: string }[] = [
   { accent: "#c77e28", soft: "#f9ebd2", tagline: "Профессиональные продажи" },
   { accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей" },
 ];
+const COMMISSION_BY_LEVEL: Record<SellerLegalType, number[]> = { self_employed: [10, 9, 8, 7], ip: [12, 11, 10, 9], ooo: [15, 14, 13, 11] };
 const levelOf = (lt: SellerLegalType, planId: string) => {
   const idx = (SELLER_PLANS[lt] || []).findIndex((p) => p.id === planId);
   return idx < 0 ? 0 : idx;
@@ -690,6 +691,7 @@ export function SellerDashboardPage() {
   const plan = sellerLimits(lt, planId);
   const lvl = levelOf(lt, planId);
   const lvlMeta = SELLER_LEVEL[lvl];
+const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.commissionRate;
   const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
   const month = currentMonth();
   const aiUsed = acc.aiCardGens[month] || 0;
@@ -697,7 +699,7 @@ export function SellerDashboardPage() {
   const commission = selectCommissionSum(acc);
   const turnover = selectTurnover(acc);
 
-  if (s.status !== "active") {
+  if (s.status !== "active" || !user || user.role !== "seller") {
     return (
       <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
         <p className="text-[56px] mb-3">🏪</p>
@@ -731,25 +733,25 @@ export function SellerDashboardPage() {
     { id: "products" as const, label: "Товары", icon: Boxes },
     { id: "orders" as const, label: "Заказы", icon: FileText },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
-    ...(plan.analytics !== "basic" ? [{ id: "analytics" as const, label: "Аналитика", icon: BarChart3 }] : []),
-    ...(plan.team > 0 ? [{ id: "team" as const, label: "Команда", icon: Users }] : []),
+    { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
+    { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
     { id: "settings" as const, label: "Настройки", icon: UserPlus },
   ];
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
       {/* шапка кабинета */}
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+      <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
         <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{s.shopName[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="font-display font-bold text-[clamp(22px,3vw,30px)] text-ink">{s.shopName}</h1>
+            <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
             <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: lvlMeta.accent }}>
               {sellerTypeInfo(lt)?.short} · {planName}
             </span>
             {plan.badge && <Badge tone="premium"><ShieldCheck size={11} /> {plan.badge}</Badge>}
           </div>
-          <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline} · комиссия {s.commissionRate}% · списание {fmtDate(nextCharge.toISOString())}</p>
+          <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline} · комиссия {commissionNow}% · списание {fmtDate(nextCharge.toISOString())}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
@@ -803,7 +805,7 @@ export function SellerDashboardPage() {
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-              <t.icon size={17} /> {t.label}
+              <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
             </button>
           ))}
         </nav>
