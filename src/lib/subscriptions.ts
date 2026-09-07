@@ -78,13 +78,14 @@ export interface Concept { id: string; style: string; roomName: string; image?: 
 export interface PriceWatch { id: string; productId: string; oldPrice: number; targetPrice: number; notified?: boolean; }
 
 interface SubState {
-  buyerPlan: BuyerPlanId;
+  buyerPlanByAccount: Record<string, BuyerPlanId>; /* key = accountId */
   aiGensUsed: Record<string, number>;
   concepts: Concept[];
   priceWatches: PriceWatch[];
-  setBuyerPlan: (p: BuyerPlanId) => void;
-  consumeAiGen: () => boolean;
-  aiGensLeft: () => number;
+  setBuyerPlan: (accountId: string, p: BuyerPlanId) => void;
+  getBuyerPlan: (accountId: string) => BuyerPlanId;
+  consumeAiGen: (accountId: string) => boolean;
+  aiGensLeft: (accountId: string) => number;
   addConcept: (c: Omit<Concept, "id" | "createdAt">) => void;
   removeConcept: (id: string) => void;
   addPriceWatch: (w: Omit<PriceWatch, "id">) => void;
@@ -94,23 +95,27 @@ interface SubState {
 export const useSubStore = create<SubState>()(
   persist(
     (set, get) => ({
-      buyerPlan: "free",
+      buyerPlanByAccount: {},
       aiGensUsed: {},
       concepts: [],
       priceWatches: [],
 
-      setBuyerPlan: (p) => set({ buyerPlan: p }),
+      setBuyerPlan: (accountId, p) => set((s) => ({ 
+        buyerPlanByAccount: { ...s.buyerPlanByAccount, [accountId]: p } 
+      })),
+      
+      getBuyerPlan: (accountId) => get().buyerPlanByAccount[accountId] || "free",
 
-      consumeAiGen: () => {
-        const plan = buyerLimits(get().buyerPlan);
+      consumeAiGen: (accountId) => {
+        const plan = buyerLimits(get().getBuyerPlan(accountId));
         const month = currentMonth();
         const used = get().aiGensUsed[month] || 0;
         if (used >= plan.aiGens) return false;
         set((s) => ({ aiGensUsed: { ...s.aiGensUsed, [month]: used + 1 } }));
         return true;
       },
-      aiGensLeft: () => {
-        const plan = buyerLimits(get().buyerPlan);
+      aiGensLeft: (accountId) => {
+        const plan = buyerLimits(get().getBuyerPlan(accountId));
         if (!Number.isFinite(plan.aiGens)) return Infinity;
         const used = get().aiGensUsed[currentMonth()] || 0;
         return Math.max(0, plan.aiGens - used);
@@ -123,14 +128,14 @@ export const useSubStore = create<SubState>()(
       addPriceWatch: (w) => set((s) => ({ priceWatches: [{ ...w, id: "pw-" + Date.now() }, ...s.priceWatches] })),
       removePriceWatch: (id) => set((s) => ({ priceWatches: s.priceWatches.filter((w) => w.id !== id) })),
     }),
-    { name: "uyutart-sub-v2" }
+    { name: "uyutart-sub-v3" }
   )
 );
 
 /* форматирование лимита: ∞ для безлимита */
 export const fmtLimit = (n: number) => (Number.isFinite(n) ? String(n) : "∞");
-export const selectAiLeft = (s: SubState) => {
-  const plan = buyerLimits(s.buyerPlan);
+export const selectAiLeft = (s: SubState, accountId: string) => {
+  const plan = buyerLimits(s.getBuyerPlan(accountId));
   if (!Number.isFinite(plan.aiGens)) return Infinity;
   return Math.max(0, plan.aiGens - (s.aiGensUsed[currentMonth()] || 0));
 };

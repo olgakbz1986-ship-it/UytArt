@@ -58,7 +58,7 @@ export const useMarketStore = create<MarketState>()(
 
 export function MarketPage() {
   const user = useAppStore((s) => s.session);
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
   const lim = buyerLimits(buyerPlan);
   const orders = useMarketStore((s) => s.orders);
   const responded = useMarketStore((s) => s.responded);
@@ -227,8 +227,8 @@ export function PlansPage() {
   const session = useAppStore((s) => s.session);
   const login = useAppStore((s) => s.login);
   
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
-  const setBuyerPlan = useSubStore((s) => s.setBuyerPlan);
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
+  const setBuyerPlan = (p: BuyerPlanId) => useSubStore.getState().setBuyerPlan(session?.userId || "guest", p);
   const acc = useSellerAccount();
   const reg = useSellerReg();
 
@@ -351,7 +351,7 @@ export function PlansPage() {
           )}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {SELLER_PLANS[effectiveSellerType].map((plan, i) => {
-              const active = acc.planIds[effectiveSellerType] === plan.id;
+              const active = acc.getPlan(session?.userId || "guest", effectiveSellerType) === plan.id;
               const limits = sellerLimits(effectiveSellerType, plan.id);
               return (
                 <div key={plan.id} className="bg-surface rounded-2xl shadow-card p-6 flex flex-col fade-up" style={{ animationDelay: `${i * 60}ms` }}>
@@ -366,7 +366,7 @@ export function PlansPage() {
                     ))}
                   </ul>
                   <Btn className="w-full mt-5" variant={active ? "outline" : "dark"} disabled={active}
-                    onClick={() => acc.setPlan(effectiveSellerType, plan.id)}>
+                    onClick={() => acc.setPlan(session?.userId || "guest", effectiveSellerType, plan.id)}>
                     {active ? "Текущий тариф" : "Подключить"}
                   </Btn>
                 </div>
@@ -686,7 +686,7 @@ export function SellerDashboardPage() {
   };
 
   const lt = s.legalType || "self_employed";
-  const planId = acc.planIds[lt];
+  const planId = acc.getPlan(session?.userId || "guest", lt);
   const plan = sellerLimits(lt, planId);
   const lvl = levelOf(lt, planId);
   const lvlMeta = SELLER_LEVEL[lvl];

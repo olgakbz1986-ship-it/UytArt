@@ -195,7 +195,7 @@ export const useSellerReg = create<SellerRegState>()(
           masterName: "", yearsExperience: "", categories: [], businessStory: "", achievements: "",
         }),
     }),
-    { name: "uyutart-seller-reg-v2" }
+    { name: "uyutart-seller-reg-v3" }
   )
 );
 
@@ -216,8 +216,9 @@ export interface SellerProductItem { id: string; name: string; category: string;
 export interface TeamMember { id: string; name: string; role: "Менеджер" | "Мастер" | "Кладовщик"; }
 
 interface SellerAccountState {
-  planIds: Record<SellerLegalType, string>;
-  setPlan: (t: SellerLegalType, id: string) => void;
+  planIdsByAccount: Record<string, Record<SellerLegalType, string>>; /* key = accountId */
+  setPlan: (accountId: string, t: SellerLegalType, id: string) => void;
+  getPlan: (accountId: string, t: SellerLegalType) => string;
   transactions: SellerTx[];
   products: SellerProductItem[];
   team: TeamMember[];
@@ -232,18 +233,28 @@ interface SellerAccountState {
   consumeAiCardGen: (month: string) => boolean;
 }
 
-const demoTx: SellerTx[] = [
-  { id: "t1", date: new Date(Date.now() - 2 * 864e5).toISOString(), kind: "sale", orderId: "UYA-3127", productPrice: 10000, commissionAmount: 1200, sellerPayout: 8800 },
-  { id: "t2", date: new Date(Date.now() - 5 * 864e5).toISOString(), kind: "sale", orderId: "UYA-3084", productPrice: 4500, commissionAmount: 540, sellerPayout: 3960 },
-  { id: "t3", date: new Date(Date.now() - 9 * 864e5).toISOString(), kind: "sale", orderId: "UYA-2971", productPrice: 7200, commissionAmount: 864, sellerPayout: 6336 },
-];
-
 export const useSellerAccount = create<SellerAccountState>()(
   persist(
     (set, get) => ({
-      planIds: { self_employed: "free", ip: "free", ooo: "free" },
-      setPlan: (t, id) => set((s) => ({ planIds: { ...s.planIds, [t]: id } })),
-      transactions: demoTx,
+      planIdsByAccount: {},
+      setPlan: (accountId, t, id) => set((s) => {
+        const current = s.planIdsByAccount[accountId] || { self_employed: "free", ip: "free", ooo: "free" };
+        return { 
+          planIdsByAccount: { 
+            ...s.planIdsByAccount, 
+            [accountId]: { ...current, [t]: id } 
+          } 
+        };
+      }),
+      getPlan: (accountId, t) => {
+        const accPlans = get().planIdsByAccount[accountId];
+        return accPlans?.[t] || "free";
+      },
+      transactions: [
+        { id: "t1", date: new Date(Date.now() - 2 * 864e5).toISOString(), kind: "sale", orderId: "UYA-3127", productPrice: 10000, commissionAmount: 1200, sellerPayout: 8800 },
+        { id: "t2", date: new Date(Date.now() - 5 * 864e5).toISOString(), kind: "sale", orderId: "UYA-3084", productPrice: 4500, commissionAmount: 540, sellerPayout: 3960 },
+        { id: "t3", date: new Date(Date.now() - 9 * 864e5).toISOString(), kind: "sale", orderId: "UYA-2971", productPrice: 7200, commissionAmount: 864, sellerPayout: 6336 },
+      ],
       products: [],
       team: [],
       aiCardGens: {},
@@ -278,7 +289,7 @@ export const useSellerAccount = create<SellerAccountState>()(
         return true;
       },
     }),
-    { name: "uyutart-seller-account-v2" }
+    { name: "uyutart-seller-account-v3" }
   )
 );
 
