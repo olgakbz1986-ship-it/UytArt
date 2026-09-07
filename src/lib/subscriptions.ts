@@ -52,21 +52,21 @@ export interface SellerLimits {
 const UNLIM = Infinity;
 export const SELLER_LIMITS: Record<SellerLegalType, Record<string, SellerLimits>> = {
   self_employed: {
-    free: { maxProducts: 5, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    master: { maxProducts: 30, aiCardGens: 10, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    profi: { maxProducts: 100, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 2, massEdit: true, bundles: true, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    top: { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: true, segmentation: false, manager: false, whiteLabel: false, badge: "Проверенный мастер" },
+    free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+    master: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+    "master-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
+    "master-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
   },
   ip: {
-    free: { maxProducts: 20, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    business: { maxProducts: 100, aiCardGens: 30, analytics: "extended", marketPriority: 1, massEdit: true, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    "business-pro": { maxProducts: 500, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 3, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: true, segmentation: false, manager: false, whiteLabel: false },
-    "business-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: 10, importFile: true, brandStore: false, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: false, badge: "Премиум продавец" },
+    free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+    business: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+    "business-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
+    "business-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
   },
   ooo: {
     free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    corp: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: true, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    "corp-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
+    corp: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+    "corp-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
     "corp-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
   },
 };
