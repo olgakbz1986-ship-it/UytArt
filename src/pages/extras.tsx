@@ -1115,6 +1115,8 @@ export function SellerDashboardPage() {
         </Btn>
       </Modal>
     </div>
+      </div>
+    </div>
   );
 }
 
