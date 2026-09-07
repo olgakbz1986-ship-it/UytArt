@@ -797,14 +797,19 @@ export function SellerDashboardPage() {
         </div>
       )}
 
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-7">
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 min-h-[44px] rounded-full text-[13.5px] font-bold whitespace-nowrap transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-            <t.icon size={15} /> {t.label}
-          </button>
-        ))}
-      </div>
+      <div className="grid lg:grid-cols-[240px_1fr] gap-6 items-start">
+        {/* Вертикальная навигация кабинета продавца */}
+        <nav className="flex flex-col gap-2 fade-up">
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
+              <t.icon size={17} /> {t.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Контент кабинета */}
+        <div className="min-w-0">
 
       {/* ТОВАРЫ */}
       {tab === "products" && (
