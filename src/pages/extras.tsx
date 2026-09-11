@@ -245,7 +245,7 @@ export function PlansPage() {
   
   /* Для гостя показываем переключатель, для залогиненного — только его линейку */
   const showBuyerTariffs = role === "buyer" || (!role && audience === "buyer");
-  const showSellerTariffs = (role === "seller" && !!sessSellerType) || (!role && audience === "seller");
+  const showSellerTariffs = (role === "seller" && (!!sessSellerType || isRegisteredSeller)) || (!role && audience === "seller");
   
   /* Эффективный тип юрлица: из сессии или из регистрации, или выбранный гостем */
   const effectiveSellerType: SellerLegalType = sessSellerType || (isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType);
@@ -434,7 +434,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
 
   const finish = (method: string) => {
     s.payFee(method);
-    login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller" });
+    login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: s.legalType || undefined });
     if (!embedded) nav("/seller/dashboard");
   };
 
@@ -688,7 +688,7 @@ export function SellerDashboardPage() {
   };
 
   const lt = s.legalType || "self_employed";
-  const planId = acc.getPlan(session?.userId || "guest", lt);
+  const planId = acc.getPlan(user?.userId || "guest", lt);
   const plan = sellerLimits(lt, planId);
   const lvl = levelOf(lt, planId);
   const lvlMeta = SELLER_LEVEL[lvl];
