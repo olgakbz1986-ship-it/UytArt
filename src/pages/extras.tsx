@@ -393,6 +393,7 @@ export function PlansPage() {
 export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   const s = useSellerReg();
   const login = useAppStore((st) => st.login);
+  const session = useAppStore((st) => st.session);
   const nav = useNavigate();
   const [ocrOk, setOcrOk] = useState<Record<string, boolean>>({});
   const [modScenario, setModScenario] = useState<"approve" | "reject">("approve");
