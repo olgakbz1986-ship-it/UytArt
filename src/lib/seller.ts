@@ -73,6 +73,25 @@ export const SELLER_PLANS: Record<SellerLegalType, SellerPlan[]> = {
 };
 export const sellerPlanById = (t: SellerLegalType, id: string) => (SELLER_PLANS[t] || []).find((p) => p.id === id);
 
+/* ---------- матрица комиссий по типу юрлица и тарифу ---------- */
+export const COMMISSION_MATRIX: Record<SellerLegalType, Record<string, number>> = {
+  self_employed: { free: 10, master: 9, profi: 8, top: 7 },
+  ip: { free: 12, business: 11, "business-pro": 10, "business-premium": 9 },
+  ooo: { free: 15, corp: 14, "corp-pro": 13, "corp-premium": 11 },
+};
+
+export function getCommissionRate(type: SellerLegalType | null | undefined, planId: string): number {
+  if (!type) return 15;
+  return COMMISSION_MATRIX[type]?.[planId] ?? COMMISSION_MATRIX[type]?.free ?? 15;
+}
+
+export function getCurrentPlanKey(type: SellerLegalType | null | undefined, accountId?: string): string {
+  if (!type) return "free";
+  // Эта функция должна вызываться из компонента, где доступен стейт
+  // Для использования в extras.tsx передавайте accountId явно
+  return "free"; // заглушка, реальное значение берётся в компоненте
+}
+
 /* ---------- состояние регистрации ---------- */
 export type SellerRegStatus = "inactive" | "docs" | "moderation" | "rejected" | "payment" | "active" | "blocked";
 
