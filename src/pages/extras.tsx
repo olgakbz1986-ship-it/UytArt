@@ -433,8 +433,18 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   };
 
   const finish = (method: string) => {
-    s.payFee(method);
-    login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: s.legalType || undefined });
+    // Проверяем, нет ли уже аккаунта продавца с таким email
+    const existingSeller = Object.values(useAppStore.getState().accounts)
+      .flat()
+      .find(acc => acc.email === s.email && acc.role === 'seller');
+    
+    if (existingSeller) {
+      // Входим в существующий аккаунт вместо создания нового
+      login(existingSeller);
+    } else {
+      s.payFee(method);
+      login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: s.legalType || undefined });
+    }
     if (!embedded) nav("/seller/dashboard");
   };
 
@@ -758,8 +768,11 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
         <p className="text-[56px] mb-3">🏪</p>
         <h1 className="font-display font-bold text-[28px] text-ink mb-2">Кабинет продавца недоступен</h1>
-        <p className="text-[14px] text-ink-soft mb-7">Зарегистрируйтесь как продавец, чтобы открыть витрину.</p>
-        <Link to="/seller/register" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">Стать продавцом</Link>
+        <p className="text-[14px] text-ink-soft mb-7">Войдите в аккаунт продавца для просмотра кабинета.</p>
+        <div className="flex justify-center gap-4">
+          <Link to="/auth" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep transition-colors">Войти</Link>
+          <Link to="/seller/register" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">Стать продавцом</Link>
+        </div>
       </div>
     );
   }
