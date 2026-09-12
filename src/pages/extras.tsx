@@ -13,7 +13,7 @@ import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById,
-  SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover,
+  SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX,
 } from "../lib/seller";
 import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
@@ -619,14 +619,67 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      {s.status === "active" && (
-        <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up">
-          <span className="inline-flex w-16 h-16 rounded-full bg-success-soft text-success items-center justify-center mb-4"><CheckCircle2 size={32} /></span>
-          <h2 className="font-display font-bold text-[22px] text-ink mb-2">Витрина открыта!</h2>
-          <p className="text-[13.5px] text-ink-soft mb-6">Магазин «{s.shopName}» активен. Комиссия {s.commissionRate}%. Добавьте первые товары.</p>
-          <Link to="/seller/dashboard" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">В кабинет продавца</Link>
-        </div>
-      )}
+      {s.status === "active" && (() => {
+        const session = useAppStore.getState().session;
+        
+        // Если сессия не продавца или отсутствует — предлагаем выбор
+        if (!session || session.role !== 'seller') {
+          const regData = s.registration;
+          const existingAccount = Object.values(useAppStore.getState().accounts)
+            .flat()
+            .find(acc => acc.email === regData?.email && acc.role === 'seller');
+
+          return (
+            <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up max-w-md mx-auto">
+              <span className="inline-flex w-16 h-16 rounded-full bg-info-soft text-info items-center justify-center mb-4"><Users size={32} /></span>
+              <h2 className="font-display font-bold text-[22px] text-ink mb-2">Продавец уже зарегистрирован</h2>
+              <p className="text-[13.5px] text-ink-soft mb-6">
+                Магазин: <b>{regData?.shopName}</b><br/>
+                Email: {regData?.email}
+              </p>
+              <div className="flex flex-col gap-3">
+                <Btn size="lg" onClick={() => {
+                  if (existingAccount) {
+                    useAppStore.getState().login(existingAccount);
+                  } else {
+                    useAppStore.getState().login({
+                      id: `seller-${regData?.slug || Date.now()}`,
+                      name: regData?.contactName || regData?.masterName || 'Продавец',
+                      email: regData?.email || '',
+                      role: 'seller',
+                      sellerType: regData?.legalType,
+                    });
+                  }
+                  window.location.href = '/seller/dashboard';
+                }}>
+                  Войти в существующий кабинет
+                </Btn>
+                <Btn size="lg" variant="outline" onClick={() => resetFlow()}>
+                  Зарегистрировать нового продавца
+                </Btn>
+              </div>
+            </div>
+          );
+        }
+
+        // Если сессия продавца активна — показываем экран с комиссией из тарифа
+        const legalType = s.registration?.legalType;
+        // Получаем текущий план из активного аккаунта
+        const sellerAcc = useSellerAccount();
+        const accountIds = Object.keys(sellerAcc.planIdsByAccount);
+        const accountId = accountIds.find(id => sellerAcc.accounts[id]?.role === 'seller') || accountIds[0];
+        const currentPlanId = accountId ? (sellerAcc.planIdsByAccount[accountId]?.[legalType!] || 'free') : 'free';
+        const commission = COMMISSION_MATRIX[legalType!]?.[currentPlanId] ?? COMMISSION_MATRIX[legalType!]?.free ?? 15;
+        
+        return (
+          <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up">
+            <span className="inline-flex w-16 h-16 rounded-full bg-success-soft text-success items-center justify-center mb-4"><CheckCircle2 size={32} /></span>
+            <h2 className="font-display font-bold text-[22px] text-ink mb-2">Витрина открыта!</h2>
+            <p className="text-[13.5px] text-ink-soft mb-6">Магазин «{s.shopName}» активен. Комиссия текущего тарифа: <b>{commission}%</b></p>
+            <Link to="/seller/dashboard" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">В кабинет продавца</Link>
+          </div>
+        );
+      })()}
     </div>
   );
 }
