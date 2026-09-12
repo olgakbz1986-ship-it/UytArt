@@ -1,8 +1,33 @@
 import { Link } from "react-router-dom";
-import { Heart, ShoppingBag, Ban } from "lucide-react";
+import { Heart, ShoppingBag, Ban, Play } from "lucide-react";
 import { Product, catBySlug, fmt, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { Badge, ProductImg, Rating } from "./ui";
+
+// Компонент AI-анимации карточки (Ken Burns + кроссфейд)
+export function CardAnimation({ frames, captions, frameMs }: { frames: string[]; captions: string[]; frameMs?: number }) {
+  const duration = frameMs || 2200;
+  return (
+    <div className="relative w-full h-full overflow-hidden bg-gray-100">
+      {frames.map((frame, i) => (
+        <div
+          key={i}
+          className="ai-frame"
+          style={{
+            backgroundImage: `url(${frame})`,
+            animationDelay: `${i * (duration / 1000)}s`,
+            animationDuration: `${(frames.length * duration) / 1000}s`,
+          }}
+        />
+      ))}
+      {captions.length > 0 && (
+        <div className="ai-caption" style={{ animationDuration: `${(frames.length * duration) / 1000}s` }}>
+          {captions[0]}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
   const addToCart = useAppStore((s) => s.addToCart);
@@ -19,7 +44,16 @@ export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
       style={{ animationDelay: `${(index % 12) * 45}ms` }}
     >
       <div className="relative aspect-[4/3.4]">
-        <ProductImg p={p} variant={index % 5} />
+        {p.animation ? (
+          <>
+            <CardAnimation frames={p.animation.frames} captions={p.animation.captions} frameMs={p.animation.frameMs} />
+            <span className="absolute top-2.5 right-2.5 bg-black/80 text-white text-xs font-bold px-2 py-1 rounded z-20 animate-pulse flex items-center gap-1">
+              <Play size={10} fill="currentColor" /> AI-видео
+            </span>
+          </>
+        ) : (
+          <ProductImg p={p} variant={index % 5} />
+        )}
         <div className="absolute top-2.5 left-2.5 flex flex-col items-start gap-1.5 z-10">
           {p.oldPrice && <Badge tone="honey">−{Math.round((1 - p.price / p.oldPrice) * 100)}%</Badge>}
           {p.isHit && <Badge tone="premium">Хит</Badge>}

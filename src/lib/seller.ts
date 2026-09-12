@@ -230,7 +230,25 @@ export interface SellerTx {
 }
 
 export interface ProductMedia { type: "image" | "video"; url: string; name: string; }
-export interface SellerProductItem { id: string; name: string; category: string; price: number; createdAt: string; archived?: boolean; aiGenerated?: boolean; media?: ProductMedia[]; }
+export interface SellerProductItem {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  createdAt: string;
+  archived?: boolean;
+  aiGenerated?: boolean;
+  media?: ProductMedia[];
+  // Новые поля для AI-студии
+  description?: string;
+  specs?: { key: string; value: string }[];
+  tags?: string[];
+  animation?: {
+    frames: string[];
+    captions: string[];
+    frameMs: number;
+  };
+}
 
 export interface TeamMember { id: string; name: string; role: "Менеджер" | "Мастер" | "Кладовщик"; }
 

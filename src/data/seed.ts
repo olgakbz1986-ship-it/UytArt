@@ -267,6 +267,8 @@ export interface Product {
   rating: number; reviewsCount: number; stock: number; views: number;
   material: string; style: string; color: string; size: string; tags: string[];
   description: string; createdAt: string; isHit?: boolean; isNew?: boolean;
+  // Поля для AI-анимации (опционально)
+  animation?: { frames: string[]; captions: string[]; frameMs?: number };
 }
 
 const MATERIALS = ["Лён", "Хлопок", "Шерсть", "Керамика", "Дуб", "Ясень", "Латунь", "Ротанг", "Стекло", "Кожа", "Серебро", "Берёза"];
