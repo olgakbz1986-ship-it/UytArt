@@ -665,7 +665,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
                 }}>
                   Войти в существующий кабинет
                 </Btn>
-                <Btn size="lg" variant="outline" onClick={() => resetFlow()}>
+                <Btn size="lg" variant="outline" onClick={() => s.resetFlow()}>
                   Зарегистрировать нового продавца
                 </Btn>
               </div>
@@ -674,11 +674,11 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
         }
 
         // Если сессия продавца активна — показываем экран с комиссией из тарифа
-        const legalType = s.registration?.legalType;
+        const legalType = s.legalType;
         // Получаем текущий план из активного аккаунта
         const sellerAcc = useSellerAccount();
         const accountIds = Object.keys(sellerAcc.planIdsByAccount);
-        const accountId = accountIds.find(id => sellerAcc.accounts[id]?.role === 'seller') || accountIds[0];
+        const accountId = accountIds.find(id => true) || accountIds[0];
         const currentPlanId = accountId ? (sellerAcc.planIdsByAccount[accountId]?.[legalType!] || 'free') : 'free';
         const commission = COMMISSION_MATRIX[legalType!]?.[currentPlanId] ?? COMMISSION_MATRIX[legalType!]?.free ?? 15;
         
