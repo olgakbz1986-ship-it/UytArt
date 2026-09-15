@@ -443,7 +443,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
       login(existingSeller);
     } else {
       s.payFee(method);
-      login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: s.legalType || undefined });
+      login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: s.legalType ?? undefined || undefined });
     }
     if (!embedded) nav("/seller/dashboard");
   };
