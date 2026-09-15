@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
+import { marketProducts } from "../lib/market";
 import { CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { useSellerReg } from "../lib/seller";
@@ -51,7 +52,7 @@ function SmartSearch() {
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (t.length < 2) return [];
-    return PRODUCTS.filter((p) => {
+    return marketProducts().filter((p) => {
       const cat = catBySlug(p.categoryId);
       const g = cat ? groupById(cat.group) : undefined;
       const subName = cat?.subs.find((s) => s.slug === p.sub)?.name.toLowerCase() ?? "";

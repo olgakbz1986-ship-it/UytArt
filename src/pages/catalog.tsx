@@ -1,3 +1,4 @@
+import { marketProducts } from "../lib/market";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare } from "lucide-react";
@@ -59,7 +60,7 @@ export function CatalogPage() {
   const browseMode = !q && group === "all" && cat === "all";
 
   const items = useMemo(() => {
-    let l = [...PRODUCTS];
+    let l = marketProducts();
     if (q) {
       l = l.filter((p) => {
         const c = catBySlug(p.categoryId);
@@ -257,7 +258,7 @@ export function ProductPage() {
   const cat = p ? catBySlug(p.categoryId) : undefined;
   const vendor = p ? vendorById(p.vendorId) : undefined;
   const similar = useMemo(
-    () => (p ? PRODUCTS.filter((x) => x.categoryId === p.categoryId && x.id !== p.id).slice(0, 4) : []),
+    () => (p ? marketProducts().filter((x) => x.categoryId === p.categoryId && x.id !== p.id).slice(0, 4) : []),
     [p]
   );
 
