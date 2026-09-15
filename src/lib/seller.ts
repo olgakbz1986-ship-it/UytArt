@@ -337,3 +337,7 @@ export const selectCommissionSum = (s: SellerAccountState) =>
   s.transactions.filter((t) => t.kind === "sale").reduce((sum, t) => sum + t.commissionAmount, 0);
 export const selectBalance = (s: SellerAccountState) =>
   s.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
+
+/* ---------- экспорты для ProductWizard ---------- */
+export const currentMonth = () => new Date().toISOString().slice(0, 7);
+export const consumeAiCardGen = (month: string) => useSellerAccount.getState().consumeAiCardGen(month);

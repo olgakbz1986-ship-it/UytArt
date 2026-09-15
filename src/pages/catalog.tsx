@@ -48,7 +48,8 @@ export function CatalogPage() {
   const [showOther, setShowOther] = useState(true);
   const [quality, setQuality] = useState(false);
 
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
+  const accountId = useAppStore((s) => s.session?.userId || "guest");
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(accountId));
   const lim = buyerLimits(buyerPlan);
 
   const activeGroup = groupById(group);

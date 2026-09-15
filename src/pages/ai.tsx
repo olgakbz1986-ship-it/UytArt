@@ -17,9 +17,10 @@ const HOTSPOTS: { top: string; left: string; cat: string }[] = [
 
 export default function AiPage() {
   const addToCart = useAppStore((s) => s.addToCart);
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
+  const accountId = useAppStore((s) => s.session?.userId || "guest");
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(accountId));
   const consumeAiGen = useSubStore((s) => s.consumeAiGen);
-  const aiGensLeft = useSubStore(selectAiLeft);
+  const aiGensLeft = useSubStore((s) => selectAiLeft(s, accountId));
   const addConcept = useSubStore((s) => s.addConcept);
   const lim = buyerLimits(buyerPlan);
 
@@ -44,7 +45,7 @@ export default function AiPage() {
   }, [messages.length, thinking]);
 
   const tryConsume = () => {
-    const ok = consumeAiGen();
+    const ok = consumeAiGen(accountId);
     setLimitHit(!ok);
     return ok;
   };

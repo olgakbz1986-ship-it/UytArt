@@ -18,7 +18,8 @@ export function CartPage() {
   const setQty = useAppStore((s) => s.setQty);
   const removeFromCart = useAppStore((s) => s.removeFromCart);
   const bonusBalance = useAppStore((s) => s.bonusBalance);
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
+  const accountId = useAppStore((s) => s.session?.userId || "guest");
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(accountId));
   const lim = buyerLimits(buyerPlan);
 
   const rows = cart.map((c) => ({ ...c, p: productById(c.productId) })).filter((r) => r.p);
@@ -95,8 +96,9 @@ export function CheckoutPage() {
   const clearCart = useAppStore((s) => s.clearCart);
   const bonusBalance = useAppStore((s) => s.bonusBalance);
   const addBonus = useAppStore((s) => s.addBonus);
-  const buyerPlan = useSubStore((s) => s.buyerPlan);
-  const lim = buyerLimits(buyerPlan);
+  const accountId2 = useAppStore((s) => s.session?.userId || "guest");
+  const buyerPlan2 = useSubStore((s) => s.getBuyerPlan(accountId2));
+  const lim = buyerLimits(buyerPlan2);
   const nav = useNavigate();
 
   const [addrId, setAddrId] = useState(addresses[0]?.id || "");

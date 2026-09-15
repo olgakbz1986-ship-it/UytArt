@@ -28,7 +28,7 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
     submitReview({
       productId: product.id,
       orderId, orderNumber,
-      userId: user?.id || "anon",
+      userId: user?.userId || "anon",
       userName: user?.name || "Покупатель",
       rating,
       text: text.trim(),
@@ -203,7 +203,7 @@ export function ComplaintModal({ open, onClose, vendorId }: {
     addComplaint({
       vendorId,
       vendorName: vendor?.name || "Продавец",
-      userId: user?.id || "anon",
+      userId: user?.userId || "anon",
       userName: user?.name || "Покупатель",
       category,
       description: description.trim(),

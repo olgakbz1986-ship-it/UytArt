@@ -19,7 +19,7 @@ import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
-import { ProductWizard } from "../components/ProductWizard";
+import { Markdown } from "../components/markdown";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -722,10 +722,10 @@ const levelOf = (lt: SellerLegalType, planId: string) => {
    ============================================================ */
 export function SellerDashboardPage() {
   const s = useSellerReg();
-  const [wizardOpen, setWizardOpen] = useState(false);
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
+  const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
   const [media, setMedia] = useState<ProductMedia[]>([]);
   const [bulk, setBulk] = useState<string[]>([]);
   const [teamMember, setTeamMember] = useState({ name: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
