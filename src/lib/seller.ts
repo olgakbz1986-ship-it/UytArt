@@ -99,6 +99,8 @@ interface SellerRegState {
   status: SellerRegStatus;
   legalType: SellerLegalType | null;
   shopName: string;
+  shopLogo?: string;
+  masterAvatar?: string;
   contactName: string;
   email: string;
   phone: string;
@@ -124,7 +126,7 @@ interface SellerRegState {
   achievements: string;
 
   setLegalType: (t: SellerLegalType) => void;
-  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements">>) => void;
+  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar">>) => void;
   toggleCategory: (slug: string) => void;
   backToStep1: () => void;
   toDocs: () => void;
@@ -241,8 +243,12 @@ export interface SellerProductItem {
   media?: ProductMedia[];
   // Новые поля для AI-студии
   description?: string;
-  specs?: { key: string; value: string }[];
+  materials?: string[];
+  manufacturer?: string;
+  dimensions?: { length?: number; width?: number; height?: number; unit?: "см" | "мм" | "м" };
   tags?: string[];
+  weight?: number;
+  specs?: { key: string; value: string }[];
   animation?: {
     frames: string[];
     captions: string[];

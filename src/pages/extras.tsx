@@ -20,6 +20,8 @@ import {
 } from "../lib/subscriptions";
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
 import { Markdown } from "../components/markdown";
+import { ProductWizard } from "../components/ProductWizard";
+import { SellerAvatar } from "../components/SellerAvatar";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -433,19 +435,16 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   };
 
   const finish = (method: string) => {
-    // Проверяем, нет ли уже аккаунта продавца с таким email
+    s.payFee(method);
     const existingSeller = Object.values(useAppStore.getState().accounts)
       .flat()
-      .find(acc => acc.email === s.email && acc.role === 'seller');
-    
+      .find((acc) => acc.email === s.email && acc.role === "seller");
     if (existingSeller) {
-      // Входим в существующий аккаунт вместо создания нового
       login(existingSeller);
     } else {
-      s.payFee(method);
-      login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: s.legalType ?? undefined || undefined });
+      login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: (s.legalType ?? undefined) });
     }
-    if (!embedded) nav("/seller/dashboard");
+    nav("/seller/dashboard");
   };
 
   return (
@@ -455,6 +454,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
       )}
       <p className="text-[13.5px] text-ink-soft mb-6">
         Регистрация платная и зависит от юридического статуса. Доступ к витрине откроется после верификации документов и оплаты.
+      <span className="block mb-4 flex gap-2 flex-wrap"><Btn size="sm" variant="outline" onClick={() => { const accs = Object.values(useAppStore.getState().accounts).flat().filter((a) => a.role === "seller"); const match = accs.find((a) => a.email === s.email) || accs[0]; if (match) { login(match); nav("/seller/dashboard"); } }}>Уже зарегистрированы? Войти в кабинет</Btn><Btn size="sm" variant="ghost" onClick={() => s.resetFlow()}>Начать регистрацию заново</Btn></span>
       </p>
 
       {/* ШАГ 1: юрлицо */}
@@ -658,7 +658,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
                       name: regData?.contactName || regData?.masterName || 'Продавец',
                       email: regData?.email || '',
                       role: 'seller',
-                      sellerType: regData?.legalType,
+                      sellerType: regData?.legalType ?? undefined,
                     });
                   }
                   window.location.href = '/seller/dashboard';
@@ -727,6 +727,7 @@ export function SellerDashboardPage() {
   const [tab, setTab] = useState<"products" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
   const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
   const [media, setMedia] = useState<ProductMedia[]>([]);
+  const [prodWizardOpen, setProdWizardOpen] = useState(false);
   const [bulk, setBulk] = useState<string[]>([]);
   const [teamMember, setTeamMember] = useState({ name: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -884,7 +885,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       {tab === "products" && (
         <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
           <div className="bg-surface rounded-2xl shadow-card p-6">
-            <h2 className="font-display font-bold text-[17px] text-ink mb-4">Новый товар</h2>
+            <div className="flex items-center justify-between mb-4"><h2 className="font-display font-bold text-[17px] text-ink">Создать карточку</h2><Btn size="sm" onClick={() => setProdWizardOpen(true)}><Sparkles size={14} /> Мастер карточки</Btn></div>
             {overProducts && <p className="text-[12px] font-semibold text-error mb-3">Достигнут лимит товаров ({fmtLimit(plan.maxProducts)}). Улучшите тариф.</p>}
             <div className="space-y-3.5">
               <Field label="Название" required><input className="field" value={prod.name} onChange={(e) => setProd({ ...prod, name: e.target.value })} placeholder="Ваза «Утро»" /></Field>
@@ -1093,6 +1094,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 
+          <div className="mb-5"><SellerAvatar /></div>
           {/* Профиль и юр. данные — доступны и редактируемы на любом тарифе */}
           <SettingsSection title="Профиль и юридические данные" icon={<Settings size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
             {/* юридические данные (из регистрации, только чтение) */}
@@ -1172,6 +1174,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           </div>
         </div>
       )}
+      <ProductWizard open={prodWizardOpen} onClose={() => setProdWizardOpen(false)} />
 
       {/* вывод средств */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Вывод средств">
