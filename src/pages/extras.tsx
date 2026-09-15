@@ -635,7 +635,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
         
         // Если сессия не продавца или отсутствует — предлагаем выбор
         if (!session || session.role !== 'seller') {
-          const regData = s.registration;
+          const regData = s;
           const existingAccount = Object.values(useAppStore.getState().accounts)
             .flat()
             .find(acc => acc.email === regData?.email && acc.role === 'seller');
