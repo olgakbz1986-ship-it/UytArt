@@ -784,10 +784,12 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const nextCharge = new Date(Date.now() + 20 * 864e5);
 
   const addMedia = (f: File) => {
-    if (media.length >= 10) return;
-    const isVideo = f.type.startsWith("video");
-    if (isVideo && media.some((m) => m.type === "video")) return; /* только 1 видео */
-    setMedia([...media, { type: isVideo ? "video" : "image", url: URL.createObjectURL(f), name: f.name }]);
+    const r = new FileReader();
+    r.onload = () => {
+      const url = r.result as string;
+      setMedia((m) => [...m, { type: f.type.startsWith("video/") ? "video" : "image", url, name: f.name }]);
+    };
+    r.readAsDataURL(f);
   };
 
   const publishProduct = () => {

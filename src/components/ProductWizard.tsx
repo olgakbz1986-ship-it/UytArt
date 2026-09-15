@@ -30,12 +30,18 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
-    const add: Media[] = [];
-    for (let i = 0; i < files.length && draft.media.length + add.length < 10; i++) {
-      const f = files[i];
-      add.push({ type: f.type.startsWith("video/") ? "video" : "image", url: URL.createObjectURL(f), name: f.name });
-    }
-    setDraft({ ...draft, media: [...draft.media, ...add] });
+    const list = Array.from(files).slice(0, Math.max(0, 10 - draft.media.length));
+    list.forEach((f) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const url = r.result as string;
+        setDraft((d) => ({
+          ...d,
+          media: [...d.media, { type: f.type.startsWith("video/") ? "video" : "image", url, name: f.name }],
+        }));
+      };
+      r.readAsDataURL(f);
+    });
   };
 
   const generateAi = () => {
