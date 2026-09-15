@@ -810,7 +810,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
       {/* шапка кабинета */}
       <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
-        <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{s.shopName[0]?.toUpperCase()}</span>
+        <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream overflow-hidden" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : s.shopName[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
