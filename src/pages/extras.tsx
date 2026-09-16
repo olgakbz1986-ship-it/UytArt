@@ -11,6 +11,7 @@ import {
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
+import { marketProducts } from "../lib/market";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById,
   SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX,
@@ -725,6 +726,9 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
+  const allOrders = useAppStore((s) => s.orders);
+  const advanceStatus = useAppStore((s) => s.advanceStatus);
+  const myOrders = allOrders.filter((o) => o.items.some((i) => i.productId.startsWith("sp-")));
   const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
   const [media, setMedia] = useState<ProductMedia[]>([]);
   const [prodWizardOpen, setProdWizardOpen] = useState(false);
@@ -982,16 +986,46 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       {/* ЗАКАЗЫ */}
       {tab === "orders" && (
         <div className="space-y-3 fade-up">
-          {[
-            { id: "UYA-3127", buyer: "Анна М.", sum: 10000, status: "Ожидает отправки" },
-            { id: "UYA-3084", buyer: "Дмитрий К.", sum: 4500, status: "Отправлен" },
-          ].map((o) => (
-            <div key={o.id} className="bg-surface rounded-2xl shadow-card p-5 flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p className="font-bold text-[15px] text-ink">Заказ {o.id}</p>
-                <p className="text-[12.5px] text-ink-mute mt-0.5">{o.buyer} · {fmt(o.sum)}</p>
+          {myOrders.length === 0 && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">📦</p>
+              <p className="font-bold text-[15px] text-ink">Заказов пока нет</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Здесь появятся заказы покупателей — вы сможете отправлять их и отслеживать статусы.</p>
+            </div>
+          )}
+          {myOrders.map((o) => (
+            <div key={o.id} className="bg-surface rounded-2xl shadow-card p-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="font-bold text-[15px] text-ink">Заказ {o.number}</p>
+                  <p className="text-[12.5px] text-ink-mute mt-0.5">{fmtDate(o.date)} · {o.payMethod} · {o.deliveryMethod}</p>
+                </div>
+                <Badge tone={o.status === "paid" ? "honey" : o.status === "shipped" ? "ai" : o.status === "delivered" ? "premium" : "success"}>
+                  {o.status === "paid" ? "Оплачен — ждёт отправки" : o.status === "shipped" ? "Отправлен" : o.status === "delivered" ? "Доставлен" : "Получен"}
+                </Badge>
               </div>
-              <Badge tone={o.status === "Отправлен" ? "ai" : "honey"}>{o.status}</Badge>
+              <div className="mt-3 pt-3 border-t border-line-soft space-y-1.5">
+                {o.items.map((it) => {
+                  const prod = marketProducts().find((x) => x.id === it.productId);
+                  return (
+                    <div key={it.productId} className="flex justify-between gap-3 text-[13px]">
+                      <span className="text-ink-soft">{prod?.name || it.productId} × {it.qty}</span>
+                      <span className="font-semibold text-ink">{fmt(it.price * it.qty)}</span>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between gap-3 text-[13px] pt-1.5">
+                  <span className="text-ink-mute truncate">📍 {o.address}</span>
+                  <span className="font-bold text-ink whitespace-nowrap">Итого: {fmt(o.total)}</span>
+                </div>
+              </div>
+              {o.status !== "received" && (
+                <div className="mt-3.5">
+                  <Btn size="sm" onClick={() => advanceStatus(o.id)}>
+                    {o.status === "paid" ? " Отправить покупателю" : o.status === "shipped" ? "🚚 Отметить доставленным" : "✅ Подтвердить получение"}
+                  </Btn>
+                </div>
+              )}
             </div>
           ))}
         </div>
