@@ -678,7 +678,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
         // Получаем текущий план из активного аккаунта
         const sellerAcc = useSellerAccount();
         const accountIds = Object.keys(sellerAcc.planIdsByAccount);
-        const accountId = accountIds.find(id => true) || accountIds[0];
+        const accountId = useAppStore.getState().session?.userId || accountIds[0];
         const currentPlanId = accountId ? (sellerAcc.planIdsByAccount[accountId]?.[legalType!] || 'free') : 'free';
         const commission = COMMISSION_MATRIX[legalType!]?.[currentPlanId] ?? COMMISSION_MATRIX[legalType!]?.free ?? 15;
         
@@ -756,7 +756,7 @@ export function SellerDashboardPage() {
   };
 
   const lt = s.legalType || "self_employed";
-  const planId = acc.getPlan(user?.userId || "guest", lt);
+  const planId = acc.getPlan(useAppStore.getState().session?.userId || "guest", lt);
   const plan = sellerLimits(lt, planId);
   const lvl = levelOf(lt, planId);
   const lvlMeta = SELLER_LEVEL[lvl];

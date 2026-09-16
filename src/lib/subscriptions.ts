@@ -70,8 +70,20 @@ export const SELLER_LIMITS: Record<SellerLegalType, Record<string, SellerLimits>
     "corp-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
   },
 };
-export const sellerLimits = (t: SellerLegalType, planId: string): SellerLimits =>
-  SELLER_LIMITS[t]?.[planId] || SELLER_LIMITS[t].free;
+/* Уровень тарифа по любому имени (top/profi из комиссионной матрицы и master-pro и т.д.) */
+const PLAN_LEVEL: Record<string, number> = {
+  free: 0,
+  master: 1, business: 1, corp: 1,
+  "master-pro": 2, "business-pro": 2, "corp-pro": 2, profi: 2,
+  "master-premium": 3, "business-premium": 3, "corp-premium": 3, top: 3,
+};
+export const sellerLimits = (t: SellerLegalType, planId: string): SellerLimits => {
+  const table = SELLER_LIMITS[t] || SELLER_LIMITS.self_employed;
+  if (table[planId]) return table[planId];
+  const lvl = PLAN_LEVEL[planId] ?? 0;
+  const keys = Object.keys(table); /* порядок: free, средний, про, премиум */
+  return table[keys[Math.min(lvl, keys.length - 1)]] || table.free;
+};
 
 /* ---------- состояние подписок покупателя ---------- */
 export interface Concept { id: string; style: string; roomName: string; image?: string; createdAt: string; }
