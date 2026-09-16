@@ -63,6 +63,7 @@ interface AppState {
   session: ActiveSession | null;
   cart: CartItem[];
   favorites: string[];
+  viewerCity: string | null;
   addresses: Address[];
   orders: Order[];
   bonusBalance: number;
@@ -82,6 +83,7 @@ interface AppState {
   placeOrder: (o: Omit<Order, "id" | "number" | "date" | "status">) => Order;
   advanceStatus: (id: string) => void;
   confirmReceipt: (id: string) => void;
+  setViewerCity: (c: string | null) => void;
   addBonus: (amount: number, reason: string) => void;
 }
 
@@ -92,6 +94,7 @@ export const useAppStore = create<AppState>()(
       session: null,
       cart: [],
       favorites: [],
+      viewerCity: null,
       addresses: [
         { id: "a1", label: "Дом", city: "Москва", street: "ул. Пятницкая, 18, кв. 47", zip: "115035", isDefault: true },
       ],
@@ -202,6 +205,7 @@ export const useAppStore = create<AppState>()(
           favorites: s.favorites.includes(productId) ? s.favorites.filter((f) => f !== productId) : [...s.favorites, productId],
         })),
 
+      setViewerCity: (c) => set({ viewerCity: c }),
       addAddress: (a) => set((s) => ({ addresses: [...s.addresses, { ...a, id: "a" + Date.now() }] })),
       removeAddress: (id) => set((s) => ({ addresses: s.addresses.filter((a) => a.id !== id) })),
 

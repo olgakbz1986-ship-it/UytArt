@@ -1,5 +1,7 @@
 import { PRODUCTS, CATEGORIES, type Product } from "../data/seed";
 import { useSellerAccount } from "./seller";
+import { isZoneMatch } from "./geo";
+import { useAppStore } from "./store";
 
 /* Преобразует активные товары продавца в формат витрины */
 export function sellerMarketProducts(): Product[] {
@@ -39,6 +41,14 @@ export function sellerMarketProducts(): Product[] {
 }
 
 /* Единый список: демо + реальные товары продавцов */
-export function marketProducts(): Product[] {
-  return [...PRODUCTS, ...sellerMarketProducts()];
+export function marketProducts(buyerCity?: string): Product[] {
+  const st = useAppStore.getState();
+  const city = buyerCity ?? st.viewerCity ?? (st.addresses.find((a) => a.isDefault)?.city || "");
+  const all = [...PRODUCTS, ...sellerMarketProducts()];
+  if (!city) return all;
+  return all.filter((p) => {
+    if (!p.id.startsWith("sp-")) return true;
+    const item = useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
+    return isZoneMatch(item?.deliveryZone, item?.sellerCity || "", city);
+  });
 }

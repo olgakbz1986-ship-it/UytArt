@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, User, LogOut, Search, ArrowRight, X } from "lucide-react";
+import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin } from "lucide-react";
 import { marketProducts } from "../lib/market";
 import { CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
+import { CITIES } from "../lib/geo";
+import { useSellerAccount } from "../lib/seller";
 import { useSellerReg } from "../lib/seller";
 import { GroupImg } from "./ui";
 
@@ -33,6 +35,17 @@ export function Logo() {
 /* ---------- умный поиск ---------- */
 function SmartSearch() {
   const [q, setQ] = useState("");
+  const [cityOpen, setCityOpen] = useState(false);
+  const [cityInput, setCityInput] = useState("");
+  const viewerCity = useAppStore((s) => s.viewerCity);
+  const setViewerCity = useAppStore((s) => s.setViewerCity);
+  const defaultCity = useAppStore((s) => s.addresses.find((a) => a.isDefault)?.city || "");
+  const queryCity = useMemo(() => {
+    const qq = q.toLowerCase();
+    const fromList = CITIES.find((x) => qq.includes(x.name.toLowerCase()));
+    if (fromList) return fromList.name;
+    return useSellerAccount.getState().products.map((pr) => pr.sellerCity || "").find((c) => c && qq.includes(c.toLowerCase()));
+  }, [q]);
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
@@ -52,7 +65,7 @@ function SmartSearch() {
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (t.length < 2) return [];
-    return marketProducts().filter((p) => {
+    return marketProducts(queryCity).filter((p) => {
       const cat = catBySlug(p.categoryId);
       const g = cat ? groupById(cat.group) : undefined;
       const subName = cat?.subs.find((s) => s.slug === p.sub)?.name.toLowerCase() ?? "";
@@ -74,6 +87,26 @@ function SmartSearch() {
     <div className="relative flex-1 max-w-xl min-w-0 hidden sm:block">
       <div className={`flex items-center gap-2.5 h-[46px] px-4 rounded-full border bg-surface transition-all duration-300 ease-out ${open ? "border-dark shadow-card" : "border-line hover:border-ink-mute"}`}>
         <Search size={17} className={`shrink-0 transition-colors duration-200 ${open ? "text-accent-deep" : "text-ink-mute"}`} />
+        <div className="relative shrink-0">
+          <button onClick={() => setCityOpen((v) => !v)} aria-label="Город просмотра"
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg hover:bg-line-soft transition-colors cursor-pointer text-[12.5px] font-semibold text-ink-soft whitespace-nowrap">
+            <MapPin size={13} className="text-accent-deep" />
+            {viewerCity || defaultCity || "Город"}
+          </button>
+          {cityOpen && (
+            <div className="absolute left-0 top-9 z-50 w-[250px] bg-surface rounded-xl shadow-lift border border-line p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute mb-2">Город просмотра</p>
+              <input className="field mb-2" list="uyt-header-cities" placeholder="Ваш город" value={cityInput} onChange={(e) => setCityInput(e.target.value)} />
+              <datalist id="uyt-header-cities">{CITIES.map((c) => <option key={c.name} value={c.name} />)}</datalist>
+              <div className="flex flex-col gap-1.5">
+                <button onClick={() => { setViewerCity(cityInput.trim() || null); setCityOpen(false); }}
+                  className="h-9 rounded-lg bg-dark text-cream text-[12.5px] font-semibold hover:bg-dark-deep transition-colors cursor-pointer">Применить</button>
+                <button onClick={() => { setViewerCity(null); setCityInput(""); setCityOpen(false); }}
+                  className="h-9 rounded-lg border border-line text-[12.5px] font-semibold text-ink-soft hover:bg-line-soft transition-colors cursor-pointer">Как в адресе доставки{defaultCity ? ` (${defaultCity})` : ""}</button>
+              </div>
+            </div>
+          )}
+        </div>
         <input
           ref={inputRef}
           value={q}
