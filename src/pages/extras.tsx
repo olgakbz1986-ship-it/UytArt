@@ -731,6 +731,7 @@ export function SellerDashboardPage() {
   const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
   const [media, setMedia] = useState<ProductMedia[]>([]);
   const [prodWizardOpen, setProdWizardOpen] = useState(false);
+  const [editProductId, setEditProductId] = useState<string | null>(null);
   const [bulk, setBulk] = useState<string[]>([]);
   const [teamMember, setTeamMember] = useState({ name: "", email: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -1026,6 +1027,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                   </p>
                   <p className="text-[12px] text-ink-mute mt-0.5">{p.category} · {fmt(p.price)} · {fmtDate(p.createdAt)}</p>
                 </div>
+                <button onClick={() => { setEditProductId(p.id); setProdWizardOpen(true); }} className="text-[12px] font-semibold text-ink-soft hover:text-accent-deep cursor-pointer transition-colors">Изменить</button>
                 <button onClick={() => acc.toggleArchive(p.id)} className="text-[12px] font-semibold text-ink-soft hover:text-ink cursor-pointer transition-colors">{p.archived ? "Вернуть" : "Архив"}</button>
                 <button onClick={() => acc.removeProduct(p.id)} className="w-9 h-9 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft cursor-pointer transition-colors"><X size={16} /></button>
               </div>
@@ -1307,7 +1309,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           </div>
         </div>
       )}
-      <ProductWizard open={prodWizardOpen} onClose={() => setProdWizardOpen(false)} />
+      <ProductWizard open={prodWizardOpen} editId={editProductId} onClose={() => { setProdWizardOpen(false); setEditProductId(null); }} />
 
       {/* вывод средств */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Вывод средств">

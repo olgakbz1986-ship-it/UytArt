@@ -284,6 +284,7 @@ interface SellerAccountState {
   removeMember: (id: string) => void;
   requestWithdrawal: (amount: number) => void;
   incrementViews: (id: string) => void;
+  updateProduct: (id: string, patch: Partial<SellerProductItem>) => void;
   recordSale: (t: { orderId: string; productPrice: number; commissionAmount: number }) => void;
   consumeAiCardGen: (month: string) => boolean;
 }
@@ -320,6 +321,7 @@ export const useSellerAccount = create<SellerAccountState>()(
       removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
       toggleArchive: (id) =>
         set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, archived: !p.archived } : p)) })),
+      updateProduct: (id, patch) => set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
       incrementViews: (id) => set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, views: (p.views || 0) + 1 } : p)) })),
       bulkSetPrice: (ids, percent) =>
         set((s) => ({

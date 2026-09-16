@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller";
 import { CITIES, zoneLabel } from "../lib/geo";
@@ -23,13 +23,37 @@ const empty: Draft = {
   deliveryZone: { mode: "nationwide" },
 };
 
-export function ProductWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ProductWizard({ open, onClose, editId }: { open: boolean; onClose: () => void; editId?: string | null }) {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const acc = useSellerAccount();
   const sellerReg = useSellerReg();
+  const editItem = editId ? acc.products.find((pp) => pp.id === editId) : undefined;
+  useEffect(() => {
+    if (!open) return;
+    if (editItem) {
+      setDraft({
+        name: editItem.name, category: editItem.category, price: String(editItem.price),
+        description: editItem.description || "", materials: editItem.materials || [], newMaterial: "",
+        manufacturer: editItem.manufacturer || "",
+        dims: {
+          length: editItem.dimensions?.length ? String(editItem.dimensions.length) : "",
+          width: editItem.dimensions?.width ? String(editItem.dimensions.width) : "",
+          height: editItem.dimensions?.height ? String(editItem.dimensions.height) : "",
+          unit: editItem.dimensions?.unit || "см",
+        },
+        tags: editItem.tags || [], newTag: "", media: editItem.media || [],
+        sellerCity: editItem.sellerCity || sellerReg.city || "",
+        deliveryZone: editItem.deliveryZone || { mode: "nationwide" },
+      });
+    } else {
+      setDraft(empty);
+    }
+    setStep(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editId]);
   const month = new Date().toISOString().slice(0, 7);
   const aiLeft = Math.max(0, 10 - (acc.aiCardGens[month] || 0));
 
@@ -66,7 +90,7 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
   };
 
   const publish = () => {
-    acc.addProduct({
+    const data = {
       sellerCity: draft.sellerCity || sellerReg.city || "",
       deliveryZone: draft.deliveryZone || { mode: "nationwide" },
       name: draft.name.trim(),
@@ -82,7 +106,9 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
       tags: draft.tags,
       media: draft.media,
       aiGenerated: !!draft.aiCover,
-    });
+    };
+    if (editItem) acc.updateProduct(editItem.id, data);
+    else acc.addProduct(data);
     setDraft(empty);
     setStep(1);
     onClose();
@@ -95,7 +121,7 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
     !!draft.aiCover || !!draft.description;
 
   return (
-    <Modal open={open} onClose={onClose} title="Мастер карточки товара" wide>
+    <Modal open={open} onClose={onClose} title={editItem ? "Редактирование карточки" : "Мастер карточки товара"} wide>
       <div className="grid lg:grid-cols-[1fr_300px] gap-6">
         <div>
           <div className="flex items-center gap-2 mb-6">
