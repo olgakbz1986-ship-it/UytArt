@@ -6,8 +6,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check,
-} from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -761,6 +760,10 @@ export function SellerDashboardPage() {
   const lvl = levelOf(lt, planId);
   const lvlMeta = SELLER_LEVEL[lvl];
 const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.commissionRate;
+  const sentOrders = myOrders.filter((o) => o.status !== "paid");
+  const revenue = sentOrders.reduce((sum, o) => sum + o.total, 0);
+  const avgCheck = sentOrders.length > 0 ? Math.round(revenue / sentOrders.length) : 0;
+  const payout = Math.round(revenue * (1 - commissionNow / 100));
   const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
   const month = currentMonth();
   const aiUsed = acc.aiCardGens[month] || 0;
@@ -866,6 +869,29 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         </div>
       </div>
 
+      {/* Живые метрики из реальных заказов */}
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6 mb-8">
+        {[
+          { label: "Выручка (отправленные)", value: fmt(revenue), icon: Wallet, bar: "#4d7327", tint: "bg-[#eef5e9] text-[#4d7327]" },
+          { label: "Заказов всего", value: String(myOrders.length), icon: Package, bar: "#c77e28", tint: "bg-[#f7efe2] text-[#c77e28]" },
+          { label: "Средний чек", value: fmt(avgCheck), icon: Receipt, bar: "#2d5f4c", tint: "bg-[#e9f0ec] text-[#2d5f4c]" },
+          { label: "К выплате · комиссия " + commissionNow + "%", value: fmt(payout), icon: Banknote, bar: "#4d7327", tint: "bg-[#eef5e9] text-[#4d7327]" },
+        ].map((m) => (
+          <div key={m.label} className="relative overflow-hidden bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 p-5">
+            <span className="absolute left-0 top-0 h-full w-1" style={{ background: m.bar }} />
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute truncate">{m.label}</p>
+                <p className="font-display font-extrabold text-[26px] leading-tight text-ink mt-2">{m.value}</p>
+              </div>
+              <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.tint}`}>
+                <m.icon size={18} />
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {aiLimitReached && (
         <div className="flex items-center gap-2.5 bg-ai-soft border border-ai/20 rounded-[10px] px-4 py-3 mb-6">
           <Sparkles size={16} className="text-ai shrink-0" />
@@ -891,7 +917,13 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       {tab === "products" && (
         <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
           <div className="bg-surface rounded-2xl shadow-card p-6">
-            <div className="flex items-center justify-between mb-4"><h2 className="font-display font-bold text-[17px] text-ink">Создать карточку</h2><Btn size="sm" onClick={() => setProdWizardOpen(true)}><Sparkles size={14} /> Мастер карточки</Btn></div>
+            <div className="flex items-center justify-between mb-4"><h2 className="font-display font-bold text-[17px] text-ink">Создать карточку</h2><button onClick={() => setProdWizardOpen(true)} className="group flex items-center gap-2.5 rounded-xl bg-gradient-to-br from-[#d98e32] to-[#b96f1f] px-4 py-2.5 text-cream shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 cursor-pointer">
+              <span className="w-8 h-8 rounded-lg bg-cream/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300"><Sparkles size={15} /></span>
+              <span className="leading-tight text-left whitespace-nowrap">
+                <span className="block text-[13px] font-bold">Мастер карточки</span>
+                <span className="block text-[10.5px] text-cream/80">AI-создание за 5 минут</span>
+              </span>
+            </button></div>
             {overProducts && <p className="text-[12px] font-semibold text-error mb-3">Достигнут лимит товаров ({fmtLimit(plan.maxProducts)}). Улучшите тариф.</p>}
             <div className="space-y-3.5">
               <Field label="Название" required><input className="field" value={prod.name} onChange={(e) => setProd({ ...prod, name: e.target.value })} placeholder="Ваза «Утро»" /></Field>
