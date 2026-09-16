@@ -82,7 +82,12 @@ export const COMMISSION_MATRIX: Record<SellerLegalType, Record<string, number>> 
 
 export function getCommissionRate(type: SellerLegalType | null | undefined, planId: string): number {
   if (!type) return 15;
-  return COMMISSION_MATRIX[type]?.[planId] ?? COMMISSION_MATRIX[type]?.free ?? 15;
+  const row = COMMISSION_MATRIX[type];
+  if (!row) return 15;
+  if (row[planId] != null) return row[planId];
+  const LEVEL: Record<string, number> = { free: 0, master: 1, business: 1, corp: 1, "master-pro": 2, "business-pro": 2, "corp-pro": 2, profi: 2, "master-premium": 3, "business-premium": 3, "corp-premium": 3, top: 3 };
+  const keys = Object.keys(row);
+  return row[keys[Math.min(LEVEL[planId] ?? 0, keys.length - 1)]] ?? 15;
 }
 
 export function getCurrentPlanKey(type: SellerLegalType | null | undefined, accountId?: string): string {

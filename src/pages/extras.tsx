@@ -444,6 +444,13 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
     } else {
       login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: (s.legalType ?? undefined) });
     }
+    const uid = useAppStore.getState().session?.userId;
+    const sac = useSellerAccount.getState();
+    const guestPlans = sac.planIdsByAccount["guest"];
+    const lt2 = s.legalType || "self_employed";
+    if (uid && guestPlans && !sac.planIdsByAccount[uid] && guestPlans[lt2] && guestPlans[lt2] !== "free") {
+      sac.setPlan(uid, lt2, guestPlans[lt2]);
+    }
     nav("/seller/dashboard");
   };
 
