@@ -1053,7 +1053,13 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               </div>
               {o.status !== "received" && (
                 <div className="mt-3.5">
-                  <Btn size="sm" onClick={() => advanceStatus(o.id)}>
+                  <Btn size="sm" onClick={() => {
+                    advanceStatus(o.id);
+                    if (o.status === "paid") {
+                      const sellerSum = o.items.filter((i) => i.productId.startsWith("sp-")).reduce((s2, i) => s2 + i.price * i.qty, 0);
+                      acc.recordSale({ orderId: o.number, productPrice: sellerSum, commissionAmount: Math.round(sellerSum * (commissionNow / 100)) });
+                    }
+                  }}>
                     {o.status === "paid" ? " Отправить покупателю" : o.status === "shipped" ? "🚚 Отметить доставленным" : "✅ Подтвердить получение"}
                   </Btn>
                 </div>

@@ -273,6 +273,7 @@ interface SellerAccountState {
   addMember: (m: Omit<TeamMember, "id">) => void;
   removeMember: (id: string) => void;
   requestWithdrawal: (amount: number) => void;
+  recordSale: (t: { orderId: string; productPrice: number; commissionAmount: number }) => void;
   consumeAiCardGen: (month: string) => boolean;
 }
 
@@ -322,6 +323,16 @@ export const useSellerAccount = create<SellerAccountState>()(
             {
               id: "t-" + Date.now(), date: new Date().toISOString(), kind: "withdraw", orderId: "W-" + Math.floor(100 + Math.random() * 900),
               productPrice: 0, commissionAmount: 0, sellerPayout: -amount,
+            },
+            ...s.transactions,
+          ],
+        })),
+      recordSale: (t) =>
+        set((s) => ({
+          transactions: [
+            {
+              id: "t-" + Date.now(), date: new Date().toISOString(), kind: "sale", orderId: t.orderId,
+              productPrice: t.productPrice, commissionAmount: t.commissionAmount, sellerPayout: t.productPrice - t.commissionAmount,
             },
             ...s.transactions,
           ],
