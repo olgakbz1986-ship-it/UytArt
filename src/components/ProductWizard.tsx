@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
-import { useSellerAccount } from "../lib/seller";
+import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller";
+import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
 import { Modal, Btn, Field, Badge } from "./ui";
 
@@ -11,12 +12,15 @@ type Draft = {
   dims: { length: string; width: string; height: string; unit: "см" | "мм" | "м" };
   tags: string[]; newTag: string; media: Media[];
   aiCover?: string; aiBullets?: string[];
+  sellerCity?: string;
+  deliveryZone?: DeliveryZone;
 };
 const empty: Draft = {
   name: "", category: CATEGORIES[0]?.name || "", price: "", description: "",
   materials: [], newMaterial: "", manufacturer: "",
   dims: { length: "", width: "", height: "", unit: "см" },
   tags: [], newTag: "", media: [],
+  deliveryZone: { mode: "nationwide" },
 };
 
 export function ProductWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -25,6 +29,7 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
   const [generating, setGenerating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const acc = useSellerAccount();
+  const sellerReg = useSellerReg();
   const month = new Date().toISOString().slice(0, 7);
   const aiLeft = Math.max(0, 10 - (acc.aiCardGens[month] || 0));
 
@@ -62,6 +67,8 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
 
   const publish = () => {
     acc.addProduct({
+      sellerCity: draft.sellerCity || sellerReg.city || "",
+      deliveryZone: draft.deliveryZone || { mode: "nationwide" },
       name: draft.name.trim(),
       category: draft.category,
       price: +draft.price,
@@ -194,6 +201,64 @@ export function ProductWizard({ open, onClose }: { open: boolean; onClose: () =>
                     <option>см</option><option>мм</option><option>м</option>
                   </select>
                 </Field>
+              </div>
+              <div className="bg-cream/60 rounded-2xl p-4 border border-line-soft">
+                <p className="font-bold text-[14px] text-ink mb-3 flex items-center gap-2">🗺️ География доставки</p>
+                <div className="grid sm:grid-cols-2 gap-2.5 mb-3">
+                  <Field label="Город отправки (любой населённый пункт)">
+                    <input className="field" list="uyt-cities" placeholder="Напр.: Углич" value={draft.sellerCity || sellerReg.city || ""} onChange={(e) => setDraft({ ...draft, sellerCity: e.target.value })} />
+                    <datalist id="uyt-cities">
+                      {CITIES.map((c) => <option key={c.name} value={c.name} />)}
+                    </datalist>
+                  </Field>
+                  <Field label="Подсказка по категории">
+                    <div className="field bg-surface text-[12px] text-ink-soft">
+                      {(draft.category || "").toLowerCase().match(/кирпич|бетон|плит|цемент|дверь|окн|мебел|диван|стол|шкаф|зеркал/)
+                        ? "📦 Крупногабарит — рекомендуем «Только город» или «Радиус»"
+                        : "📦 Стандартный товар — можно «По России»"}
+                    </div>
+                  </Field>
+                </div>
+                <p className="text-[11.5px] text-ink-mute mb-2 font-semibold uppercase tracking-wide">Зона доставки</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { m: "city",        label: "Только город",      icon: "📍" },
+                    { m: "radius",      label: "Радиус",             icon: "🚚" },
+                    { m: "region",      label: "Округ",              icon: "🏛" },
+                    { m: "nationwide",  label: "По России",          icon: "🇷🇺" },
+                  ].map((opt) => (
+                    <button key={opt.m} type="button"
+                      onClick={() => setDraft({ ...draft, deliveryZone: opt.m === "radius" ? { mode: "radius", km: 50 } : { mode: opt.m as any } })}
+                      className={`rounded-xl border p-2.5 text-left transition-all cursor-pointer ${
+                        (draft.deliveryZone as any)?.mode === opt.m
+                          ? "border-accent bg-surface shadow-card"
+                          : "border-line bg-surface/50 hover:border-ink-mute"
+                      }`}>
+                      <div className="text-[18px]">{opt.icon}</div>
+                      <p className="text-[12px] font-bold text-ink mt-1">{opt.label}</p>
+                    </button>
+                  ))}
+                </div>
+                {(draft.deliveryZone as any)?.mode === "city" && (
+                  <label className="mt-3 flex items-center gap-2 text-[12.5px] text-ink-soft cursor-pointer">
+                    <input type="checkbox" checked={!!(draft.deliveryZone as any)?.withDistrict} onChange={(e) => setDraft({ ...draft, deliveryZone: { mode: "city", withDistrict: e.target.checked } })} className="accent-accent w-4 h-4" />
+                    Включая район и ближайшие населённые пункты
+                  </label>
+                )}
+                {(draft.deliveryZone as any)?.mode === "radius" && (
+                  <div className="mt-3 flex items-center gap-2.5">
+                    <span className="text-[12.5px] text-ink-soft whitespace-nowrap">Радиус:</span>
+                    <input type="range" min="10" max="500" step="10"
+                      value={(draft.deliveryZone as any)?.km || 50}
+                      onChange={(e) => setDraft({ ...draft, deliveryZone: { mode: "radius", km: Number(e.target.value) } })}
+                      className="flex-1 accent-accent" />
+                    <span className="text-[13px] font-bold text-ink w-16 text-right">{(draft.deliveryZone as any)?.km || 50} км</span>
+                  </div>
+                )}
+                <p className="text-[12px] text-ink-soft mt-3 flex items-center gap-1.5">
+                  <span className="text-success">●</span>
+                  Покупатель увидит товар: <strong className="text-ink">{zoneLabel(draft.deliveryZone as any, draft.sellerCity || sellerReg.city || "")}</strong>
+                </p>
               </div>
               <Field label="Теги для поиска">
                 <div className="flex gap-2 mb-2 flex-wrap">

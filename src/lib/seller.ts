@@ -232,6 +232,12 @@ export interface SellerTx {
 }
 
 export interface ProductMedia { type: "image" | "video"; url: string; name: string; }
+export type DeliveryZone =
+  | { mode: "city"; withDistrict?: boolean }
+  | { mode: "radius"; km: number }
+  | { mode: "region" }
+  | { mode: "nationwide" };
+
 export interface SellerProductItem {
   id: string;
   name: string;
@@ -250,6 +256,8 @@ export interface SellerProductItem {
   tags?: string[];
   weight?: number;
   specs?: { key: string; value: string }[];
+  sellerCity?: string;
+  deliveryZone?: DeliveryZone;
   animation?: {
     frames: string[];
     captions: string[];

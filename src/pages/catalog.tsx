@@ -7,7 +7,7 @@ import {
   GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup, catImage,
   vendorById, productBySlug,
 } from "../data/seed";
-import { canDeliver, DISTRICTS, DistrictId } from "../lib/geo";
+import { canDeliver, DISTRICTS, DistrictId, zoneLabel } from "../lib/geo";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { ProductGrid } from "../components/product";
@@ -401,7 +401,7 @@ export function ProductPage() {
                   <Link to={`/shop/${vendor?.slug}`} className="font-bold text-[15px] text-ink hover:text-accent-deep transition-colors">{vendor?.name}</Link>
                 )}
                 <p className="text-[12px] text-ink-mute flex items-center gap-1.5 mt-0.5">
-                  <MapPin size={12} /> {sellerItem ? (sellerReg.city || "Россия") : vendor?.city} · <Rating value={sellerItem ? 0 : (vendor?.rating || 0)} size={10} />
+                  <MapPin size={12} /> {sellerItem ? (sellerReg.city || sellerItem.sellerCity || "Россия") : vendor?.city} · <Rating value={sellerItem ? 0 : (vendor?.rating || 0)} size={10} />
                 </p>
               </div>
               {sellerItem
@@ -441,7 +441,7 @@ export function ProductPage() {
           {tab === "delivery" && (
             <div className="space-y-3 text-[14px] text-ink-soft leading-relaxed">
               <p className="flex gap-2.5"><ShieldCheck size={17} className="text-success shrink-0 mt-0.5" /> <span><strong className="text-ink">Безопасная сделка:</strong> деньги резервируются на транзитном счёте и уходят мастеру только после отправки.</span></p>
-              <p className="flex gap-2.5"><MapPin size={17} className="text-ai shrink-0 mt-0.5" /> <span>СДЭК, Boxberry и Почта России — 2–7 дней по России. Отправка из г. {vendor?.city}.</span></p>
+              <p className="flex gap-2.5"><MapPin size={17} className="text-ai shrink-0 mt-0.5" /> <span>{sellerItem?.deliveryZone && sellerItem.deliveryZone.mode !== "nationwide" ? <>Зона доставки продавца: <strong className="text-ink">{zoneLabel(sellerItem.deliveryZone, sellerItem.sellerCity || "")}</strong>. За пределы зоны товар не отправляется.</> : <>СДЭК, Boxberry и Почта России — 2–7 дней по России. Отправка из г. {sellerItem?.sellerCity || vendor?.city}.</>}</span></p>
               <p className="flex gap-2.5"><Ban size={17} className="text-error shrink-0 mt-0.5" /> <span>{custom ? "Товар изготавливается по индивидуальным параметрам и возврату не подлежит (абз. 4 п. 4 ст. 26.1 ЗоЗПП)." : "Возврат в течение 7 дней с момента получения (ст. 26.1 ЗоЗПП)."}</span></p>
             </div>
           )}
