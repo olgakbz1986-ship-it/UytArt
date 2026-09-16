@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, CreditCard, Smartphone, Wallet, CheckCircle2 } from "lucide-react";
 import { PRODUCTS, fmt, productById, legalDoc } from "../data/seed";
+import { marketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { Badge, Btn, ProductImg, Field } from "../components/ui";
@@ -22,7 +23,7 @@ export function CartPage() {
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(accountId));
   const lim = buyerLimits(buyerPlan);
 
-  const rows = cart.map((c) => ({ ...c, p: productById(c.productId) })).filter((r) => r.p);
+  const rows = cart.map((c) => ({ ...c, p: marketProducts().find((x) => x.id === c.productId) })).filter((r) => r.p);
   const subtotal = rows.reduce((s, r) => s + (r.p!.price * r.qty), 0);
   const discount = Math.round((subtotal * lim.discountPct) / 100);
   const hasCustom = rows.some((r) => r.p!.is_non_returnable);
@@ -111,7 +112,7 @@ export function CheckoutPage() {
   const [err, setErr] = useState("");
   const [done, setDone] = useState<string | null>(null);
 
-  const rows = cart.map((c) => ({ ...c, p: productById(c.productId) })).filter((r) => r.p);
+  const rows = cart.map((c) => ({ ...c, p: marketProducts().find((x) => x.id === c.productId) })).filter((r) => r.p);
   const subtotal = rows.reduce((s, r) => s + (r.p!.price * r.qty), 0);
   const discount = Math.round((subtotal * lim.discountPct) / 100);
   const delivery = DELIVERY.find((d) => d.id === deliveryId)!;

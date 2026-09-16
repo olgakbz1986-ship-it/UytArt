@@ -1,7 +1,8 @@
 import { marketProducts } from "../lib/market";
+import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare } from "lucide-react";
+import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play } from "lucide-react";
 import {
   GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup, catImage,
   vendorById, productBySlug,
@@ -246,7 +247,7 @@ export function CatalogPage() {
    ============================================================ */
 export function ProductPage() {
   const { slug = "" } = useParams();
-  const p = productBySlug(slug);
+  const p = marketProducts().find((x) => x.slug === slug) || productBySlug(slug);
   const addToCart = useAppStore((s) => s.addToCart);
   const toggleFav = useAppStore((s) => s.toggleFav);
   const favs = useAppStore((s) => s.favorites);
@@ -261,6 +262,13 @@ export function ProductPage() {
     () => (p ? marketProducts().filter((x) => x.categoryId === p.categoryId && x.id !== p.id).slice(0, 4) : []),
     [p]
   );
+  const sellerItem = useMemo(() => {
+    if (!p || !p.id.startsWith("sp-")) return undefined;
+    return useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
+  }, [p]);
+  const sellerMedia = sellerItem?.media || [];
+  const sellerReg = useSellerReg();
+  const session = useAppStore((s) => s.session);
 
   if (!p) {
     return (
@@ -285,17 +293,40 @@ export function ProductPage() {
 
       <div className="grid lg:grid-cols-2 gap-10 items-start">
         <div>
-          <div className="rounded-2xl overflow-hidden shadow-card aspect-square group">
-            <ProductImg p={p} variant={variant} />
-          </div>
-          <div className="flex gap-2.5 mt-3.5">
-            {[0, 1, 2, 3].map((v) => (
-              <button key={v} onClick={() => setVariant(v)} aria-label={`Вариант фото ${v + 1}`}
-                className={`w-[76px] h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer group ${variant === v ? "border-accent shadow-card" : "border-transparent opacity-70 hover:opacity-100"}`}>
-                <ProductImg p={p} variant={v} />
-              </button>
-            ))}
-          </div>
+          {sellerMedia.length > 0 ? (
+            <>
+              <div className="rounded-2xl overflow-hidden shadow-card aspect-square group bg-cream">
+                {sellerMedia[variant]?.type === "video" ? (
+                  <video src={sellerMedia[variant].url} className="w-full h-full object-cover" controls muted />
+                ) : (
+                  <img src={sellerMedia[variant]?.url} alt={p.name} className="w-full h-full object-cover" />
+                )}
+              </div>
+              <div className="flex gap-2.5 mt-3.5 flex-wrap">
+                {sellerMedia.map((m, v) => (
+                  <button key={v} onClick={() => setVariant(v)} aria-label={`Фото ${v + 1}`}
+                    className={`relative w-[76px] h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ${variant === v ? "border-accent shadow-card" : "border-transparent opacity-70 hover:opacity-100"}`}>
+                    {m.type === "video" ? <video src={m.url} className="w-full h-full object-cover" muted /> : <img src={m.url} className="w-full h-full object-cover" />}
+                    {m.type === "video" && <span className="absolute inset-0 flex items-center justify-center bg-dark/40"><Play size={14} className="text-cream" /></span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl overflow-hidden shadow-card aspect-square group">
+                <ProductImg p={p} variant={variant} />
+              </div>
+              <div className="flex gap-2.5 mt-3.5">
+                {[0, 1, 2, 3].map((v) => (
+                  <button key={v} onClick={() => setVariant(v)} aria-label={`Вариант фото ${v + 1}`}
+                    className={`w-[76px] h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer group ${variant === v ? "border-accent shadow-card" : "border-transparent opacity-70 hover:opacity-100"}`}>
+                    <ProductImg p={p} variant={v} />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div>
@@ -345,21 +376,33 @@ export function ProductPage() {
           {/* продавец — обязателен по ст. 12 ЗоЗПП */}
           <div className="mt-7 bg-surface rounded-2xl shadow-card p-5">
             <div className="flex items-center gap-3.5">
-              <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: vendor?.avatarColor }}>{vendor?.emoji}</span>
+              {sellerItem ? (
+                session?.avatar ? (
+                  <img src={session.avatar} className="w-12 h-12 rounded-[14px] object-cover" />
+                ) : (
+                  <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: "var(--color-dark)" }}>{(sellerReg.shopName[0] || "М").toUpperCase()}</span>
+                )
+              ) : (
+                <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: vendor?.avatarColor }}>{vendor?.emoji}</span>
+              )}
               <div className="flex-1 min-w-0">
-                <Link to={`/shop/${vendor?.slug}`} className="font-bold text-[15px] text-ink hover:text-accent-deep transition-colors">{vendor?.name}</Link>
+                {sellerItem ? (
+                  <span className="font-bold text-[15px] text-ink">{sellerReg.shopName || "Мастерская"}</span>
+                ) : (
+                  <Link to={`/shop/${vendor?.slug}`} className="font-bold text-[15px] text-ink hover:text-accent-deep transition-colors">{vendor?.name}</Link>
+                )}
                 <p className="text-[12px] text-ink-mute flex items-center gap-1.5 mt-0.5">
-                  <MapPin size={12} /> {vendor?.city} · <Rating value={vendor?.rating || 0} size={10} />
+                  <MapPin size={12} /> {sellerItem ? (sellerReg.city || "Россия") : vendor?.city} · <Rating value={sellerItem ? 0 : (vendor?.rating || 0)} size={10} />
                 </p>
               </div>
-              {vendor?.verified
-                ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge>
-                : <Badge tone="honey">На проверке</Badge>}
+              {sellerItem
+                ? <Badge tone="success"><ShieldCheck size={12} /> Продавец сервиса</Badge>
+                : (vendor?.verified ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge> : <Badge tone="honey">На проверке</Badge>)}
             </div>
             <div className="mt-4 pt-4 border-t border-line-soft grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
-              <p><span className="text-ink-mute">Продавец:</span> <span className="font-semibold text-ink">{vendor?.legal_name}</span></p>
-              <p><span className="text-ink-mute">ИНН:</span> <span className="font-semibold text-ink">{vendor?.inn}</span></p>
-              <p className="col-span-2"><span className="text-ink-mute">ОГРН:</span> <span className="font-semibold text-ink">{vendor?.ogrn}</span></p>
+              <p><span className="text-ink-mute">Продавец:</span> <span className="font-semibold text-ink">{sellerItem ? (sellerReg.contactName || sellerReg.masterName) : vendor?.legal_name}</span></p>
+              <p><span className="text-ink-mute">ИНН:</span> <span className="font-semibold text-ink">{sellerItem ? (sellerReg.inn || "—") : vendor?.inn}</span></p>
+              <p className="col-span-2"><span className="text-ink-mute">ОГРН:</span> <span className="font-semibold text-ink">{sellerItem ? (sellerReg.ogrn || "—") : vendor?.ogrn}</span></p>
             </div>
           </div>
         </div>
@@ -379,7 +422,7 @@ export function ProductPage() {
           {tab === "desc" && <p className="text-[15px] leading-[1.75] text-ink-soft">{p.description}</p>}
           {tab === "specs" && (
             <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
-              {[["Материал", p.material], ["Стиль", p.style], ["Цвет", p.color], ["Размер", p.size], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Тип", custom ? "На заказ (custom-made)" : "Готовый (ready-made)"], ["Добавлен", fmtDate(p.createdAt)]].map(([k, v], i) => (
+              {(sellerItem ? [["Материалы", sellerItem.materials?.join(", ") || "—"], ["Производитель", sellerItem.manufacturer || "—"], ["Размеры", p.size], ["Теги", sellerItem.tags?.map((t) => "#" + t).join(" ") || "—"], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Добавлен", fmtDate(p.createdAt)] as [string, string]] : [["Материал", p.material], ["Стиль", p.style], ["Цвет", p.color], ["Размер", p.size], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Тип", custom ? "На заказ (custom-made)" : "Готовый (ready-made)"], ["Добавлен", fmtDate(p.createdAt)] as [string, string]]).map(([k, v], i) => (
                 <div key={k} className={`flex justify-between gap-4 px-5 py-3 text-[14px] ${i % 2 ? "bg-cream/50" : ""}`}>
                   <span className="text-ink-soft">{k}</span><span className="font-semibold text-ink text-right">{v}</span>
                 </div>
