@@ -257,7 +257,8 @@ export interface SellerProductItem {
   };
 }
 
-export interface TeamMember { id: string; name: string; role: "Менеджер" | "Мастер" | "Кладовщик"; }
+export interface TeamMember { id: string; name: string; role: "Менеджер" | "Мастер" | "Кладовщик";
+  email?: string; }
 
 interface SellerAccountState {
   planIdsByAccount: Record<string, Record<SellerLegalType, string>>; /* key = accountId */

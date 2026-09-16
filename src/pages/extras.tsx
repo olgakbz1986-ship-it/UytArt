@@ -6,7 +6,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote } from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2 } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -732,7 +732,7 @@ export function SellerDashboardPage() {
   const [media, setMedia] = useState<ProductMedia[]>([]);
   const [prodWizardOpen, setProdWizardOpen] = useState(false);
   const [bulk, setBulk] = useState<string[]>([]);
-  const [teamMember, setTeamMember] = useState({ name: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
+  const [teamMember, setTeamMember] = useState({ name: "", email: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawSum, setWithdrawSum] = useState("");
 
@@ -1180,33 +1180,49 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {/* КОМАНДА */}
       {tab === "team" && (
-        <div className="fade-up max-w-[640px]">
-          <div className="bg-surface rounded-2xl shadow-card p-6 mb-4">
-            <p className="font-display font-bold text-[16px] text-ink mb-4">Сотрудники · {acc.team.length} из {fmtLimit(plan.team)}</p>
-            {acc.team.length === 0 && <p className="text-[13.5px] text-ink-soft mb-4">Добавьте сотрудников с ролями: менеджер, мастер, кладовщик.</p>}
-            <div className="space-y-2.5 mb-5">
-              {acc.team.map((m) => (
-                <div key={m.id} className="flex items-center justify-between border border-line-soft rounded-[10px] px-4 py-3">
-                  <div>
-                    <p className="text-[13.5px] font-semibold text-ink">{m.name}</p>
-                    <p className="text-[11.5px] text-ink-mute">{m.role}</p>
-                  </div>
-                  <button onClick={() => acc.removeMember(m.id)} className="w-9 h-9 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft cursor-pointer transition-colors"><X size={16} /></button>
+        <div className="fade-up">
+          {plan.team === 0 ? (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">🔒</p>
+              <p className="font-bold text-[15px] text-ink">Команда доступна с тарифа «Мастер»</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Приглашайте сотрудников: менеджеров, мастеров, кладовщиков.</p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-surface rounded-2xl shadow-card p-6 mb-4">
+                <p className="font-display font-bold text-[16px] text-ink mb-4">Сотрудники · {acc.team.length} из {fmtLimit(plan.team)}</p>
+                {acc.team.length === 0 && <p className="text-[13.5px] text-ink-soft mb-4">Добавьте сотрудников с ролями: менеджер, мастер, кладовщик.</p>}
+                <div className="space-y-2.5">
+                  {acc.team.map((mm) => (
+                    <div key={mm.id} className="flex items-center gap-3 rounded-xl border border-line p-3.5">
+                      <span className="w-9 h-9 rounded-full bg-cream flex items-center justify-center font-bold text-[14px] text-accent-deep shrink-0">{(mm.name[0] || "?").toUpperCase()}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-[14px] text-ink truncate">{mm.name}</p>
+                        <p className="text-[12px] text-ink-mute truncate">{mm.email || "email не указан"}</p>
+                      </div>
+                      <Badge tone={mm.role === "Менеджер" ? "ai" : mm.role === "Мастер" ? "success" : "honey"}>{mm.role}</Badge>
+                      <button onClick={() => acc.removeMember(mm.id)} aria-label="Удалить сотрудника" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-mute hover:text-error hover:bg-error/10 transition-colors cursor-pointer"><Trash2 size={15} /></button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="grid sm:grid-cols-3 gap-3">
-              <input className="field sm:col-span-1" placeholder="Имя" value={teamMember.name} onChange={(e) => setTeamMember({ ...teamMember, name: e.target.value })} />
-              <select className="field" value={teamMember.role} onChange={(e) => setTeamMember({ ...teamMember, role: e.target.value as typeof teamMember.role })}>
-                {["Менеджер", "Мастер", "Кладовщик"].map((r) => <option key={r}>{r}</option>)}
-              </select>
-              <Btn disabled={!teamMember.name.trim() || acc.team.length >= plan.team} onClick={() => { acc.addMember(teamMember); setTeamMember({ name: "", role: "Менеджер" }); }}>Добавить</Btn>
-            </div>
-          </div>
+              </div>
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4">Пригласить сотрудника</p>
+                <div className="grid sm:grid-cols-[1fr_1fr_auto_auto] gap-2.5 items-center">
+                  <input className="field" placeholder="Имя" value={teamMember.name} onChange={(e) => setTeamMember({ ...teamMember, name: e.target.value })} />
+                  <input className="field" placeholder="Email для приглашения" type="email" value={teamMember.email || ""} onChange={(e) => setTeamMember({ ...teamMember, email: e.target.value })} />
+                  <select className="field" value={teamMember.role} onChange={(e) => setTeamMember({ ...teamMember, role: e.target.value as typeof teamMember.role })}>
+                    <option>Менеджер</option><option>Мастер</option><option>Кладовщик</option>
+                  </select>
+                  <Btn disabled={!teamMember.name.trim() || acc.team.length >= plan.team} onClick={() => { acc.addMember(teamMember); setTeamMember({ name: "", email: "", role: "Менеджер" }); }}>Добавить</Btn>
+                </div>
+                {acc.team.length >= plan.team && <p className="text-[12px] font-semibold text-error mt-2.5">Достигнут лимит команды для вашего тарифа.</p>}
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* НАСТРОЙКИ */}
       {tab === "settings" && (
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
