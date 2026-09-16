@@ -239,6 +239,7 @@ export interface SellerProductItem {
   price: number;
   createdAt: string;
   archived?: boolean;
+  views?: number;
   aiGenerated?: boolean;
   media?: ProductMedia[];
   // Новые поля для AI-студии
@@ -273,6 +274,7 @@ interface SellerAccountState {
   addMember: (m: Omit<TeamMember, "id">) => void;
   removeMember: (id: string) => void;
   requestWithdrawal: (amount: number) => void;
+  incrementViews: (id: string) => void;
   recordSale: (t: { orderId: string; productPrice: number; commissionAmount: number }) => void;
   consumeAiCardGen: (month: string) => boolean;
 }
@@ -309,6 +311,7 @@ export const useSellerAccount = create<SellerAccountState>()(
       removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
       toggleArchive: (id) =>
         set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, archived: !p.archived } : p)) })),
+      incrementViews: (id) => set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, views: (p.views || 0) + 1 } : p)) })),
       bulkSetPrice: (ids, percent) =>
         set((s) => ({
           products: s.products.map((p) =>

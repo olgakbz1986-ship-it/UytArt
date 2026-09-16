@@ -1,6 +1,6 @@
 import { marketProducts } from "../lib/market";
 import { useSellerAccount, useSellerReg } from "../lib/seller";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play } from "lucide-react";
 import {
@@ -245,6 +245,8 @@ export function CatalogPage() {
 /* ============================================================
    Карточка товара
    ============================================================ */
+const viewedOnce = new Set<string>();
+
 export function ProductPage() {
   const { slug = "" } = useParams();
   const p = marketProducts().find((x) => x.slug === slug) || productBySlug(slug);
@@ -267,6 +269,13 @@ export function ProductPage() {
     return useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
   }, [p]);
   const sellerMedia = sellerItem?.media || [];
+  useEffect(() => {
+    if (sellerItem && !viewedOnce.has(sellerItem.id)) {
+      viewedOnce.add(sellerItem.id);
+      useSellerAccount.getState().incrementViews(sellerItem.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p?.id]);
   const sellerReg = useSellerReg();
   const session = useAppStore((s) => s.session);
 

@@ -764,6 +764,25 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const revenue = sentOrders.reduce((sum, o) => sum + o.total, 0);
   const avgCheck = sentOrders.length > 0 ? Math.round(revenue / sentOrders.length) : 0;
   const payout = Math.round(revenue * (1 - commissionNow / 100));
+  const totalViews = acc.products.reduce((s2, pr) => s2 + (pr.views || 0), 0);
+  const receivedCount = myOrders.filter((o) => o.status === "received").length;
+  const pctOf = (n: number) => (totalViews ? Math.round((n / totalViews) * 1000) / 10 : 0);
+  const funnel = [
+    ["Просмотры карточек", totalViews, 100],
+    ["Заказы", myOrders.length, pctOf(myOrders.length)],
+    ["Отправлено", sentOrders.length, pctOf(sentOrders.length)],
+    ["Получено", receivedCount, pctOf(receivedCount)],
+  ] as [string, number, number][];
+  const days = [...Array(7)].map((_, i) => {
+    const d = new Date(Date.now() - (6 - i) * 864e5);
+    const key = d.toISOString().slice(0, 10);
+    return { key, label: `${d.getDate()}.${d.getMonth() + 1}`, sum: myOrders.filter((o) => o.date.slice(0, 10) === key).reduce((s2, o) => s2 + o.total, 0) };
+  });
+  const maxDay = Math.max(1, ...days.map((d) => d.sum));
+  const topItems = Object.entries(
+    myOrders.flatMap((o) => o.items).filter((i) => i.productId.startsWith("sp-"))
+      .reduce<Record<string, number>>((m2, i) => ({ ...m2, [i.productId]: (m2[i.productId] || 0) + i.qty }), {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 3);
   const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
   const month = currentMonth();
   const aiUsed = acc.aiCardGens[month] || 0;
@@ -1120,7 +1139,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         <div className="fade-up grid sm:grid-cols-2 gap-4">
           <div className="bg-surface rounded-2xl shadow-card p-6">
             <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Воронка продаж</p>
-            {[["Просмотры", 4200, 100], ["В корзину", 640, 15], ["Заказы", 180, 4.3], ["Выкуп", 150, 3.6]].map(([label, val, pct]) => (
+            {funnel.map(([label, val, pct]) => (
               <div key={label as string} className="mb-3">
                 <div className="flex justify-between text-[12px] mb-1"><span className="font-semibold text-ink">{label}</span><span className="text-ink-mute">{(val as number).toLocaleString("ru-RU")} · {pct}%</span></div>
                 <div className="h-2.5 rounded-full bg-line-soft overflow-hidden"><div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></div>
@@ -1131,6 +1150,30 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-ai" /> Рекомендации по ценам</p>
             <p className="text-[13.5px] text-ink-soft leading-relaxed">Ваши товары в категории «{prod.category}» в среднем на 8% дороже рыночных. Снижение цены на 5% может поднять конверсию до 6%.</p>
             {plan.forecasts && <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> при текущей динамике выручка следующего месяца ≈ {fmt(Math.round(turnover * 1.18))}.</p>}
+          </div>
+          <div className="bg-surface rounded-2xl shadow-card p-6">
+            <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Продажи за 7 дней</p>
+            <div className="flex items-end gap-2 h-[120px]">
+              {days.map((d) => (
+                <div key={d.key} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+                  <div className="w-full rounded-t-lg bg-accent transition-all duration-500" style={{ height: `${Math.max(4, (d.sum / maxDay) * 100)}%`, opacity: d.sum ? 1 : 0.25 }} title={fmt(d.sum)} />
+                  <span className="text-[10px] text-ink-mute">{d.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-surface rounded-2xl shadow-card p-6">
+            <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><Package size={17} className="text-accent-deep" /> Топ товаров</p>
+            {topItems.length === 0 && <p className="text-[13.5px] text-ink-soft">Продаж пока нет — топ появится после первых заказов.</p>}
+            {topItems.map(([pid, qty], i) => {
+              const prod = marketProducts().find((x) => x.id === pid);
+              return (
+                <div key={pid} className="flex justify-between gap-3 py-2 border-b border-line-soft last:border-0 text-[13.5px]">
+                  <span className="text-ink-soft">{i + 1}. {prod?.name || pid}</span>
+                  <span className="font-bold text-ink">{qty} шт</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
