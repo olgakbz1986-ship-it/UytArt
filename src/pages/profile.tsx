@@ -503,7 +503,7 @@ export default function ProfilePage() {
               {bonusHistory.map((b) => (
                 <div key={b.id} className="flex items-center justify-between border-b border-line-soft pb-2.5 last:border-0">
                   <div>
-                    <p className="text-[13.5px] font-semibold text-ink">{b.reason}</p>
+                    <p className="text-[13.5px] font-semibold text-ink">{b.reason}{b.sellerName ? ` · ${b.sellerName}` : ""}</p>
                     <p className="text-[11.5px] text-ink-mute mt-0.5">{fmtDate(b.date)}</p>
                   </div>
                   <span className={`font-display font-bold text-[15px] ${b.amount < 0 ? "text-error" : "text-[#4d7327]"}`}>{b.amount < 0 ? `−${-b.amount}` : `+${b.amount}`}</span>

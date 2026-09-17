@@ -18,6 +18,7 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
   const user = useAppStore((s) => s.session);
   const addBonus = useAppStore((s) => s.addBonus);
   const submitReview = useReviewStore((s) => s.submitReview);
+  const sellerReg = useSellerReg();
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
@@ -36,14 +37,19 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
       photoName: photo || undefined,
       receivedDate: new Date().toISOString(),
     });
-    addBonus(photo ? 300 : 100, photo ? "Отзыв с фото в интерьере" : "Отзыв о заказе");
+    const vendor = product.vendorId ? vendorById(product.vendorId) : undefined;
+    const sellerId = vendor ? vendor.id : "self-shop";
+    const sellerName = vendor ? vendor.name : (sellerReg.shopName || "Магазин продавца");
+    if (rating >= 4) {
+      addBonus(photo ? 300 : 100, photo ? "Отзыв с фото в интерьере" : "Отзыв о заказе", sellerId, sellerName);
+    }
     setRating(5); setText(""); setPhoto(null); setErr("");
     onClose();
   };
 
   return (
     <Modal open={open} onClose={onClose} title={`Отзыв · ${product.name}`}>
-      <p className="text-[12.5px] text-ink-soft mb-4">Заказ {orderNumber}. Отзыв появится после премодерации. {photo ? "+300 бонусов за фото" : "+100 бонусов (и +300 с фото в интерьере)"}.</p>
+      <p className="text-[12.5px] text-ink-soft mb-4">Заказ {orderNumber}. Отзыв появится после премодерации. Бонусы — за отзывы 4-5 звёзд; тратить их можно только в магазине этого товара. {photo ? "+300 бонусов за фото" : "+100 бонусов (и +300 с фото в интерьере)"}.</p>
       <div className="mb-4">
         <p className="text-[13px] font-semibold text-ink mb-1.5">Оценка</p>
         <div className="flex gap-1">
@@ -77,6 +83,12 @@ export function ReviewsSection({ product }: { product: Product }) {
   const replyToReview = useReviewStore((s) => s.replyToReview);
   const sellerReg = useSellerReg();
   const list = approvedReviews(reviews, product.id);
+  const [sort, setSort] = useState<"new" | "photo" | "rating">("new");
+  const sorted = [...list].sort((a, b) => {
+    if (sort === "new") return b.createdAt.localeCompare(a.createdAt);
+    if (sort === "photo") return (b.hasPhoto ? 1 : 0) - (a.hasPhoto ? 1 : 0);
+    return b.rating - a.rating;
+  });
   const [replyFor, setReplyFor] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
 
@@ -84,12 +96,12 @@ export function ReviewsSection({ product }: { product: Product }) {
 
   return (
     <div className="space-y-3">
-      {list.length === 0 && (
+      {sorted.length === 0 && (
         <p className="text-[13.5px] text-ink-soft bg-cream rounded-[14px] px-5 py-6 text-center">
           Отзывов пока нет — оставьте первый после получения заказа.
         </p>
       )}
-      {list.map((r) => (
+      {sorted.map((r) => (
         <div key={r.id} className="bg-surface rounded-[14px] shadow-card p-5">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
             <div className="flex items-center gap-2.5">

@@ -14,6 +14,7 @@ import { ProductGrid } from "../components/product";
 import { Badge, Btn, GroupImg, ProductImg, Rating } from "../components/ui";
 import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
+import { productRating } from "../lib/review";
 
 type SortId = "popular" | "price-asc" | "price-desc" | "new" | "rating";
 const SORTS: { id: SortId; label: string }[] = [
@@ -347,8 +348,8 @@ export function ProductPage() {
           </div>
           <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] leading-tight text-ink">{p.name}</h1>
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
-            <Rating value={p.rating} />
-            <span className="text-[12.5px] text-ink-mute">{p.reviewsCount} отзывов · арт. {p.sku}</span>
+            <Rating value={productRating(p.id).avg} />
+            <span className="text-[12.5px] text-ink-mute">{productRating(p.id).count} отзывов · арт. {p.sku}</span>
           </div>
 
           <div className="flex items-end gap-3.5 mt-5">

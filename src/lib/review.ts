@@ -36,10 +36,17 @@ export const useReviewStore = create<ReviewState>()(
     (set, get) => ({
       reviews: [],
 
-      submitReview: (r) =>
+      submitReview: (r) => {
+        const id = "rv-" + Date.now();
         set((s) => ({
-          reviews: [{ ...r, id: "rv-" + Date.now(), status: "pending", createdAt: new Date().toISOString() }, ...s.reviews],
-        })),
+          reviews: [{ ...r, id, status: "pending", createdAt: new Date().toISOString() }, ...s.reviews],
+        }));
+        setTimeout(() => {
+          set((s) => ({
+            reviews: s.reviews.map((rv) => (rv.id === id ? { ...rv, status: "approved" } : rv)),
+          }));
+        }, 2500);
+      },
 
       /* демо-премодерация: в реальности — администратором */
       approveReview: (id) =>
@@ -66,3 +73,12 @@ export const useReviewStore = create<ReviewState>()(
 /* одобренные отзывы для отображения */
 export const approvedReviews = (reviews: UserReview[], productId: string) =>
   reviews.filter((r) => r.productId === productId && r.status === "approved");
+
+
+/* Живой рейтинг и счётчик отзывов товара */
+export const productRating = (productId: string): { avg: number; count: number } => {
+  const approved = useReviewStore.getState().reviews.filter((r) => r.productId === productId && r.status === "approved");
+  if (approved.length === 0) return { avg: 0, count: 0 };
+  const sum = approved.reduce((acc, r) => acc + r.rating, 0);
+  return { avg: sum / approved.length, count: approved.length };
+};

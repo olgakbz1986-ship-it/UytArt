@@ -32,7 +32,7 @@ export interface ActiveSession {
 
 export interface Address { id: string; label: string; city: string; street: string; zip: string; isDefault?: boolean; }
 export interface CartItem { productId: string; qty: number; }
-export interface BonusEntry { id: string; date: string; amount: number; reason: string; }
+export interface BonusEntry { id: string; date: string; amount: number; reason: string; sellerId?: string; sellerName?: string; }
 export type OrderStatus = "paid" | "shipped" | "delivered" | "received";
 export interface Order {
   id: string;
@@ -67,6 +67,7 @@ interface AppState {
   addresses: Address[];
   orders: Order[];
   bonusBalance: number;
+  bonusBySeller: Record<string, number>;
   bonusHistory: BonusEntry[];
 
   login: (u: User, makeActive?: boolean) => void;
@@ -84,7 +85,8 @@ interface AppState {
   advanceStatus: (id: string) => void;
   confirmReceipt: (id: string) => void;
   setViewerCity: (c: string | null) => void;
-  addBonus: (amount: number, reason: string) => void;
+  addBonus: (amount: number, reason: string, sellerId?: string, sellerName?: string) => void;
+  spendBonuses: (entries: { sellerId: string; amount: number }[]) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -114,6 +116,7 @@ export const useAppStore = create<AppState>()(
         },
       ],
       bonusBalance: 350,
+      bonusBySeller: { v1: 350 },
       bonusHistory: [
         { id: "b1", date: new Date(Date.now() - 12 * 864e5).toISOString(), amount: 300, reason: "Отзыв с фото в интерьере" },
         { id: "b2", date: new Date(Date.now() - 30 * 864e5).toISOString(), amount: 50, reason: "Подтверждение получения" },
@@ -224,11 +227,23 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ orders: s.orders.map((o) => (o.id === id ? { ...o, status: NEXT_STATUS[o.status] } : o)) })),
       confirmReceipt: (id) => set((s) => ({ orders: s.orders.map((o) => (o.id === id ? { ...o, status: "received" } : o)) })),
 
-      addBonus: (amount, reason) =>
+      addBonus: (amount, reason, sellerId, sellerName) =>
         set((s) => ({
           bonusBalance: s.bonusBalance + amount,
-          bonusHistory: [{ id: "b-" + Date.now(), date: new Date().toISOString(), amount, reason }, ...s.bonusHistory],
+          bonusBySeller: sellerId && amount > 0 ? { ...s.bonusBySeller, [sellerId]: (s.bonusBySeller[sellerId] || 0) + amount } : s.bonusBySeller,
+          bonusHistory: [{ id: "b-" + Date.now(), date: new Date().toISOString(), amount, reason, sellerId, sellerName }, ...s.bonusHistory],
         })),
+      spendBonuses: (entries) =>
+        set((s) => {
+          const bySeller = { ...s.bonusBySeller };
+          let total = 0;
+          entries.forEach((e) => { bySeller[e.sellerId] = Math.max(0, (bySeller[e.sellerId] || 0) - e.amount); total += e.amount; });
+          return {
+            bonusBalance: Math.max(0, s.bonusBalance - total),
+            bonusBySeller: bySeller,
+            bonusHistory: [{ id: "b-" + Date.now(), date: new Date().toISOString(), amount: -total, reason: "Списание бонусов при оплате заказа" }, ...s.bonusHistory],
+          };
+        }),
     }),
     { name: "uyutart-app-v3" }
   )

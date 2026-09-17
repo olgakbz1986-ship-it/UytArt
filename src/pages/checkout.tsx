@@ -75,7 +75,7 @@ export function CartPage() {
           <span className="font-bold">Итого</span>
           <span className="font-display font-extrabold text-[26px] text-ink">{fmt(subtotal - discount)}</span>
         </div>
-        {bonusBalance > 0 && <p className="text-[12px] text-ink-mute mt-2">Доступно {bonusBalance} бонусов — можно списать при оплате</p>}
+        {bonusBalance > 0 && <p className="text-[12px] text-ink-mute mt-2">Доступно {bonusBalance} бонусов — списываются при оплате только в магазинах, где вы их заработали</p>}
         {hasCustom && (
           <p className="text-[12px] text-error font-semibold mt-3">В корзине есть товар на заказ — он не подлежит возврату.</p>
         )}
@@ -116,7 +116,10 @@ export function CheckoutPage() {
   const subtotal = rows.reduce((s, r) => s + (r.p!.price * r.qty), 0);
   const discount = Math.round((subtotal * lim.discountPct) / 100);
   const delivery = DELIVERY.find((d) => d.id === deliveryId)!;
-  const bonusDiscount = useBonuses ? Math.min(bonusBalance, Math.round((subtotal - discount) * 0.3)) : 0;
+  const perSeller: Record<string, number> = {};
+  rows.forEach((r) => { const sid = r.productId.startsWith("sp-") ? "self-shop" : (r.p!.vendorId || "v1"); perSeller[sid] = (perSeller[sid] || 0) + r.p!.price * r.qty; });
+  const usableBonuses = Object.entries(perSeller).reduce((s, [sid, sub]) => s + Math.min(bonusBySeller[sid] || 0, Math.round(sub * 0.3)), 0);
+  const bonusDiscount = useBonuses ? Math.min(usableBonuses, Math.round((subtotal - discount) * 0.3)) : 0;
   const total = subtotal - discount + delivery.price - bonusDiscount;
   const hasCustom = rows.some((r) => r.p!.is_non_returnable);
   const addr = addresses.find((a) => a.id === addrId);
@@ -134,7 +137,16 @@ export function CheckoutPage() {
       hasCustom,
       payMethod: pay === "card" ? "Банковская карта (ЮKassa)" : pay === "sbp" ? "СБП" : "Электронный кошелёк",
     });
-    if (bonusDiscount > 0) addBonus(-bonusDiscount, "Списание бонусов при оплате");
+    if (bonusDiscount > 0) {
+      let left = bonusDiscount;
+      const entries: { sellerId: string; amount: number }[] = [];
+      for (const [sid, sub] of Object.entries(perSeller)) {
+        if (left <= 0) break;
+        const take = Math.min(bonusBySeller[sid] || 0, Math.round(sub * 0.3), left);
+        if (take > 0) { entries.push({ sellerId: sid, amount: take }); left -= take; }
+      }
+      spendBonuses(entries);
+    }
     addBonus(50, "Кэшбэк за заказ");
     clearCart();
     setDone(order.number);
@@ -269,7 +281,7 @@ export function CheckoutPage() {
           </div>
           {bonusBalance > 0 && (
             <label className="flex items-center justify-between mt-4 cursor-pointer select-none">
-              <span className="text-[12.5px] font-semibold text-ink-soft">Списать бонусы ({bonusBalance})</span>
+              <span className="text-[12.5px] font-semibold text-ink-soft">Списать бонусы ({usableBonuses}) — только в магазинах, где заработали</span>
               <input type="checkbox" checked={useBonuses} onChange={(e) => setUseBonuses(e.target.checked)} />
             </label>
           )}
