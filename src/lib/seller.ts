@@ -129,9 +129,13 @@ interface SellerRegState {
   categories: string[];
   businessStory: string;
   achievements: string;
+  acceptsCustomOrders: boolean;
+  productionGallery: string[];
+  videoTourUrl: string;
+  submittedAt: string;
 
   setLegalType: (t: SellerLegalType) => void;
-  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar">>) => void;
+  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar" | "acceptsCustomOrders" | "productionGallery" | "videoTourUrl" | "submittedAt">>) => void;
   toggleCategory: (slug: string) => void;
   backToStep1: () => void;
   toDocs: () => void;
@@ -175,6 +179,10 @@ export const useSellerReg = create<SellerRegState>()(
       categories: [],
       businessStory: "",
       achievements: "",
+      acceptsCustomOrders: false,
+      productionGallery: [],
+      videoTourUrl: "",
+      submittedAt: "",
 
       setLegalType: (t) => set({ legalType: t, docs: {} }),
       setInfo: (patch) => set(patch),
