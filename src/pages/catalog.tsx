@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play } from "lucide-react";
 import {
-  GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup, catImage,
+  GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
   vendorById, productBySlug,
 } from "../data/seed";
 import { canDeliver, DISTRICTS, DistrictId, zoneLabel } from "../lib/geo";
@@ -62,7 +62,7 @@ export function CatalogPage() {
   const browseMode = !q && group === "all" && cat === "all";
 
   const items = useMemo(() => {
-    let l = marketProducts();
+    let l = marketProducts().filter((x) => x.id.startsWith("sp-")); /* демо скрыто: витрина только для реальных товаров */
     if (q) {
       l = l.filter((p) => {
         const c = catBySlug(p.categoryId);
@@ -140,45 +140,36 @@ export function CatalogPage() {
       {/* второй уровень — категории группы */}
       {!q && group !== "all" && (
         <>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-5">
+          <div className="bg-surface rounded-2xl shadow-card p-3 mb-6">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute px-2 pb-2">Категории</p>
             <button onClick={() => (window.location.hash = `#/catalog?group=${group}`)}
-              className={`shrink-0 px-4 min-h-[44px] rounded-full text-[13px] font-bold transition-all duration-200 cursor-pointer ${cat === "all" ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-              Все
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors ${cat === "all" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+              ✦ Все категории
             </button>
             {groupCats.map((c) => (
-              <button key={c.slug} onClick={() => (window.location.hash = `#/catalog?cat=${c.slug}`)}
-                className={`shrink-0 px-4 min-h-[44px] rounded-full text-[13px] font-bold transition-all duration-200 cursor-pointer ${cat === c.slug ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-                {c.emoji} {c.name}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5 mb-8">
-            {groupCats.map((c, ci) => (
               <Link key={c.slug} to={`/catalog?cat=${c.slug}`}
-                className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 overflow-hidden">
-                <div className="aspect-[16/10]">
-                  <GroupImg src={catImage(c.slug)} emoji={c.emoji} alt={c.name} pos={ci + 1} />
-                </div>
-                <div className="p-3.5">
-                  <span className="block font-bold text-[13.5px] text-ink leading-tight group-hover:text-accent-deep transition-colors">{c.name}</span>
-                  <span className="block text-[11px] text-ink-mute mt-0.5">{c.subs.length} подкатегорий</span>
-                </div>
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors ${cat === c.slug ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+                <span>{c.emoji}</span>
+                <span className="flex-1 text-left leading-tight">{c.name}</span>
+                <span className={`text-[11px] ${cat === c.slug ? "text-cream/60" : "text-ink-mute"}`}>{c.subs.length} подкат.</span>
               </Link>
             ))}
           </div>
+
         </>
       )}
 
       {/* третий уровень — подкатегории */}
       {!q && cat !== "all" && activeCat && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-6">
+        <div className="bg-surface rounded-2xl shadow-card p-3 mb-6">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute px-2 pb-2">Подкатегории</p>
           <button onClick={() => (window.location.hash = `#/catalog?cat=${cat}`)}
-            className={`shrink-0 px-3.5 min-h-[40px] rounded-full text-[12.5px] font-semibold transition-all duration-200 cursor-pointer ${sub === "all" ? "bg-accent text-ink" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
-            Все
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors text-left ${sub === "all" ? "bg-accent text-ink" : "text-ink-soft hover:bg-cream"}`}>
+            ✦ Все подкатегории
           </button>
           {activeCat.subs.map((s) => (
             <button key={s.slug} onClick={() => (window.location.hash = `#/catalog?cat=${cat}&sub=${s.slug}`)}
-              className={`shrink-0 px-3.5 min-h-[40px] rounded-full text-[12.5px] font-semibold transition-all duration-200 cursor-pointer ${sub === s.slug ? "bg-accent text-ink" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors text-left ${sub === s.slug ? "bg-accent text-ink" : "text-ink-soft hover:bg-cream"}`}>
               {s.name}
             </button>
           ))}

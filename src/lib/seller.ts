@@ -311,11 +311,7 @@ export const useSellerAccount = create<SellerAccountState>()(
         const accPlans = get().planIdsByAccount[accountId];
         return accPlans?.[t] || "free";
       },
-      transactions: [
-        { id: "t1", date: new Date(Date.now() - 2 * 864e5).toISOString(), kind: "sale", orderId: "UYA-3127", productPrice: 10000, commissionAmount: 1200, sellerPayout: 8800 },
-        { id: "t2", date: new Date(Date.now() - 5 * 864e5).toISOString(), kind: "sale", orderId: "UYA-3084", productPrice: 4500, commissionAmount: 540, sellerPayout: 3960 },
-        { id: "t3", date: new Date(Date.now() - 9 * 864e5).toISOString(), kind: "sale", orderId: "UYA-2971", productPrice: 7200, commissionAmount: 864, sellerPayout: 6336 },
-      ],
+      transactions: [],
       products: [],
       team: [],
       aiCardGens: {},

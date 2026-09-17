@@ -1,12 +1,15 @@
 import { Link } from "react-router-dom";
 import { ShieldCheck, Star, Wrench, ArrowRight, Sparkles } from "lucide-react";
-import { PRODUCTS, REVIEWS, VENDORS, fmt } from "../data/seed";
+import { fmt } from "../data/seed";
+import { marketProducts } from "../lib/market";
+import { useReviewStore } from "../lib/review";
 import { ProductGrid } from "../components/product";
 import { GroupImg, Reveal } from "../components/ui";
 
 export default function HomePage() {
-  const featured = PRODUCTS.filter((p) => p.isHit || p.rating >= 4.8).slice(0, 8);
-  const customMade = PRODUCTS.filter((p) => p.product_type === "custom_made").slice(0, 4);
+  const featured = marketProducts().filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8).slice(0, 8);
+  const customMade = marketProducts().filter((p) => p.id.startsWith("sp-")).filter((p) => p.product_type === "custom_made").slice(0, 4);
+  const realReviews = useReviewStore((s) => s.reviews).filter((r) => r.status === "approved").slice(0, 3);
 
   return (
     <div>
@@ -101,19 +104,22 @@ export default function HomePage() {
             <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-accent-deep mb-2">Слово покупателям</p>
             <h2 className="font-display font-bold text-[clamp(26px,3.4vw,38px)] text-ink mb-8">Почему нам доверяют</h2>
           </Reveal>
+          {realReviews.length === 0 && (
+            <p className="text-[13.5px] text-ink-soft bg-cream rounded-[14px] px-5 py-6 text-center mb-4">Отзывы появятся после первых покупок — их оставляют только проверенные покупатели.</p>
+          )}
           <div className="grid md:grid-cols-3 gap-4">
-            {REVIEWS.slice(0, 3).map((r, i) => (
-              <Reveal key={r.name} delay={i * 80}>
+            {realReviews.map((r, i) => (
+              <Reveal key={r.id} delay={i * 80}>
                 <figure className="bg-surface rounded-2xl shadow-card p-6 h-full flex flex-col">
                   <div className="flex gap-0.5 mb-4">
                     {[...Array(r.rating)].map((_, j) => <Star key={j} size={15} className="text-accent fill-accent" />)}
                   </div>
                   <blockquote className="font-quote text-[19px] leading-[1.45] text-ink flex-1">«{r.text}»</blockquote>
                   <figcaption className="mt-5 flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[15px]">{r.name[0]}</span>
+                    <span className="w-10 h-10 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[15px]">{r.userName[0]}</span>
                     <span>
-                      <span className="block text-[13.5px] font-bold text-ink">{r.name}</span>
-                      <span className="block text-[12px] text-ink-mute">{r.city} · проверенная покупка</span>
+                      <span className="block text-[13.5px] font-bold text-ink">{r.userName}</span>
+                      <span className="block text-[12px] text-ink-mute">проверенная покупка</span>
                     </span>
                   </figcaption>
                 </figure>
@@ -125,28 +131,10 @@ export default function HomePage() {
 
       {/* ---------- мастера ---------- */}
       <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-14">
-        <Reveal>
-          <div className="flex items-end justify-between mb-7 flex-wrap gap-3">
-            <div>
-              <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-accent-deep mb-2">Лица платформы</p>
-              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,38px)] text-ink">Мастера со всей России</h2>
-            </div>
-            <Link to="/masters" className="text-sm font-bold text-accent-deep hover:text-accent flex items-center gap-1.5 transition-colors">
-              Все мастерские <ArrowRight size={16} />
-            </Link>
-          </div>
-        </Reveal>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          {VENDORS.slice(0, 4).map((v, i) => (
-            <Reveal key={v.id} delay={(i % 4) * 60}>
-              <Link to={`/shop/${v.slug}`} className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1.5 transition-all duration-300 p-5 block">
-                <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[24px] text-cream mb-3.5" style={{ background: v.avatarColor }}>{v.emoji}</span>
-                <span className="block font-bold text-[14.5px] text-ink group-hover:text-accent-deep transition-colors">{v.name}</span>
-                <span className="block text-[12px] text-ink-mute mt-1">{v.city} · с {v.since} года</span>
-                <span className="block text-[12px] font-bold text-accent-deep mt-2">★ {v.rating.toFixed(1)} · {v.reviewsCount} отзывов</span>
-              </Link>
-            </Reveal>
-          ))}
+        <div className="bg-dark rounded-[24px] p-10 text-center text-cream">
+          <h2 className="font-display font-bold text-[clamp(24px,3vw,34px)] mb-3">Мастера со всей России</h2>
+          <p className="text-[14px] text-cream/70 max-w-[560px] mx-auto mb-6">Первые мастерские присоединяются к УютАрт. Добавьте свои товары — и ваша мастерская появится здесь и в каталоге.</p>
+          <Link to="/seller" className="inline-flex h-[48px] px-7 items-center rounded-[12px] bg-accent text-ink font-bold hover:bg-accent-deep hover:text-cream transition-colors">Стать мастером</Link>
         </div>
       </section>
 

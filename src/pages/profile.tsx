@@ -301,6 +301,13 @@ export default function ProfilePage() {
               <Link to="/catalog" className="text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">Перейти в каталог →</Link>
             </div>
           )}
+          {orders.length === 0 && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[14px] font-bold text-ink mb-1">Заказов пока нет</p>
+              <p className="text-[13px] text-ink-soft mb-4">Здесь появятся ваши покупки — с отслеживанием, чатом с мастером и отзывами.</p>
+              <a href="#/catalog" className="inline-flex h-[44px] px-6 items-center rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">В каталог</a>
+            </div>
+          )}
           {orders.map((o) => (
             <div key={o.id} className="bg-surface rounded-2xl shadow-card p-5">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-3">

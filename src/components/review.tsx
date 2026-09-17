@@ -8,6 +8,17 @@ import { useComplaintStore, COMPLAINT_CATEGORIES } from "../lib/complaint";
 import { useSellerReg } from "../lib/seller";
 import { Modal, Btn, Field, Rating } from "./ui";
 
+export const reviewScore = (text: string, pros: string, cons: string, hasPhoto: boolean): number => {
+  const t = text.trim().length;
+  let s = 0;
+  if (t >= 80) s += 50;
+  if (t >= 250) s += 100;
+  if (pros.trim()) s += 50;
+  if (cons.trim()) s += 50;
+  if (hasPhoto) s += 100;
+  return s;
+};
+
 /* ============================================================
    Модалка отзыва: только для полученного заказа, +300 бонусов
    за фото. Уходит на премодерацию.
@@ -21,13 +32,19 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
   const sellerReg = useSellerReg();
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
+  const [pros, setPros] = useState("");
+  const [cons, setCons] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [err, setErr] = useState("");
 
+  const score = reviewScore(text, pros, cons, !!photo);
   const submit = () => {
     if (text.trim().length < 10) { setErr("Расскажите подробнее — минимум 10 символов."); return; }
     submitReview({
       productId: product.id,
+      pros: pros.trim() || undefined,
+      cons: cons.trim() || undefined,
+      score,
       orderId, orderNumber,
       userId: user?.userId || "anon",
       userName: user?.name || "Покупатель",
@@ -40,16 +57,16 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
     const vendor = product.vendorId ? vendorById(product.vendorId) : undefined;
     const sellerId = vendor ? vendor.id : "self-shop";
     const sellerName = vendor ? vendor.name : (sellerReg.shopName || "Магазин продавца");
-    if (rating >= 4) {
-      addBonus(photo ? 300 : 100, photo ? "Отзыв с фото в интерьере" : "Отзыв о заказе", sellerId, sellerName);
+    if (score > 0) {
+      addBonus(score, "Качественный отзыв", sellerId, sellerName);
     }
-    setRating(5); setText(""); setPhoto(null); setErr("");
+    setRating(5); setText(""); setPros(""); setCons(""); setPhoto(null); setErr("");
     onClose();
   };
 
   return (
     <Modal open={open} onClose={onClose} title={`Отзыв · ${product.name}`}>
-      <p className="text-[12.5px] text-ink-soft mb-4">Заказ {orderNumber}. Отзыв появится после премодерации. Бонусы — за отзывы 4-5 звёзд; тратить их можно только в магазине этого товара. {photo ? "+300 бонусов за фото" : "+100 бонусов (и +300 с фото в интерьере)"}.</p>
+      <p className="text-[12.5px] text-ink-soft mb-4">Заказ {orderNumber}. Отзыв появится после премодерации. Бонусы — за качество и честность отзыва, тон может быть любым. Тратить их можно только в магазине этого товара. {photo ? "+300 бонусов за фото" : "+100 бонусов (и +300 с фото в интерьере)"}.</p>
       <div className="mb-4">
         <p className="text-[13px] font-semibold text-ink mb-1.5">Оценка</p>
         <div className="flex gap-1">
@@ -62,6 +79,19 @@ export function ReviewModal({ open, onClose, product, orderId, orderNumber }: {
       </div>
       <Field label="Ваш отзыв" required error={err}>
         <textarea className="field" rows={4} value={text} onChange={(e) => { setText(e.target.value); setErr(""); }} placeholder="Что понравилось, как качество…" />
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div>
+          <p className="text-[13px] font-semibold text-ink mb-1.5">Плюсы</p>
+          <textarea className="field" rows={2} value={pros} onChange={(e) => setPros(e.target.value)} placeholder="Что понравилось?" />
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold text-ink mb-1.5">Минусы</p>
+          <textarea className="field" rows={2} value={cons} onChange={(e) => setCons(e.target.value)} placeholder="Что учесть другим?" />
+        </div>
+      </div>
+      <p className="text-[12px] font-semibold mt-3" style={{ color: score > 0 ? "#4d7327" : "#8a8577" }}>
+        Качество отзыва: {score} из 350 бонусов{score === 0 ? " — добавьте деталей, плюсы/минусы или фото" : " · тон может быть любым!"}
+      </p>
       </Field>
       <div className="mt-4">
         <label className="flex items-center gap-3 border-2 border-dashed border-line rounded-[10px] px-4 py-3 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
@@ -114,9 +144,16 @@ export function ReviewsSection({ product }: { product: Product }) {
             <div className="flex items-center gap-2">
               <Rating value={r.rating} size={12} showValue={false} />
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-soft text-[#4d7327] text-[10.5px] font-bold"><BadgeCheck size={11} /> Проверенная покупка</span>
+              {(r.score || 0) >= 200 && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f5e7d0] text-accent-deep text-[10.5px] font-bold"><Star size={11} /> Качественный отзыв</span>}
             </div>
           </div>
           <p className="text-[13.5px] text-ink-soft leading-relaxed">{r.text}</p>
+          {(r.pros || r.cons) && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              {r.pros && <div className="bg-success-soft rounded-[10px] px-3 py-2"><p className="text-[11px] font-bold text-[#4d7327] mb-1">Плюсы</p><p className="text-[12.5px] text-ink-soft">{r.pros}</p></div>}
+              {r.cons && <div className="bg-cream rounded-[10px] px-3 py-2"><p className="text-[11px] font-bold text-ink-mute mb-1">Минусы</p><p className="text-[12.5px] text-ink-soft">{r.cons}</p></div>}
+            </div>
+          )}
           {r.hasPhoto && (
             <p className="flex items-center gap-1.5 text-[11.5px] text-ink-mute mt-2"><Camera size={12} /> Фото в интерьере: {r.photoName}</p>
           )}

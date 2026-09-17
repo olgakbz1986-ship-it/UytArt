@@ -96,6 +96,8 @@ export function CheckoutPage() {
   const placeOrder = useAppStore((s) => s.placeOrder);
   const clearCart = useAppStore((s) => s.clearCart);
   const bonusBalance = useAppStore((s) => s.bonusBalance);
+  const bonusBySeller = useAppStore((s) => s.bonusBySeller);
+  const spendBonuses = useAppStore((s) => s.spendBonuses);
   const addBonus = useAppStore((s) => s.addBonus);
   const accountId2 = useAppStore((s) => s.session?.userId || "guest");
   const buyerPlan2 = useSubStore((s) => s.getBuyerPlan(accountId2));

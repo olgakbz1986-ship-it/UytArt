@@ -100,27 +100,10 @@ export const useAppStore = create<AppState>()(
       addresses: [
         { id: "a1", label: "Дом", city: "Москва", street: "ул. Пятницкая, 18, кв. 47", zip: "115035", isDefault: true },
       ],
-      orders: [
-        {
-          id: "o1",
-          number: "UYA-2481",
-          date: new Date(Date.now() - 6 * 864e5).toISOString(),
-          status: "shipped",
-          items: PRODUCTS.slice(0, 2).map((p) => ({ productId: p.id, qty: 1, price: p.price })),
-          total: (PRODUCTS[0]?.price || 0) + (PRODUCTS[1]?.price || 0) + 350,
-          delivery: 350,
-          deliveryMethod: "СДЭК до пункта выдачи",
-          address: "Москва, ул. Пятницкая, 18",
-          hasCustom: false,
-          payMethod: "Банковская карта (ЮKassa)",
-        },
-      ],
-      bonusBalance: 350,
-      bonusBySeller: { v1: 350 },
-      bonusHistory: [
-        { id: "b1", date: new Date(Date.now() - 12 * 864e5).toISOString(), amount: 300, reason: "Отзыв с фото в интерьере" },
-        { id: "b2", date: new Date(Date.now() - 30 * 864e5).toISOString(), amount: 50, reason: "Подтверждение получения" },
-      ],
+      orders: [],
+      bonusBalance: 0,
+      bonusBySeller: {},
+      bonusHistory: [],
 
       /* Вход: сохраняем аккаунт в реестр по email, опционально делаем активным */
       login: (u, makeActive = true) => set((s) => {

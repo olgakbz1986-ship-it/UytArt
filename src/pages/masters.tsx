@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MapPin, ShieldCheck, Flag, Store, MessageSquare } from "lucide-react";
 import { VENDORS, PRODUCTS, fmt, vendorById } from "../data/seed";
+import { useSellerReg } from "../lib/seller";
+import { marketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { ProductGrid } from "../components/product";
 import { Badge, Rating, Btn } from "../components/ui";
@@ -13,7 +15,9 @@ export function MastersPage() {
 
   const list = useMemo(
     () =>
-      VENDORS.filter((v) => {
+      [...(useSellerReg.getState().status === "active"
+        ? [{ ...VENDORS[0], id: "self", slug: "self", name: useSellerReg.getState().shopName || "Моя мастерская", city: useSellerReg.getState().city || "", emoji: "🏺", avatarColor: "#1e3a2f" }]
+        : [])].filter((v) => {
         const okQ = !q.trim() || (v.name + " " + v.city + " " + v.description).toLowerCase().includes(q.toLowerCase());
         const okR = region === "all" || v.production_region === region;
         return okQ && okR;
@@ -73,7 +77,7 @@ export function ShopPage() {
   const user = useAppStore((s) => s.session);
   const [tab, setTab] = useState<"goods" | "about" | "reviews">("goods");
   const [complaintOpen, setComplaintOpen] = useState(false);
-  const goods = useMemo(() => PRODUCTS.filter((p) => p.vendorId === vendor?.id), [vendor]);
+  const goods = useMemo(() => marketProducts().filter((p) => (vendor?.id === "self" ? p.id.startsWith("sp-") : p.vendorId === vendor?.id)), [vendor]);
 
   if (!vendor) {
     return (

@@ -15,6 +15,9 @@ export interface UserReview {
   userName: string;
   rating: number;
   text: string;
+  pros?: string;
+  cons?: string;
+  score?: number;
   hasPhoto: boolean;
   photoName?: string;
   receivedDate: string;

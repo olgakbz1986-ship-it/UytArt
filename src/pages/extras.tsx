@@ -41,10 +41,7 @@ interface MarketState {
 export const useMarketStore = create<MarketState>()(
   persist(
     (set) => ({
-      orders: [
-        { id: "mo1", title: "Дубовый стол на кухню", type: "Мебель", desc: "Нужен стол 160×90 из массива дуба, скандинавский стиль.", material: "Дуб", budget: 65000, term: "1–2 месяца", region: "ЦФО", date: new Date(Date.now() - 3 * 864e5).toISOString(), status: "published", responses: 4 },
-        { id: "mo2", title: "Зеркало в раме из ротанга", type: "Зеркала", desc: "Круглое зеркало Ø 80 см в раме из ротанга.", material: "Ротанг", budget: 18000, term: "2–3 недели", region: "СЗФО", date: new Date(Date.now() - 1 * 864e5).toISOString(), status: "published", responses: 2 },
-      ],
+      orders: [],
       responded: [],
       addOrder: (o) =>
         set((s) => ({ orders: [{ ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: "moderation", responses: 0, myOwn: true }, ...s.orders] })),
@@ -125,6 +122,12 @@ export function MarketPage() {
       )}
 
       <div className="grid sm:grid-cols-2 gap-4">
+        {visible.length === 0 && (
+          <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+            <p className="text-[14px] font-bold text-ink mb-1">Заказов на бирже пока нет</p>
+            <p className="text-[13px] text-ink-soft">Опишите, что нужно изготовить, — мастера увидят заказ и пришлют предложения. Или создайте первый заказ сами.</p>
+          </div>
+        )}
         {visible.map((o, i) => (
           <div key={o.id} className="bg-surface rounded-2xl shadow-card p-6 fade-up" style={{ animationDelay: `${(i % 6) * 60}ms` }}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -1127,6 +1130,12 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line-soft">
+                  {acc.transactions.length === 0 && (
+                    <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+                      <p className="text-[14px] font-bold text-ink mb-1">Операций пока нет</p>
+                      <p className="text-[13px] text-ink-soft">Продажи, комиссии и выплаты появятся здесь после первых заказов.</p>
+                    </div>
+                  )}
                   {acc.transactions.map((t) => (
                     <tr key={t.id} className="hover:bg-cream/50 transition-colors">
                       <td className="px-6 py-3 text-ink-mute whitespace-nowrap">{fmtDate(t.date)}</td>

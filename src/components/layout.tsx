@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin } from "lucide-react";
 import { marketProducts } from "../lib/market";
-import { CATEGORIES, PRODUCTS, fmt, catBySlug, groupById } from "../data/seed";
+import { CATEGORIES, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { CITIES } from "../lib/geo";
 import { useSellerAccount } from "../lib/seller";
