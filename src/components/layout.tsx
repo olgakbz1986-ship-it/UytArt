@@ -183,7 +183,6 @@ export function Header() {
     { to: "/market", label: "Заказы" },
     { to: "/masters", label: "Мастера" },
     { to: "/ai-assistant", label: "AI-дизайнер" },
-    { to: "/plans", label: "Тарифы" },
     { to: "/about", label: "О нас" },
     { to: "/contacts", label: "Контакты" },
     { to: "/legal", label: "Документы" },
@@ -322,6 +321,7 @@ export function Footer() {
     <footer className="bg-dark text-cream mt-16">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
         <span className="text-[12px] text-cream/50">© 2026 УютАрт. Все права защищены</span>
+        <Link to="/plans" className="text-[12px] text-cream/70 hover:text-accent transition-colors">Мастерам: тарифы</Link>
         <div className="flex items-center gap-3 sm:gap-4">
           <a href="mailto:info@starttechpro.ru" className="text-[12px] text-cream/70 hover:text-cream transition-colors">info@starttechpro.ru</a>
           <div className="flex items-center gap-2">
