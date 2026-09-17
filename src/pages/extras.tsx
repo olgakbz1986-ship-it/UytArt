@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
@@ -526,6 +526,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
               <Field label="История бизнеса — взлёты и падения">
                 <textarea className="field" rows={4} value={s.businessStory} onChange={(e) => s.setInfo({ businessStory: e.target.value })} placeholder="Как вы начинали, с какими трудностями столкнулись, чем гордитесь…" />
               </Field>
+              <MasterProfileBlock />
             </div>
           </div>
 
@@ -706,6 +707,8 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
 }
 
 export function SellerRegisterPage() {
+  const regAuto = useSellerReg();
+  if (regAuto.status === "active") return <Navigate to="/seller/dashboard" replace />;
   return (
     <div className="max-w-[860px] mx-auto px-4 sm:px-6 py-10">
       <SellerRegWizard />
@@ -1273,6 +1276,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               <Field label="Лет опыта"><input className="field" inputMode="numeric" value={sProf.yearsExperience} onChange={(e) => setSProf({ ...sProf, yearsExperience: e.target.value.replace(/\D/g, "") })} /></Field>
               <div className="sm:col-span-2"><Field label="Достижения"><input className="field" value={sProf.achievements} onChange={(e) => setSProf({ ...sProf, achievements: e.target.value })} placeholder="Награды, публикации, выставки" /></Field></div>
               <div className="sm:col-span-2"><Field label="История бизнеса"><textarea className="field" rows={3} value={sProf.businessStory} onChange={(e) => setSProf({ ...sProf, businessStory: e.target.value })} placeholder="Как начиналась мастерская, взлёты и падения" /></Field></div>
+              <MasterProfileBlock />
             </div>
 
             <Btn size="sm" className="mt-4" onClick={saveSProf}>
@@ -1971,5 +1975,54 @@ export function NotFoundPage() {
         <Link to="/catalog" className="h-[52px] px-7 rounded-[10px] border border-line bg-surface text-[15px] font-semibold hover:bg-cream transition-colors flex items-center">В каталог</Link>
       </div>
     </div>
+  );
+}
+
+
+export function MasterProfileBlock() {
+  const s = useSellerReg();
+  return (
+              <div className="md:col-span-2 mt-5 rounded-2xl border border-line p-5 bg-cream">
+                <p className="font-display font-bold text-[16px] text-ink mb-1">Мастер-профиль</p>
+                <p className="text-[12px] text-ink-mute mb-4">Эти данные формируют вашу карточку на странице «Мастера» и мини-сайт мастерской.</p>
+                <label className="flex items-center gap-2.5 text-[13px] font-semibold text-ink cursor-pointer mb-3">
+                  <input type="checkbox" checked={!!s.isMaster} onChange={(e) => s.setInfo({ isMaster: e.target.checked })} />
+                  Я мастер-производитель — показывать мастерскую на странице «Мастера»
+                </label>
+                <label className="flex items-center gap-2.5 text-[13px] font-semibold text-ink cursor-pointer mb-4">
+                  <input type="checkbox" checked={!!s.acceptsCustomOrders} onChange={(e) => s.setInfo({ acceptsCustomOrders: e.target.checked })} />
+                  Принимаю индивидуальные заказы
+                </label>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина</p>
+                    <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { alert("Файл до 1.5 МБ"); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />
+                    {s.shopLogo && <img src={s.shopLogo} alt="Логотип" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
+                  </div>
+                  <div>
+                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Аватар мастера</p>
+                    <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { alert("Файл до 1.5 МБ"); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ masterAvatar: r.result as string }); r.readAsDataURL(f); }} />
+                    {s.masterAvatar && <img src={s.masterAvatar} alt="Аватар" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">Фотовитрина производства (до 6 фото, каждое до 1.5 МБ)</p>
+                  <input type="file" accept="image/*" multiple className="field" onChange={(e) => { Array.from(e.target.files || []).slice(0, 6).forEach((f) => { if (f.size > 1500000) { alert(f.name + ": больше 1.5 МБ — пропущено"); return; } const r = new FileReader(); r.onload = () => { const cur = useSellerReg.getState().productionGallery; s.setInfo({ productionGallery: [...cur, r.result as string] }); }; r.readAsDataURL(f); }); e.target.value = ""; }} />
+                  {s.productionGallery.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {s.productionGallery.map((g, i) => (
+                        <span key={i} className="relative inline-block">
+                          <img src={g} alt={"Фото " + (i + 1)} className="w-16 h-16 rounded-[10px] object-cover" />
+                          <button onClick={() => s.setInfo({ productionGallery: s.productionGallery.filter((_, j) => j !== i) })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-error text-cream text-[11px] font-bold cursor-pointer">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4">
+                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">Видео-экскурсия по мастерской (прямая ссылка на mp4/webm)</p>
+                  <input className="field" value={s.videoTourUrl} onChange={(e) => s.setInfo({ videoTourUrl: e.target.value })} placeholder="https://…/masterstvo.mp4" />
+                </div>
+              </div>
   );
 }

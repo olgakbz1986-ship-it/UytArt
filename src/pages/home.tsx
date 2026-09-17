@@ -134,7 +134,7 @@ export default function HomePage() {
         <div className="bg-dark rounded-[24px] p-10 text-center text-cream">
           <h2 className="font-display font-bold text-[clamp(24px,3vw,34px)] mb-3">Мастера со всей России</h2>
           <p className="text-[14px] text-cream/70 max-w-[560px] mx-auto mb-6">Первые мастерские присоединяются к УютАрт. Добавьте свои товары — и ваша мастерская появится здесь и в каталоге.</p>
-          <Link to="/seller" className="inline-flex h-[48px] px-7 items-center rounded-[12px] bg-accent text-ink font-bold hover:bg-accent-deep hover:text-cream transition-colors">Стать мастером</Link>
+          <Link to="/seller/register" className="inline-flex h-[48px] px-7 items-center rounded-[12px] bg-accent text-ink font-bold hover:bg-accent-deep hover:text-cream transition-colors">Стать мастером</Link>
         </div>
       </section>
 

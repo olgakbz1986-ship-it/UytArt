@@ -17,7 +17,7 @@ const LEGAL_META: Record<string, { label: string; emoji: string; color: string }
 };
 
 const buildRealMaster = (reg: any): any => {
-  if (!reg || reg.status !== "active" || !reg.shopName) return null;
+  if (!reg || reg.status !== "active" || !reg.shopName || !reg.isMaster) return null;
   const lm = LEGAL_META[reg.legalType] || LEGAL_META.self_employed;
   return {
     id: "self",
@@ -26,7 +26,7 @@ const buildRealMaster = (reg: any): any => {
     city: reg.city || "",
     region: "ЦФО",
     story: reg.businessStory || "",
-    avatar: reg.shopLogo || reg.masterAvatar || "",
+    avatar: reg.shopLogo || reg.masterAvatar || (useAppStore.getState().session?.avatar || ""),
     initial: reg.shopName[0]?.toUpperCase() || "М",
     bg: "#1e3a2f",
     legal: lm,
@@ -38,6 +38,7 @@ const buildRealMaster = (reg: any): any => {
 
 
 export function MastersPage() {
+  const reg = useSellerReg();
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("all");
 
@@ -50,6 +51,7 @@ export function MastersPage() {
       }),
     [q, region]
   );
+  const totalMasters = useMemo(() => [buildRealMaster(useSellerReg.getState())].filter(Boolean).length, []);
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-10">
@@ -64,11 +66,11 @@ export function MastersPage() {
         </select>
       </div>
 
-      {list.length === 0 && (
+      {totalMasters === 0 && (
         <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
           <p className="text-[14px] font-bold text-ink mb-1">Первые мастерские проходят верификацию</p>
           <p className="text-[13px] text-ink-soft">Здесь появятся только мастера с подтверждёнными документами.</p>
-          <Link to="/seller" className="inline-flex h-[44px] px-6 mt-4 items-center rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">Стать мастером</Link>
+          <Link to={reg.status === "active" ? "/seller/dashboard" : "/seller/register"} className="inline-flex h-[44px] px-6 mt-4 items-center rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">{reg.status === "active" ? (reg.isMaster ? "Редактировать профиль мастера" : "Активировать профиль мастера") : "Стать мастером"}</Link>
         </div>
       )}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -86,6 +88,7 @@ export function MastersPage() {
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold text-cream" style={{ background: v.legal.color }}>
                   <span>{v.legal.emoji}</span>{v.legal.label}
                 </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f5e7d0] text-accent-deep text-[10.5px] font-bold">🏺 Мастер-производитель</span>
                 {v.verified && <Badge tone="success"><ShieldCheck size={11} /> Проверен</Badge>}
               </div>
             </div>
@@ -99,7 +102,7 @@ export function MastersPage() {
         ))}
       </div>
 
-      {list.length === 0 && (
+      {totalMasters > 0 && list.length === 0 && (
         <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
           <p className="text-[44px] mb-3">🔍</p>
           <p className="font-display font-bold text-[20px] text-ink mb-2">Мастера не найдены</p>
