@@ -335,3 +335,12 @@ input[type="checkbox"], input[type="radio"] {
   .kb, .marquee-track, .float-y { animation: none; }
   .house-mark path { animation: none; stroke-dashoffset: 0; }
 }
+
+/* Живые обложки: медленный зум ВНУТРИ рамки (размер плитки не меняется) */
+@keyframes kbZoom {
+  0%   { transform: scale(1) translate(0, 0); }
+  50%  { transform: scale(1.1) translate(-1.5%, 1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+.kb-zoom { animation: kbZoom 18s ease-in-out infinite; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .kb-zoom { animation: none; } }

@@ -121,7 +121,7 @@ export function ProductImg({ p, variant = 0, className = "" }: { p: { image?: st
           alt={p.emoji}
           loading="lazy"
           onError={() => setErr(true)}
-          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06] ${className}`}
+          className={`w-full h-full object-cover kb-zoom ${className}`}
           style={{ objectPosition: POSITIONS[v], filter: HUES[v] ? `hue-rotate(${HUES[v]}deg) saturate(1.04)` : undefined }}
         />
       )}
@@ -135,19 +135,39 @@ export function ProductImg({ p, variant = 0, className = "" }: { p: { image?: st
 }
 
 /* ---------- изображение группы ---------- */
+const KB_STYLE = `
+@keyframes kbZoom {
+  0%   { transform: scale(1) translate(0, 0); }
+  50%  { transform: scale(1.12) translate(-1.5%, 1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+.kb-zoom { animation: kbZoom 14s ease-in-out infinite; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .kb-zoom { animation: none; } }
+`;
+
 export function GroupImg({ src, emoji, alt, pos = 0, className = "" }: { src?: string; emoji: string; alt: string; pos?: number; className?: string }) {
   const [err, setErr] = useState(false);
   const v = pos % POSITIONS.length;
+  const isVideo = !!src && /\.(mp4|webm)$/i.test(src);
   return (
     <div className="relative w-full h-full overflow-hidden bg-dark">
-      {!err && src && (
+      <style>{KB_STYLE}</style>
+      {!err && src && isVideo && (
+        <video
+          src={src}
+          autoPlay muted loop playsInline
+          className={`w-full h-full object-cover ${className}`}
+          style={{ objectPosition: POSITIONS[v] }}
+        />
+      )}
+      {!err && src && !isVideo && (
         <img
           src={src}
           alt={alt}
           loading="lazy"
           onError={() => setErr(true)}
-          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.06] ${className}`}
-          style={{ objectPosition: POSITIONS[v], filter: HUES[v] ? `hue-rotate(${HUES[v] * 2}deg) saturate(1.03)` : undefined }}
+          className={`w-full h-full object-cover kb-zoom ${className}`}
+          style={{ objectPosition: POSITIONS[v], filter: HUES[v] ? `hue-rotate(${HUES[v] * 2}deg) saturate(1.03)` : undefined, animationDelay: `${(pos % 5) * 1.3}s` }}
         />
       )}
       {(!src || err) && (
