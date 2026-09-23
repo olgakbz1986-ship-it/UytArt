@@ -1,3 +1,6 @@
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
+} from "recharts";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { create } from "zustand";
@@ -6,7 +9,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2 } from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -779,6 +782,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const avgCheck = sentOrders.length > 0 ? Math.round(revenue / sentOrders.length) : 0;
   const payout = Math.round(revenue * (1 - commissionNow / 100));
   const cartEvents = useAppStore((st) => st.cartEvents);
+  const [anaPeriod, setAnaPeriod] = useState<7 | 30 | 90>(30);
   const totalViews = acc.products.reduce((s2, pr) => s2 + (pr.views || 0), 0);
   const receivedCount = myOrders.filter((o) => o.status === "received").length;
   const pctOf = (n: number) => (totalViews ? Math.round((n / totalViews) * 1000) / 10 : 0);
@@ -1164,50 +1168,149 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       )}
 
       {/* АНАЛИТИКА */}
-      {tab === "analytics" && (
-        <div className="fade-up grid sm:grid-cols-2 gap-4">
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Воронка продаж</p>
-            {funnel.map(([label, val, pct]) => (
-              <div key={label as string} className="mb-3">
-                <div className="flex justify-between text-[12px] mb-1"><span className="font-semibold text-ink">{label}</span><span className="text-ink-mute">{(val as number).toLocaleString("ru-RU")} · {pct}%</span></div>
-                <div className="h-2.5 rounded-full bg-line-soft overflow-hidden"><div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></div>
+      {tab === "analytics" && (() => {
+        const nowTs = Date.now();
+        const periodMs = anaPeriod * 864e5;
+        const curTx = acc.transactions.filter((t) => t.kind === "sale" && nowTs - new Date(t.date).getTime() <= periodMs);
+        const prevTx = acc.transactions.filter((t) => { const n = nowTs - new Date(t.date).getTime(); return n > periodMs && n <= periodMs * 2; });
+        const curRevenue = curTx.reduce((s, t) => s + (t.productPrice || 0), 0);
+        const prevRevenue = prevTx.reduce((s, t) => s + (t.productPrice || 0), 0);
+        const curOrders = curTx.length;
+        const prevOrders = prevTx.length;
+        const avgCheck = curOrders ? Math.round(curRevenue / curOrders) : 0;
+        const prevAvg = prevOrders ? Math.round(prevRevenue / prevOrders) : 0;
+        const conv = totalViews ? Math.round((curOrders / totalViews) * 1000) / 10 : 0;
+        const prevConv = totalViews ? Math.round((prevOrders / totalViews) * 1000) / 10 : 0;
+        const delta = (cur: number, prev: number) => {
+          if (!prev) return cur > 0 ? <span className="text-[#4d7327] text-[11px] font-bold">новое</span> : <span className="text-ink-mute text-[11px]">—</span>;
+          const d = Math.round(((cur - prev) / prev) * 100);
+          return <span className={`text-[11px] font-bold ${d >= 0 ? "text-[#4d7327]" : "text-error"}`}>{d >= 0 ? "+" : ""}{d}%</span>;
+        };
+        const chartData = [...Array(anaPeriod)].map((_, i) => {
+          const d = new Date(Date.now() - (anaPeriod - 1 - i) * 864e5);
+          const key = d.toISOString().slice(0, 10);
+          const sum = curTx.filter((t) => t.date.slice(0, 10) === key).reduce((s, t) => s + (t.productPrice || 0), 0);
+          return { day: `${d.getDate()}.${d.getMonth() + 1}`, sum };
+        });
+        const weekdayData = [0, 0, 0, 0, 0, 0, 0];
+        curTx.forEach((t) => { weekdayData[new Date(t.date).getDay()] += t.productPrice || 0; });
+        const wdNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+        const peakIdx = weekdayData.indexOf(Math.max(...weekdayData));
+        const peakDay = weekdayData[peakIdx] > 0 ? wdNames[peakIdx] : null;
+        const periodOrders = myOrders.filter((o) => nowTs - new Date(o.date).getTime() <= periodMs);
+        const catMap: Record<string, number> = {};
+        periodOrders.forEach((o) => o.items.forEach((it) => {
+          const pr = marketProducts().find((x) => x.id === it.productId);
+          const cat = (pr as any)?.category || "Прочее";
+          catMap[cat] = (catMap[cat] || 0) + ((pr?.price || 0) * it.qty);
+        }));
+        const catList = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+        return (
+          <div className="fade-up space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-surface rounded-2xl shadow-card px-5 py-3">
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Аналитика продаж</p>
+              <div className="flex items-center gap-1 bg-cream rounded-xl p-1">
+                <Calendar size={13} className="text-ink-mute ml-2" />
+                {([7, 30, 90] as const).map((pp) => (
+                  <button key={pp} onClick={() => setAnaPeriod(pp)} className={`px-3 py-1.5 text-[12px] font-bold rounded-lg transition-colors cursor-pointer ${anaPeriod === pp ? "bg-accent text-ink" : "text-ink-soft hover:text-ink"}`}>{pp} дн.</button>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-ai" /> Рекомендации по ценам</p>
-            <p className="text-[13.5px] text-ink-soft leading-relaxed">{(() => { const mine = marketProducts().filter((x) => x.id.startsWith("sp-")); const avgMine = mine.length ? mine.reduce((a, b) => a + b.price, 0) / mine.length : 0; const cat = marketProducts().filter((x) => x.categoryId === (mine[0]?.categoryId || "")); const avgCat = cat.length ? cat.reduce((a, b) => a + b.price, 0) / cat.length : 0; if (!mine.length || !avgCat) return <span>Ценовой совет появится, когда на витрине будут ваши товары и товары категории для сравнения.</span>; const diff = Math.round(((avgMine - avgCat) / avgCat) * 100); return <span>Средняя цена ваших товаров: <strong className="text-ink">{fmt(Math.round(avgMine))}</strong>, по категории: <strong className="text-ink">{fmt(Math.round(avgCat))}</strong> ({diff >= 0 ? `+${diff}%` : `${diff}%`}). Коридор максимальной конверсии: ±10% от средней по категории.</span>; })()}</p>
-            {plan.forecasts && (forecast30 > 0 ? <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> выручка следующих 30 дней ≈ {fmt(forecast30)}. Метод: средняя выручка дня активности ({fmt(Math.round(sum30 / activeDays))} × 30) по фактическим транзакциям за последние 30 дней ({activeDays} дн. активности).</p> : <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> появится после 7 дней активных продаж — сейчас данных для честной экстраполяции недостаточно.</p>)}
-          </div>
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Продажи за 7 дней</p>
-            <div className="flex items-end gap-2 h-[120px]">
-              {days.map((d) => (
-                <div key={d.key} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-                  <div className="w-full rounded-t-lg bg-accent transition-all duration-500" style={{ height: `${Math.max(4, (d.sum / maxDay) * 100)}%`, opacity: d.sum ? 1 : 0.25 }} title={fmt(d.sum)} />
-                  <span className="text-[10px] text-ink-mute">{d.label}</span>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: "Выручка", value: fmt(curRevenue), cur: curRevenue, prev: prevRevenue, icon: Banknote },
+                { label: "Заказы", value: curOrders.toString(), cur: curOrders, prev: prevOrders, icon: Package },
+                { label: "Средний чек", value: fmt(avgCheck), cur: avgCheck, prev: prevAvg, icon: Receipt },
+                { label: "Конверсия", value: `${conv}%`, cur: conv, prev: prevConv, icon: TrendingUp },
+              ].map((k) => (
+                <div key={k.label} className="bg-surface rounded-2xl shadow-card p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide">{k.label}</p>
+                    <k.icon size={14} className="text-accent-deep" />
+                  </div>
+                  <p className="font-display font-extrabold text-[22px] text-ink">{k.value}</p>
+                  <div className="mt-1.5 text-ink-mute text-[11px]">vs прошлый период: {delta(k.cur, k.prev)}</div>
                 </div>
               ))}
             </div>
-          </div>
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><Package size={17} className="text-accent-deep" /> Топ товаров</p>
-            {topItems.length === 0 && <p className="text-[13.5px] text-ink-soft">Продаж пока нет — топ появится после первых заказов.</p>}
-            {topItems.map(([pid, qty], i) => {
-              const prod = marketProducts().find((x) => x.id === pid);
-              return (
-                <div key={pid} className="flex justify-between gap-3 py-2 border-b border-line-soft last:border-0 text-[13.5px]">
-                  <span className="text-ink-soft flex-1 min-w-0 truncate">{i + 1}. {prod?.name || pid}</span>
-                  <span className="text-ink-mute whitespace-nowrap">{(prod as any)?.views || 0} просм.</span>
-                  <span className="text-ink-mute whitespace-nowrap">конв. {(prod as any)?.views ? Math.round((qty / ((prod as any)?.views || 1)) * 100) : 0}%</span>
-                  <span className="font-bold text-ink whitespace-nowrap">{qty} шт</span>
+
+            <div className="bg-surface rounded-2xl shadow-card p-6">
+              <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-accent-deep" /> Выручка по дням</p>
+              {curRevenue === 0 ? (
+                <p className="text-[13px] text-ink-soft text-center py-8">Нет продаж за выбранный период — график появится с первым заказом.</p>
+              ) : (
+                <div style={{ width: "100%", height: 220 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={chartData}>
+                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#8a8a8a" }} tickLine={false} axisLine={{ stroke: "#e5e5e5" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#8a8a8a" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}к`} />
+                      <RechartsTooltip formatter={(v: any) => [fmt(Number(v)), "Выручка"]} />
+                      <Line type="monotone" dataKey="sum" stroke="#4d7327" strokeWidth={2.5} dot={{ r: 3, fill: "#4d7327" }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Воронка продаж</p>
+                {funnel.map(([label, val, pct]) => (
+                  <div key={label as string} className="mb-3">
+                    <div className="flex justify-between text-[12px] mb-1"><span className="font-semibold text-ink">{label}</span><span className="text-ink-mute">{(val as number).toLocaleString("ru-RU")} · {pct}%</span></div>
+                    <div className="h-2.5 rounded-full bg-line-soft overflow-hidden"><div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><Package size={17} className="text-accent-deep" /> Топ товаров</p>
+                {topItems.length === 0 ? (
+                  <p className="text-[13.5px] text-ink-soft">Продаж пока нет — топ появится после первых заказов.</p>
+                ) : (
+                  topItems.map(([pid, qty], i) => {
+                    const prod = marketProducts().find((x) => x.id === pid);
+                    const revenue = (prod?.price || 0) * qty;
+                    return (
+                      <div key={pid} className="flex justify-between gap-3 py-2 border-b border-line-soft last:border-0 text-[13px]">
+                        <span className="text-ink-soft flex-1 min-w-0 truncate">{i + 1}. {prod?.name || pid}</span>
+                        <span className="text-ink-mute whitespace-nowrap">{(prod as any)?.views || 0} просм.</span>
+                        <span className="text-ink-mute whitespace-nowrap">{fmt(revenue)}</span>
+                        <span className="font-bold text-ink whitespace-nowrap">{qty} шт</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Выручка по категориям</p>
+                {catList.length === 0 ? (
+                  <p className="text-[13px] text-ink-soft">Категории появятся с первыми продажами.</p>
+                ) : (
+                  catList.map(([cat, sum]) => {
+                    const pct = curRevenue ? Math.round((sum / curRevenue) * 100) : 0;
+                    return (
+                      <div key={cat} className="mb-3 last:mb-0">
+                        <div className="flex justify-between text-[12px] mb-1"><span className="font-semibold text-ink truncate">{cat}</span><span className="text-ink-mute whitespace-nowrap">{fmt(sum)} · {pct}%</span></div>
+                        <div className="h-2 rounded-full bg-line-soft overflow-hidden"><div className="h-full rounded-full bg-accent-deep" style={{ width: `${pct}%` }} /></div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-ai" /> Рекомендации</p>
+                <p className="text-[13.5px] text-ink-soft leading-relaxed">{(() => { const mine = marketProducts().filter((x) => x.id.startsWith("sp-")); const avgMine = mine.length ? mine.reduce((a, b) => a + b.price, 0) / mine.length : 0; const cat = marketProducts().filter((x) => x.categoryId === (mine[0]?.categoryId || "")); const avgCat = cat.length ? cat.reduce((a, b) => a + b.price, 0) / cat.length : 0; if (!mine.length || !avgCat) return <span>Ценовой совет появится, когда на витрине будут ваши товары и товары категории для сравнения.</span>; const diff = Math.round(((avgMine - avgCat) / avgCat) * 100); return <span>Средняя цена ваших товаров: <strong className="text-ink">{fmt(Math.round(avgMine))}</strong>, по категории: <strong className="text-ink">{fmt(Math.round(avgCat))}</strong> ({diff >= 0 ? `+${diff}%` : `${diff}%`}). Коридор максимальной конверсии: ±10% от средней.</span>; })()}</p>
+                {peakDay && <p className="text-[12.5px] text-ink-soft mt-3 pt-3 border-t border-line-soft">📅 <strong className="text-ink">Пиковый день недели:</strong> {peakDay} — планируйте акции и рассылки на этот день.</p>}
+                {plan.forecasts && (forecast30 > 0 ? <p className="text-[12.5px] text-ink-soft mt-2"><strong className="text-ink">Прогноз 30 дней:</strong> ≈ {fmt(forecast30)} (экстраполяция фактической выручки).</p> : <p className="text-[12.5px] text-ink-soft mt-2"><strong className="text-ink">Прогноз:</strong> появится после 7 дней активных продаж.</p>)}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* КОМАНДА */}
       {tab === "team" && (
