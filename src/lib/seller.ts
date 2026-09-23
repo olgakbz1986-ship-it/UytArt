@@ -217,6 +217,7 @@ export const useSellerReg = create<SellerRegState>()(
           const info = sellerTypeInfo(s.legalType);
           return {
             status: "active",
+            submittedAt: new Date().toISOString(),
             payMethod: method,
             commissionRate: info?.commission ?? 15,
             slug: slugify(s.shopName),

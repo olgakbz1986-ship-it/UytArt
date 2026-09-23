@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MapPin, ShieldCheck, Flag, Store, MessageSquare } from "lucide-react";
 import { fmt, vendorById } from "../data/seed";
-import { useSellerReg } from "../lib/seller";
+import { useSellerReg, useSellerAccount } from "../lib/seller";
 import { marketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useReviewStore } from "../lib/review";
@@ -16,15 +16,37 @@ const LEGAL_META: Record<string, { label: string; emoji: string; color: string }
   ooo: { label: "Производство", emoji: "🏭", color: "#1e3a2f" },
 };
 
+const REGION_CITIES: [string, string[]][] = [
+  ["ЦФО", ["москва", "тула", "тверь", "ярослав", "владимир", "рязань", "калуга", "брянск", "орел", "курск", "воронеж", "липецк", "тамбов", "иваново", "кострома", "смоленск", "белгород"]],
+  ["СЗФО", ["санкт-петербург", "псков", "новгород", "калининград", "мурманск", "архангельск", "вологда", "череповец", "сыктывкар", "петрозаводск"]],
+  ["ЮФО", ["ростов", "краснодар", "сочи", "волгоград", "астрахань", "майкоп", "элиста", "симферополь", "севастополь", "адлер"]],
+  ["СКФО", ["ставрополь", "пятогорск", "кисловодск", "нальчик", "владикавказ", "грозный", "махачкала", "дербент", "черкесск", "ессентуки"]],
+  ["ПФО", ["нижний новгород", "казань", "самара", "саратов", "уфа", "пермь", "ульяновск", "киров", "ижевск", "чебоксары", "йошкар-ола", "пенза", "саранск", "оренбург"]],
+  ["УФО", ["екатеринбург", "челябинск", "тюмень", "сургут", "курган", "магнитогорск", "нижний тагил", "ханты-мансийск"]],
+  ["СФО", ["новосибирск", "омск", "красноярск", "томск", "кемерово", "барнаул", "иркутск", "новокузнецк"]],
+  ["ДФО", ["владивосток", "хабаровск", "якутск", "южно-сахалинск", "петропавловск", "магадан", "благовещенск", "чита", "улан-удэ"]],
+];
+const regionByCity = (city: string): string => {
+  const c = (city || "").toLowerCase();
+  if (!c.trim()) return "";
+  for (const [r, list] of REGION_CITIES) if (list.some((w) => c.includes(w))) return r;
+  return "";
+};
+
 const buildRealMaster = (reg: any): any => {
   if (!reg || reg.status !== "active" || !reg.shopName || !reg.isMaster) return null;
   const lm = LEGAL_META[reg.legalType] || LEGAL_META.self_employed;
+  const goods = marketProducts().filter((x) => x.id.startsWith("sp-"));
+  const ids = new Set(goods.map((g) => g.id));
+  const revs = useReviewStore.getState().reviews.filter((r: any) => r.status === "approved" && ids.has(r.productId));
+  const rating = revs.length ? Math.round((revs.reduce((a: number, r: any) => a + r.rating, 0) / revs.length) * 10) / 10 : 0;
+  const sales = useSellerAccount.getState().transactions.filter((t: any) => t.kind === "sale").length;
   return {
     id: "self",
     slug: "self",
     name: reg.shopName,
     city: reg.city || "",
-    region: "ЦФО",
+    region: regionByCity(reg.city),
     story: reg.businessStory || "",
     avatar: reg.shopLogo || reg.masterAvatar || (useAppStore.getState().session?.avatar || ""),
     initial: reg.shopName[0]?.toUpperCase() || "М",
@@ -33,6 +55,9 @@ const buildRealMaster = (reg: any): any => {
     verified: true,
     acceptsCustom: !!reg.acceptsCustomOrders,
     sinceYear: reg.submittedAt ? new Date(reg.submittedAt).getFullYear() : new Date().getFullYear(),
+    rating,
+    ratingCount: revs.length,
+    sales,
   };
 };
 
@@ -93,11 +118,17 @@ export function MastersPage() {
               </div>
             </div>
             <h2 className="font-bold text-[17px] text-ink group-hover:text-accent-deep transition-colors">{v.name}</h2>
-            <p className="text-[12.5px] text-ink-mute mt-1 flex items-center gap-1.5"><MapPin size={12} /> {v.city} · на платформе с {v.sinceYear}</p>
+            <p className="text-[12.5px] text-ink-mute mt-1 flex items-center gap-1.5"><MapPin size={12} /> {v.city || "Россия"} · на платформе с {v.sinceYear}</p>
             {v.story && <p className="text-[13px] text-ink-soft leading-relaxed mt-3 line-clamp-2">{v.story}</p>}
             <div className="flex flex-wrap gap-1.5 mt-3">
               {v.acceptsCustom && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cream text-ink-soft text-[10.5px] font-bold">✦ Индивидуальные заказы</span>}
             </div>
+            {(v.ratingCount > 0 || v.sales > 0) && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                {v.ratingCount > 0 ? <Rating value={v.rating} /> : <span className="text-[12px] text-ink-mute">Отзывов пока нет</span>}
+                <span className="text-[12px] text-ink-mute">{v.sales} заказов</span>
+              </div>
+            )}
           </Link>
         ))}
       </div>
@@ -151,6 +182,12 @@ export function ShopPage() {
           <h1 className="font-display font-bold text-[clamp(26px,3vw,36px)] text-ink">{master.name}</h1>
           <p className="text-[13px] text-ink-mute mt-1 flex items-center gap-1.5"><MapPin size={13} /> {master.city || "Россия"} · на платформе с {master.sinceYear} года</p>
           {reg.yearsExperience && <p className="text-[13px] text-ink-soft mt-2">Опыт мастерской: {reg.yearsExperience}</p>}
+          {(master.ratingCount > 0 || master.sales > 0) && (
+            <p className="text-[13px] text-ink-soft mt-2 flex items-center gap-2 flex-wrap">
+              {master.ratingCount > 0 && <><Rating value={master.rating} /> <span className="text-ink-mute">· {master.ratingCount} отзывов</span></>}
+              {master.sales > 0 && <span className="text-ink-mute">· {master.sales} заказов</span>}
+            </p>
+          )}
         </div>
       </div>
 
