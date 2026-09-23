@@ -62,6 +62,7 @@ interface AppState {
   /* Единая активная сессия */
   session: ActiveSession | null;
   cart: CartItem[];
+  cartEvents: { productId: string; ts: string }[];
   favorites: string[];
   viewerCity: string | null;
   addresses: Address[];
@@ -95,6 +96,7 @@ export const useAppStore = create<AppState>()(
       accounts: {},
       session: null,
       cart: [],
+      cartEvents: [],
       favorites: [],
       viewerCity: null,
       addresses: [
@@ -175,9 +177,10 @@ export const useAppStore = create<AppState>()(
       addToCart: (productId, qty = 1) =>
         set((s) => {
           const ex = s.cart.find((c) => c.productId === productId);
+          const cartEvents = [...s.cartEvents.slice(-499), { productId, ts: new Date().toISOString() }];
           return ex
-            ? { cart: s.cart.map((c) => (c.productId === productId ? { ...c, qty: c.qty + qty } : c)) }
-            : { cart: [...s.cart, { productId, qty }] };
+            ? { cart: s.cart.map((c) => (c.productId === productId ? { ...c, qty: c.qty + qty } : c)), cartEvents }
+            : { cart: [...s.cart, { productId, qty }], cartEvents };
         }),
       setQty: (productId, qty) =>
         set((s) => ({

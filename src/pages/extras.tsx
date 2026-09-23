@@ -778,11 +778,14 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const revenue = sentOrders.reduce((sum, o) => sum + o.total, 0);
   const avgCheck = sentOrders.length > 0 ? Math.round(revenue / sentOrders.length) : 0;
   const payout = Math.round(revenue * (1 - commissionNow / 100));
+  const cartEvents = useAppStore((st) => st.cartEvents);
   const totalViews = acc.products.reduce((s2, pr) => s2 + (pr.views || 0), 0);
   const receivedCount = myOrders.filter((o) => o.status === "received").length;
   const pctOf = (n: number) => (totalViews ? Math.round((n / totalViews) * 1000) / 10 : 0);
+  const cartAdds = cartEvents.filter((e) => e.productId.startsWith("sp-")).length;
   const funnel = [
     ["Просмотры карточек", totalViews, 100],
+    ["Добавили в корзину", cartAdds, pctOf(cartAdds)],
     ["Заказы", myOrders.length, pctOf(myOrders.length)],
     ["Отправлено", sentOrders.length, pctOf(sentOrders.length)],
     ["Получено", receivedCount, pctOf(receivedCount)],
@@ -803,6 +806,11 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const balance = acc.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
   const commission = selectCommissionSum(acc);
   const turnover = selectTurnover(acc);
+  const nowTs = Date.now();
+  const tx30 = acc.transactions.filter((t) => t.kind === "sale" && nowTs - new Date(t.date).getTime() <= 30 * 864e5);
+  const activeDays = new Set(tx30.map((t) => t.date.slice(0, 10))).size;
+  const sum30 = tx30.reduce((s2, t) => s2 + (t.productPrice || 0), 0);
+  const forecast30 = activeDays >= 7 ? Math.round((sum30 / activeDays) * 30) : 0;
 
   if (s.status !== "active" || !user || user.role !== "seller") {
     return (
@@ -1170,7 +1178,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <div className="bg-surface rounded-2xl shadow-card p-6">
             <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-ai" /> Рекомендации по ценам</p>
             <p className="text-[13.5px] text-ink-soft leading-relaxed">{(() => { const mine = marketProducts().filter((x) => x.id.startsWith("sp-")); const avgMine = mine.length ? mine.reduce((a, b) => a + b.price, 0) / mine.length : 0; const cat = marketProducts().filter((x) => x.categoryId === (mine[0]?.categoryId || "")); const avgCat = cat.length ? cat.reduce((a, b) => a + b.price, 0) / cat.length : 0; if (!mine.length || !avgCat) return <span>Ценовой совет появится, когда на витрине будут ваши товары и товары категории для сравнения.</span>; const diff = Math.round(((avgMine - avgCat) / avgCat) * 100); return <span>Средняя цена ваших товаров: <strong className="text-ink">{fmt(Math.round(avgMine))}</strong>, по категории: <strong className="text-ink">{fmt(Math.round(avgCat))}</strong> ({diff >= 0 ? `+${diff}%` : `${diff}%`}). Коридор максимальной конверсии: ±10% от средней по категории.</span>; })()}</p>
-            {plan.forecasts && <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> при текущей динамике выручка следующего месяца ≈ {fmt(Math.round(turnover * 1.18))}.</p>}
+            {plan.forecasts && (forecast30 > 0 ? <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> выручка следующих 30 дней ≈ {fmt(forecast30)}. Метод: средняя выручка дня активности ({fmt(Math.round(sum30 / activeDays))} × 30) по фактическим транзакциям за последние 30 дней ({activeDays} дн. активности).</p> : <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> появится после 7 дней активных продаж — сейчас данных для честной экстраполяции недостаточно.</p>)}
           </div>
           <div className="bg-surface rounded-2xl shadow-card p-6">
             <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Продажи за 7 дней</p>
