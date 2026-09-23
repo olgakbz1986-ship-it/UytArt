@@ -234,8 +234,8 @@ export function Header() {
                       aria-label={isSeller ? "Открыть кабинет продавца" : "Открыть личный кабинет"}
                       className="group flex items-center gap-2 h-11 pl-1.5 pr-3 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink hover:border-dark hover:-translate-y-px transition-all duration-200"
                     >
-                      {session.avatar ? (
-                        <img src={session.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      {(session.avatar || (isSeller ? (sellerReg.shopLogo || sellerReg.masterAvatar) : "")) ? (
+                        <img src={(session.avatar || (isSeller ? (sellerReg.shopLogo || sellerReg.masterAvatar) : "")) as string} alt="" className="w-8 h-8 rounded-full object-cover" />
                       ) : (
                         <span className="w-8 h-8 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px] group-hover:bg-dark-deep transition-colors">
                           {(displayName[0] || "?").toUpperCase()}
