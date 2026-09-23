@@ -1,52 +1,55 @@
 import { useRef } from "react";
 import { Camera, X } from "lucide-react";
-import { useAppStore } from "../lib/store";
+import { useSellerReg } from "../lib/seller";
 
 export function SellerAvatar() {
-  const session = useAppStore((s) => s.session);
-  const updateUser = useAppStore((s) => s.updateUser);
-  const ref = useRef<HTMLInputElement>(null);
+  const reg = useSellerReg();
+  const logoRef = useRef<HTMLInputElement>(null);
+  const masterRef = useRef<HTMLInputElement>(null);
 
-  const pick = (f?: File) => {
+  const pick = (f: File | undefined, field: "shopLogo" | "masterAvatar") => {
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => updateUser({ avatar: r.result as string });
-    r.readAsDataURL(f);
+    if (f.size > 1500000) { alert("Файл до 1.5 МБ"); return; }
+    const v = new FileReader();
+    v.onload = () => {
+      const data = v.result as string;
+      if (field === "shopLogo") reg.setInfo({ shopLogo: data });
+      else reg.setInfo({ masterAvatar: data });
+    };
+    v.readAsDataURL(f);
   };
 
-  if (!session) return null;
-
   return (
-    <div className="flex items-center gap-4 mb-5">
-      <button
-        onClick={() => ref.current?.click()}
-        className="relative w-20 h-20 rounded-full bg-cream border-2 border-line-soft overflow-hidden hover:border-dark group"
-      >
-        {session.avatar ? (
-          <img src={session.avatar} className="w-full h-full object-cover" />
-        ) : (
-          <span className="w-full h-full flex items-center justify-center font-display font-bold text-[28px] text-ink-mute">
-            {(session.name || "?")[0].toUpperCase()}
-          </span>
-        )}
-        <span className="absolute inset-0 bg-dark/50 text-cream opacity-0 group-hover:opacity-100 flex items-center justify-center">
-          <Camera size={20} />
-        </span>
-      </button>
-      <div>
-        <p className="font-display font-bold text-[14px] text-ink">Аватар магазина и мастера</p>
-        <p className="text-[12px] text-ink-soft">Одно фото для шапки кабинета, карточек товаров и отзывов</p>
-        <div className="flex gap-3 mt-1.5">
-          <button onClick={() => ref.current?.click()} className="text-[12px] font-bold text-accent-deep underline">
-            Загрузить фото
-          </button>
-          {session.avatar && (
-            <button onClick={() => updateUser({ avatar: undefined })} className="text-[12px] text-error flex items-center gap-1">
-              <X size={11} /> Удалить
-            </button>
-          )}
+    <div className="grid sm:grid-cols-2 gap-4 mb-5">
+      <div className="flex items-center gap-4 bg-cream rounded-2xl border border-line p-4">
+        <button onClick={() => logoRef.current?.click()} className="relative w-16 h-16 rounded-[14px] bg-surface border-2 border-line-soft overflow-hidden hover:border-dark group shrink-0 cursor-pointer" aria-label="Загрузить логотип магазина">
+          {reg.shopLogo ? <img src={reg.shopLogo} className="w-full h-full object-cover" alt="Логотип магазина" /> : <span className="w-full h-full flex items-center justify-center font-display font-bold text-[22px] text-ink-mute">{(reg.shopName || "?")[0].toUpperCase()}</span>}
+          <span className="absolute inset-0 bg-dark/50 text-cream opacity-0 group-hover:opacity-100 flex items-center justify-center"><Camera size={16} /></span>
+        </button>
+        <div className="min-w-0">
+          <p className="font-display font-bold text-[13.5px] text-ink">Логотип магазина</p>
+          <p className="text-[11.5px] text-ink-soft">Шапка кабинета, карточки товаров, /masters, мини-сайт</p>
+          <div className="flex gap-3 mt-1">
+            <button onClick={() => logoRef.current?.click()} className="text-[11.5px] font-bold text-accent-deep underline cursor-pointer">Загрузить</button>
+            {reg.shopLogo && <button onClick={() => reg.setInfo({ shopLogo: "" })} className="text-[11.5px] text-error flex items-center gap-1 cursor-pointer"><X size={11} /> Удалить</button>}
+          </div>
         </div>
-        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0] || undefined)} />
+        <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0], "shopLogo")} />
+      </div>
+      <div className="flex items-center gap-4 bg-cream rounded-2xl border border-line p-4">
+        <button onClick={() => masterRef.current?.click()} className="relative w-16 h-16 rounded-full bg-surface border-2 border-line-soft overflow-hidden hover:border-dark group shrink-0 cursor-pointer" aria-label="Загрузить аватар мастера">
+          {reg.masterAvatar ? <img src={reg.masterAvatar} className="w-full h-full object-cover" alt="Аватар мастера" /> : <span className="w-full h-full flex items-center justify-center font-display font-bold text-[22px] text-ink-mute">{(reg.masterName || reg.shopName || "?")[0].toUpperCase()}</span>}
+          <span className="absolute inset-0 bg-dark/50 text-cream opacity-0 group-hover:opacity-100 flex items-center justify-center"><Camera size={16} /></span>
+        </button>
+        <div className="min-w-0">
+          <p className="font-display font-bold text-[13.5px] text-ink">Аватар мастера</p>
+          <p className="text-[11.5px] text-ink-soft">Мини-сайт мастерской, подписи отзывов, карточка на /masters</p>
+          <div className="flex gap-3 mt-1">
+            <button onClick={() => masterRef.current?.click()} className="text-[11.5px] font-bold text-accent-deep underline cursor-pointer">Загрузить</button>
+            {reg.masterAvatar && <button onClick={() => reg.setInfo({ masterAvatar: "" })} className="text-[11.5px] text-error flex items-center gap-1 cursor-pointer"><X size={11} /> Удалить</button>}
+          </div>
+        </div>
+        <input ref={masterRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0], "masterAvatar")} />
       </div>
     </div>
   );

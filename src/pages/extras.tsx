@@ -852,7 +852,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
       {/* шапка кабинета */}
       <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
-        <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream overflow-hidden" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : s.shopName[0]?.toUpperCase()}</span>
+        <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream overflow-hidden" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{(s.shopLogo || s.masterAvatar || user?.avatar) ? <img src={(s.shopLogo || s.masterAvatar || user?.avatar) as string} className="w-full h-full object-cover" /> : s.shopName[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
@@ -1169,7 +1169,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           </div>
           <div className="bg-surface rounded-2xl shadow-card p-6">
             <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-ai" /> Рекомендации по ценам</p>
-            <p className="text-[13.5px] text-ink-soft leading-relaxed">Ваши товары в категории «{prod.category}» в среднем на 8% дороже рыночных. Снижение цены на 5% может поднять конверсию до 6%.</p>
+            <p className="text-[13.5px] text-ink-soft leading-relaxed">{(() => { const mine = marketProducts().filter((x) => x.id.startsWith("sp-")); const avgMine = mine.length ? mine.reduce((a, b) => a + b.price, 0) / mine.length : 0; const cat = marketProducts().filter((x) => x.categoryId === (mine[0]?.categoryId || "")); const avgCat = cat.length ? cat.reduce((a, b) => a + b.price, 0) / cat.length : 0; if (!mine.length || !avgCat) return <span>Ценовой совет появится, когда на витрине будут ваши товары и товары категории для сравнения.</span>; const diff = Math.round(((avgMine - avgCat) / avgCat) * 100); return <span>Средняя цена ваших товаров: <strong className="text-ink">{fmt(Math.round(avgMine))}</strong>, по категории: <strong className="text-ink">{fmt(Math.round(avgCat))}</strong> ({diff >= 0 ? `+${diff}%` : `${diff}%`}). Коридор максимальной конверсии: ±10% от средней по категории.</span>; })()}</p>
             {plan.forecasts && <p className="text-[13.5px] text-ink-soft leading-relaxed mt-3 pt-3 border-t border-line-soft"><strong className="text-ink">Прогноз:</strong> при текущей динамике выручка следующего месяца ≈ {fmt(Math.round(turnover * 1.18))}.</p>}
           </div>
           <div className="bg-surface rounded-2xl shadow-card p-6">
@@ -1190,8 +1190,10 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               const prod = marketProducts().find((x) => x.id === pid);
               return (
                 <div key={pid} className="flex justify-between gap-3 py-2 border-b border-line-soft last:border-0 text-[13.5px]">
-                  <span className="text-ink-soft">{i + 1}. {prod?.name || pid}</span>
-                  <span className="font-bold text-ink">{qty} шт</span>
+                  <span className="text-ink-soft flex-1 min-w-0 truncate">{i + 1}. {prod?.name || pid}</span>
+                  <span className="text-ink-mute whitespace-nowrap">{(prod as any)?.views || 0} просм.</span>
+                  <span className="text-ink-mute whitespace-nowrap">конв. {(prod as any)?.views ? Math.round((qty / ((prod as any)?.views || 1)) * 100) : 0}%</span>
+                  <span className="font-bold text-ink whitespace-nowrap">{qty} шт</span>
                 </div>
               );
             })}
