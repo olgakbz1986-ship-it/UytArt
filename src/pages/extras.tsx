@@ -1205,6 +1205,28 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           catMap[cat] = (catMap[cat] || 0) + ((pr?.price || 0) * it.qty);
         }));
         const catList = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+        const aiTips: { icon: string; title: string; text: string }[] = [];
+        const myGoods = marketProducts().filter((x) => x.id.startsWith("sp-"));
+        if (myGoods.length === 0) aiTips.push({ icon: "📦", title: "Запустите витрину", text: "На витрине нет ваших товаров — создайте первую карточку, чтобы аналитика и советы ожили." });
+        if (totalViews >= 20 && cartAdds === 0) aiTips.push({ icon: "👀", title: "Просмотры есть, корзин нет", text: `Карточки посмотрели ${totalViews} раз, но в корзину не добавили ни разу: улучшите главное фото и первое предложение цены.` });
+        if (cartAdds > 0 && curOrders / cartAdds < 0.3) aiTips.push({ icon: "🛒", title: "Корзины не доходят до заказа", text: `Только ${Math.round((curOrders / cartAdds) * 100)}% корзин становятся заказами: проверьте цену доставки и сроки отправки.` });
+        if (conv > 0 && conv < 1 && totalViews >= 30) aiTips.push({ icon: "📉", title: `Конверсия ${conv}% — ниже рынка`, text: "Средняя конверсия маркетплейса 2-4%. Добавьте фото в интерьере и короткое видео изделия." });
+        const avgMine = myGoods.length ? myGoods.reduce((a, b) => a + b.price, 0) / myGoods.length : 0;
+        const catGoods = marketProducts().filter((x) => x.categoryId === (myGoods[0]?.categoryId || ""));
+        const avgCat = catGoods.length ? catGoods.reduce((a, b) => a + b.price, 0) / catGoods.length : 0;
+        if (avgMine && avgCat) {
+          const diff = Math.round(((avgMine - avgCat) / avgCat) * 100);
+          if (diff > 10) aiTips.push({ icon: "💰", title: `Цена на ${diff}% выше рынка`, text: `Средняя цена категории ${fmt(Math.round(avgCat))}: снижение на 5-7% обычно даёт рост конверсии.` });
+          else if (diff < -10) aiTips.push({ icon: "📈", title: `Цена на ${-diff}% ниже рынка`, text: `Категория в среднем ${fmt(Math.round(avgCat))}: плавный рост цены на 5% часто проходит без потери заказов.` });
+          else aiTips.push({ icon: "✅", title: "Цена в рынке", text: `Ваши цены в коридоре ±10% от среднего категории (${fmt(Math.round(avgCat))}) — зона максимальной конверсии.` });
+        }
+        if (topItems.length > 0 && curRevenue > 0) {
+          const topProd = marketProducts().find((x) => x.id === topItems[0][0]);
+          const topShare = Math.round((((topProd?.price || 0) * topItems[0][1]) / curRevenue) * 100);
+          if (topShare >= 60) aiTips.push({ icon: "🎯", title: `Один товар = ${topShare}% выручки`, text: `«${topProd?.name || topItems[0][0]}» тянет почти всю выручку: развивайте соседние товары, чтобы снизить риск.` });
+        }
+        if (peakDay) aiTips.push({ icon: "📅", title: `Пиковый день — ${peakDay}`, text: "Публикуйте новинки и планируйте акции на этот день недели." });
+        if (forecast30 > 0) aiTips.push({ icon: "🔮", title: `Прогноз 30 дней ≈ ${fmt(forecast30)}`, text: `Экстраполяция фактической выручки (${activeDays} дн. активности): удержите темп — месяц закроется на этой цифре.` });
         return (
           <div className="fade-up space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-surface rounded-2xl shadow-card px-5 py-3">
@@ -1301,11 +1323,29 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                 )}
               </div>
 
-              <div className="bg-surface rounded-2xl shadow-card p-6">
-                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-ai" /> Рекомендации</p>
-                <p className="text-[13.5px] text-ink-soft leading-relaxed">{(() => { const mine = marketProducts().filter((x) => x.id.startsWith("sp-")); const avgMine = mine.length ? mine.reduce((a, b) => a + b.price, 0) / mine.length : 0; const cat = marketProducts().filter((x) => x.categoryId === (mine[0]?.categoryId || "")); const avgCat = cat.length ? cat.reduce((a, b) => a + b.price, 0) / cat.length : 0; if (!mine.length || !avgCat) return <span>Ценовой совет появится, когда на витрине будут ваши товары и товары категории для сравнения.</span>; const diff = Math.round(((avgMine - avgCat) / avgCat) * 100); return <span>Средняя цена ваших товаров: <strong className="text-ink">{fmt(Math.round(avgMine))}</strong>, по категории: <strong className="text-ink">{fmt(Math.round(avgCat))}</strong> ({diff >= 0 ? `+${diff}%` : `${diff}%`}). Коридор максимальной конверсии: ±10% от средней.</span>; })()}</p>
-                {peakDay && <p className="text-[12.5px] text-ink-soft mt-3 pt-3 border-t border-line-soft">📅 <strong className="text-ink">Пиковый день недели:</strong> {peakDay} — планируйте акции и рассылки на этот день.</p>}
-                {plan.forecasts && (forecast30 > 0 ? <p className="text-[12.5px] text-ink-soft mt-2"><strong className="text-ink">Прогноз 30 дней:</strong> ≈ {fmt(forecast30)} (экстраполяция фактической выручки).</p> : <p className="text-[12.5px] text-ink-soft mt-2"><strong className="text-ink">Прогноз:</strong> появится после 7 дней активных продаж.</p>)}
+              <div className="bg-surface rounded-2xl shadow-card p-6 border-2 border-ai/25">
+                <p className="font-display font-bold text-[16px] text-ink mb-1 flex items-center gap-2"><Sparkles size={17} className="text-ai" /> ИИ-аналитик</p>
+                <p className="text-[11.5px] text-ink-mute mb-4">Персональные рекомендации по вашим данным за выбранный период</p>
+                {!plan.forecasts ? (
+                  <div className="text-center py-4">
+                    <p className="text-[28px] mb-2">🔒</p>
+                    <p className="text-[13px] font-bold text-ink mb-1">ИИ-аналитик доступен с тарифа «Топ-мастер»</p>
+                    <p className="text-[12px] text-ink-mute">Умные советы по росту продаж на основе ваших данных. Кнопка «Сменить тариф» — в шапке кабинета.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {aiTips.length === 0 && <p className="text-[13px] text-ink-soft">Данных пока мало — советы появятся после первых просмотров и продаж.</p>}
+                    {aiTips.map((t, ti) => (
+                      <div key={ti} className="flex gap-2.5 rounded-xl bg-cream/70 border border-line-soft p-3">
+                        <span className="text-[15px] shrink-0">{t.icon}</span>
+                        <div>
+                          <p className="text-[12.5px] font-bold text-ink">{t.title}</p>
+                          <p className="text-[12px] text-ink-soft leading-relaxed">{t.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
