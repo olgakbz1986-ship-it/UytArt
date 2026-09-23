@@ -9,7 +9,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award } from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp } from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -18,6 +18,7 @@ import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById,
   SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX,
 } from "../lib/seller";
+import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
 import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
@@ -751,6 +752,19 @@ export function SellerDashboardPage() {
   const [bulk, setBulk] = useState<string[]>([]);
   const [teamMember, setTeamMember] = useState({ name: "", email: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const finance = useFinance();
+  const available = selectAvailable(finance);
+  const held = selectHeld(finance);
+  const inTransit = selectInTransit(finance);
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [newMethodType, setNewMethodType] = useState<PayoutMethodType>("card");
+  const [newMethodMask, setNewMethodMask] = useState("");
+  useEffect(() => {
+    finance.tick();
+    const id = setInterval(() => finance.tick(), 5000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => { finance.tick(); }, [finance.ledger.length, finance.deliveries.length, finance.payouts.length]);
   const [withdrawSum, setWithdrawSum] = useState("");
 
   /* настройки: тема и уведомления — глобальные и персистентные */
@@ -1117,57 +1131,114 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {/* ФИНАНСЫ */}
       {tab === "finance" && (
-        <div className="fade-up">
-          <div className="grid sm:grid-cols-3 gap-3 mb-5">
-            <div className="bg-surface rounded-2xl shadow-card p-5">
-              <p className="text-[12px] text-ink-mute">Оборот</p>
-              <p className="font-display font-extrabold text-[24px] text-ink mt-1">{fmt(turnover)}</p>
+        <div className="fade-up space-y-4">
+          <div className="bg-surface rounded-2xl shadow-card px-5 py-3 flex items-center justify-between">
+            <div>
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><Banknote size={17} className="text-accent-deep" /> Финансы</p>
+              <p className="text-[11.5px] text-ink-mute mt-0.5">Эскроу-модель: деньги покупателя под защитой платформы до выдачи СДЭК</p>
             </div>
-            <div className="bg-surface rounded-2xl shadow-card p-5">
-              <p className="text-[12px] text-ink-mute">Комиссия платформы</p>
-              <p className="font-display font-extrabold text-[24px] text-accent-deep mt-1">{fmt(commission)}</p>
+            <Btn size="sm" disabled={available <= 0} onClick={() => setWithdrawOpen(true)}><Wallet size={14} /> Вывести</Btn>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div className="bg-surface rounded-2xl shadow-card p-5 border-l-4 border-[#4d7327]">
+              <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#4d7327]" />Доступно к выводу</p>
+              <p className="font-display font-extrabold text-[24px] text-ink mt-1.5">{fmt(available)}</p>
+              <p className="text-[11.5px] text-ink-mute mt-1">Заказы, выпущенные по выдаче СДЭК</p>
             </div>
-            <div className="bg-surface rounded-2xl shadow-card p-5">
-              <p className="text-[12px] text-ink-mute">К выводу</p>
-              <p className="font-display font-extrabold text-[24px] text-[#4d7327] mt-1">{fmt(balance)}</p>
-              <Btn size="sm" className="mt-3" disabled={balance <= 0} onClick={() => setWithdrawOpen(true)}><Wallet size={14} /> Вывести</Btn>
+            <div className="bg-surface rounded-2xl shadow-card p-5 border-l-4 border-accent-deep">
+              <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-accent-deep" />На защите</p>
+              <p className="font-display font-extrabold text-[24px] text-ink mt-1.5">{fmt(held)}</p>
+              <p className="text-[11.5px] text-ink-mute mt-1">Активные заказы в сейфе платформы</p>
+            </div>
+            <div className="bg-surface rounded-2xl shadow-card p-5 border-l-4 border-ai">
+              <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-ai" />В пути</p>
+              <p className="font-display font-extrabold text-[24px] text-ink mt-1.5">{fmt(inTransit)}</p>
+              <p className="text-[11.5px] text-ink-mute mt-1">Заявки на вывод, обработка ЮKassa</p>
             </div>
           </div>
+
           <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
-            <p className="font-display font-bold text-[16px] text-ink px-6 pt-5 pb-3">История транзакций</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px] min-w-[560px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-ink-mute border-y border-line-soft bg-cream/60">
-                    <th className="px-6 py-3 font-bold">Дата</th><th className="px-3 py-3 font-bold">Операция</th>
-                    <th className="px-3 py-3 font-bold text-right">Сумма</th><th className="px-3 py-3 font-bold text-right">Комиссия</th>
-                    <th className="px-6 py-3 font-bold text-right">Выплата</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line-soft">
-                  {acc.transactions.length === 0 && (
-                    <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
-                      <p className="text-[14px] font-bold text-ink mb-1">Операций пока нет</p>
-                      <p className="text-[13px] text-ink-soft">Продажи, комиссии и выплаты появятся здесь после первых заказов.</p>
-                    </div>
-                  )}
-                  {acc.transactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-cream/50 transition-colors">
-                      <td className="px-6 py-3 text-ink-mute whitespace-nowrap">{fmtDate(t.date)}</td>
-                      <td className="px-3 py-3 font-semibold text-ink">{t.kind === "sale" ? `Заказ ${t.orderId}` : `Вывод ${t.orderId}`}</td>
-                      <td className="px-3 py-3 text-right text-ink">{t.productPrice ? fmt(t.productPrice) : "—"}</td>
-                      <td className="px-3 py-3 text-right text-accent-deep font-semibold">{t.commissionAmount ? `−${fmt(t.commissionAmount)}` : "—"}</td>
-                      <td className={`px-6 py-3 text-right font-bold ${t.sellerPayout < 0 ? "text-error" : "text-[#4d7327]"}`}>{t.sellerPayout < 0 ? `−${fmt(-t.sellerPayout)}` : `+${fmt(t.sellerPayout)}`}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><Package size={17} className="text-accent-deep" /> Заказы в сейфе</p>
+              {finance.methods.length > 0 && <span className="text-[11.5px] text-ink-mute">Способов вывода: {finance.methods.length}</span>}
             </div>
+            {finance.holds.length === 0 ? (
+              <div className="px-6 pb-6 pt-2 text-center">
+                <p className="text-[30px] mb-1">🔒</p>
+                <p className="text-[13.5px] font-bold text-ink mb-1">В сейфе пока пусто</p>
+                <p className="text-[12.5px] text-ink-soft">Заказы покупателей появятся здесь автоматически и будут выпущены вам в момент «Выдан в ПВЗ СДЭК».</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-line-soft">
+                {finance.holds.map((h) => {
+                  const d = finance.deliveries.find((x) => x.orderId === h.orderId);
+                  const rate = COMMISSION_MATRIX[lt]?.[planId] ?? 15;
+                  const K = Math.round((h.amount * rate) / 100);
+                  const D = d ? d.cost : 0;
+                  const seller = h.amount - D - K;
+                  const statusLabel = h.status === "held" ? "Под защитой" : h.status === "frozen" ? "Заморожено (спор)" : h.status === "released" ? "Выпущено" : "Возвращено";
+                  const statusColor = h.status === "held" ? "bg-accent-deep/15 text-accent-deep" : h.status === "frozen" ? "bg-error/15 text-error" : h.status === "released" ? "bg-[#4d7327]/15 text-[#4d7327]" : "bg-ink-mute/15 text-ink-mute";
+                  return (
+                    <div key={h.orderId} className="px-6 py-4">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <p className="font-display font-bold text-[14px] text-ink">Заказ {h.orderId.slice(-6)}</p>
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-3 text-[12.5px] mb-2">
+                        <div><p className="text-ink-mute text-[10.5px]">Цена</p><p className="text-ink font-bold">{fmt(h.amount)}</p></div>
+                        <div><p className="text-ink-mute text-[10.5px]">СДЭК</p><p className="text-ink font-bold">{d ? `−${fmt(D)}` : "—"}</p></div>
+                        <div><p className="text-ink-mute text-[10.5px]">Комиссия {rate}%</p><p className="text-accent-deep font-bold">−{fmt(K)}</p></div>
+                        <div><p className="text-ink-mute text-[10.5px]">Вам</p><p className="text-[#4d7327] font-bold">{fmt(seller)}</p></div>
+                      </div>
+                      {d && (
+                        <div className="flex items-center gap-2 text-[11.5px] text-ink-soft pt-2 border-t border-line-soft">
+                          <Truck size={12} className="text-accent-deep shrink-0" />
+                          <span className="truncate">СДЭК <strong className="text-ink">{d.track}</strong> · {d.from || "—"} → {d.to || "—"} · {d.weight} кг · {d.status === "in_transit" ? "В пути" : d.status === "at_pvz" ? "В ПВЗ, ожидает покупателя" : "Выдан покупателю"}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
+            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><ArrowDownUp size={17} className="text-accent-deep" /> Ledger · движение каждой копейки</p>
+              <button onClick={() => setMethodOpen(true)} className="text-[11.5px] font-bold text-accent-deep underline cursor-pointer">Способы вывода</button>
+            </div>
+            {finance.ledger.length === 0 ? (
+              <div className="px-6 pb-6 pt-2 text-center">
+                <p className="text-[12.5px] text-ink-soft">Операций пока нет — первая оплата покупателя запустит сейф.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-line-soft">
+                {finance.ledger.slice(0, 30).map((e) => {
+                  const pos = e.type === "release_seller" || e.type === "payout_paid";
+                  const neg = e.type === "payout_hold" || e.type === "release_platform" || e.type === "release_cdek";
+                  return (
+                    <div key={e.id} className="px-6 py-3 flex items-center justify-between gap-4 text-[12.5px]">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center ${pos ? "bg-[#4d7327]/15 text-[#4d7327]" : neg ? "bg-accent-deep/15 text-accent-deep" : "bg-cream text-ink-mute"}`}>
+                          {pos ? <Plus size={13} /> : neg ? <Minus size={13} /> : <Wallet size={12} />}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-ink font-semibold truncate">{e.comment}</p>
+                          <p className="text-ink-mute text-[11px]">{fmtDate(e.ts)}{e.orderId ? ` · заказ ${e.orderId.slice(-6)}` : ""}</p>
+                        </div>
+                      </div>
+                      <span className={`font-bold whitespace-nowrap ${pos ? "text-[#4d7327]" : neg ? "text-accent-deep" : "text-ink"}`}>{pos ? "+" : neg ? "−" : ""}{fmt(e.amount)}</span>
+                    </div>
+                  );
+                })}
+                {finance.ledger.length > 30 && <p className="px-6 py-3 text-[11.5px] text-ink-mute text-center">Показаны последние 30 операций из {finance.ledger.length}</p>}
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      {/* АНАЛИТИКА */}
       {tab === "analytics" && (() => {
         const nowTs = Date.now();
         const periodMs = anaPeriod * 864e5;
@@ -1486,13 +1557,77 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {/* вывод средств */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Вывод средств">
-        <p className="text-[13px] text-ink-soft mb-4">Доступно: <strong className="text-ink">{fmt(balance)}</strong>. Деньги уйдут на расчётный счёт в течение 1–3 рабочих дней.</p>
-        <Field label="Сумма, ₽" required>
-          <input className="field" inputMode="numeric" value={withdrawSum} onChange={(e) => setWithdrawSum(e.target.value.replace(/\D/g, ""))} placeholder={String(balance)} />
-        </Field>
-        <Btn className="w-full mt-5" disabled={!+withdrawSum || +withdrawSum > balance} onClick={() => { acc.requestWithdrawal(+withdrawSum); setWithdrawSum(""); setWithdrawOpen(false); }}>
-          <Wallet size={16} /> Вывести
-        </Btn>
+        <p className="text-[13px] text-ink-soft mb-4">Доступно: <strong className="text-ink">{fmt(available)}</strong>. Комиссия за вывод — 0 ₽ для мастера. Минимум — 100 ₽.</p>
+        {finance.methods.length === 0 ? (
+          <div className="bg-cream rounded-xl p-4 text-center mb-4">
+            <p className="text-[13px] font-bold text-ink mb-1">Добавьте способ вывода</p>
+            <p className="text-[12px] text-ink-soft">Карта РФ, СБП, ЮMoney или расчётный счёт самозанятого/ИП.</p>
+            <button onClick={() => { setWithdrawOpen(false); setMethodOpen(true); }} className="text-[12px] font-bold text-accent-deep underline mt-2 cursor-pointer">Добавить способ</button>
+          </div>
+        ) : (
+          <>
+            <p className="text-[11.5px] font-bold uppercase tracking-wide text-ink-mute mb-2">Куда вывести</p>
+            <div className="space-y-2 mb-4 max-h-[200px] overflow-y-auto">
+              {finance.methods.map((m) => (
+                <label key={m.id} className="flex items-center gap-3 rounded-xl border border-line p-3 hover:border-accent cursor-pointer">
+                  <input type="radio" name="wMethod" value={m.id} defaultChecked={m.id === finance.methods[0].id} className="accent-accent-deep" />
+                  <span className="text-[18px]">{PAYOUT_METHOD_META[m.type].icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-bold text-ink truncate">{PAYOUT_METHOD_META[m.type].title}</p>
+                    <p className="text-[11.5px] text-ink-soft truncate">{m.mask}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <Field label="Сумма, ₽" required>
+              <input className="field" inputMode="numeric" value={withdrawSum} onChange={(e) => setWithdrawSum(e.target.value.replace(/\D/g, ""))} placeholder={String(available)} />
+            </Field>
+            <Btn className="w-full mt-5" disabled={!+withdrawSum || +withdrawSum < 100 || +withdrawSum > available} onClick={() => {
+              const mid = (document.querySelector('input[name="wMethod"]:checked') as HTMLInputElement)?.value;
+              if (!mid) { alert("Выберите способ вывода"); return; }
+              const err = finance.requestPayout(+withdrawSum, mid);
+              if (err) { alert(err); return; }
+              setWithdrawSum(""); setWithdrawOpen(false);
+            }}>
+              <Wallet size={16} /> Отправить заявку в ЮKassa
+            </Btn>
+          </>
+        )}
+      </Modal>
+
+      <Modal open={methodOpen} onClose={() => setMethodOpen(false)} title="Способы вывода">
+        <p className="text-[12.5px] text-ink-soft mb-4">Сохранённые реквизиты для выплат. Добавьте удобный способ — деньги будут уходить туда при заявке.</p>
+        {finance.methods.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {finance.methods.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 rounded-xl border border-line p-3">
+                <span className="text-[18px]">{PAYOUT_METHOD_META[m.type].icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12.5px] font-bold text-ink truncate">{PAYOUT_METHOD_META[m.type].title}</p>
+                  <p className="text-[11.5px] text-ink-soft truncate">{m.mask}</p>
+                </div>
+                <button onClick={() => finance.removeMethod(m.id)} className="text-[11.5px] text-error font-bold cursor-pointer">Удалить</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="border-t border-line-soft pt-4">
+          <p className="text-[11.5px] font-bold uppercase tracking-wide text-ink-mute mb-2">Добавить способ</p>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {(Object.keys(PAYOUT_METHOD_META) as PayoutMethodType[]).map((t) => (
+              <button key={t} onClick={() => setNewMethodType(t)} className={`text-left rounded-lg border p-2.5 cursor-pointer transition-colors ${newMethodType === t ? "border-accent-deep bg-cream" : "border-line hover:border-accent"}`}>
+                <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">{PAYOUT_METHOD_META[t].icon} {PAYOUT_METHOD_META[t].title}</p>
+                <p className="text-[10.5px] text-ink-mute">{PAYOUT_METHOD_META[t].hint}</p>
+              </button>
+            ))}
+          </div>
+          <Field label={newMethodType === "card" ? "Номер карты (последние 4 цифры)" : newMethodType === "sbp" ? "Номер телефона (+7...)" : newMethodType === "yoomoney" ? "Номер кошелька" : "Номер счёта (последние 6 цифр)"}>
+            <input className="field" value={newMethodMask} onChange={(e) => setNewMethodMask(e.target.value)} placeholder="Например: •••• 4521" />
+          </Field>
+          <Btn className="w-full mt-3" disabled={!newMethodMask.trim()} onClick={() => { finance.addMethod(newMethodType, newMethodMask.trim()); setNewMethodMask(""); }}>
+            <Plus size={14} /> Сохранить
+          </Btn>
+        </div>
       </Modal>
     </div>
       </div>
