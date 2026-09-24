@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin } from "lucide-react";
+import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing } from "lucide-react";
 import { marketProducts } from "../lib/market";
 import { CATEGORIES, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
@@ -10,6 +10,57 @@ import { useSellerReg } from "../lib/seller";
 import { GroupImg } from "./ui";
 
 /* ---------- контурный логотип-домик ---------- */
+import { useNotifyStore } from "../lib/notify";
+
+function NotifyBell() {
+  const items = useNotifyStore((s) => s.items);
+  const markRead = useNotifyStore((s) => s.markRead);
+  const markAll = useNotifyStore((s) => s.markAll);
+  const resolve = useNotifyStore((s) => s.resolve);
+  const [open, setOpen] = useState(false);
+  const unread = items.filter((i) => !i.read).length;
+  const kindIcon = (k: string) =>
+    k === "confirm" ? <UserCheck size={15} className="text-accent" /> :
+    k === "question" ? <HelpCircle size={15} className="text-ai" /> :
+    k === "alert" ? <BellRing size={15} className="text-error" /> :
+    <ClipboardList size={15} className="text-success" />;
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} aria-label="Уведомления" className="relative w-11 h-11 rounded-[10px] flex items-center justify-center text-ink hover:bg-line-soft transition-colors cursor-pointer">
+        <Bell size={21} />
+        {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{unread}</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[52px] w-[360px] max-h-[440px] overflow-auto bg-surface rounded-2xl shadow-card border border-line-soft z-50 p-3">
+          <div className="flex items-center justify-between px-2 pb-2">
+            <span className="text-[13px] font-bold text-ink">Уведомления</span>
+            <button onClick={markAll} className="text-[11.5px] font-semibold text-accent-deep hover:text-accent cursor-pointer">Прочитать все</button>
+          </div>
+          {items.length === 0 && <p className="text-[12.5px] text-ink-mute px-2 py-6 text-center">Пока тихо. Агент и сервис будут писать сюда.</p>}
+          {items.map((i) => (
+            <div key={i.id} onClick={() => markRead(i.id)} className={`rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"}`}>
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5">{kindIcon(i.kind)}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12.5px] font-bold text-ink leading-snug">{i.title}</p>
+                  <p className="text-[12px] text-ink-soft leading-snug mt-1">{i.text}</p>
+                  {i.kind === "confirm" && !i.resolved && (
+                    <div className="flex gap-2 mt-2.5">
+                      <button onClick={(e) => { e.stopPropagation(); resolve(i.id, "accepted"); }} className="h-8 px-3 rounded-[8px] bg-dark text-cream text-[11.5px] font-bold hover:bg-dark-deep cursor-pointer">Подтвердить</button>
+                      <button onClick={(e) => { e.stopPropagation(); resolve(i.id, "declined"); }} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[11.5px] font-bold hover:bg-line cursor-pointer">Отклонить</button>
+                    </div>
+                  )}
+                  {i.resolved && <p className={`text-[11px] font-bold mt-1.5 ${i.resolved === "accepted" ? "text-success" : "text-ink-mute"}`}>{i.resolved === "accepted" ? "Подтверждено ✓" : "Отклонено"}</p>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HouseMark({ size = 40, className = "" }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={`house-mark ${className}`} aria-hidden="true">
@@ -219,6 +270,7 @@ export function Header() {
           <Logo />
           <SmartSearch />
           <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <NotifyBell />
             <Link to="/cart" aria-label={`Корзина, товаров: ${cartCount}`} className="relative w-11 h-11 rounded-[10px] flex items-center justify-center text-ink hover:bg-line-soft transition-colors">
               <ShoppingBag size={21} />
               {cartCount > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{cartCount}</span>}
