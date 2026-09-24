@@ -1674,14 +1674,6 @@ export function AboutPage() {
     <div>
       {/* ---------- открытие: манифест ---------- */}
       <section className="relative overflow-hidden bg-dark text-cream">
-        {/* многослойный фон */}
-        <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 15% 20%, rgba(217,142,50,0.22) 0, transparent 45%), radial-gradient(circle at 85% 80%, rgba(45,95,76,0.5) 0, transparent 50%)" }} />
-        <img src={GROUP_IMG.home} alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.10] kb" />
-        <div className="absolute inset-0 bg-gradient-to-b from-dark/40 via-transparent to-dark" />
-        {/* контурный домик как фоновый паттерн */}
-        <svg className="absolute right-[-40px] top-1/2 -translate-y-1/2 w-[340px] h-[340px] text-cream/[0.06] hidden lg:block" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-          <path d="M7 19L20 7l13 12M10 18v13h20V18M17 31v-8a3 3 0 0 1 6 0v8" stroke="currentColor" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
 
         <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20 sm:py-28">
           <Reveal>
