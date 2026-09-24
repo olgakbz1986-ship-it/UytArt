@@ -64,7 +64,7 @@ export default function HomePage() {
             <div className="bg-surface rounded-2xl shadow-card p-12 text-center">
               <p className="text-[40px] mb-3">🏺</p>
               <p className="font-display font-bold text-[18px] text-ink mb-2">Здесь появятся первые хиты</p>
-              <p className="text-[13.5px] text-ink-soft max-w-md mx-auto">Мастерские только присоединяются к УютАрт. Как только мастера выставят товары — лучшие из них будут на этой странице.</p>
+              <p className="text-[13.5px] text-ink-soft max-w-md mx-auto">Мастерские только присоединяются к Quantiform. Как только мастера выставят товары — лучшие из них будут на этой странице.</p>
               <Link to="/masters" className="inline-flex items-center gap-2 mt-6 h-11 px-6 rounded-[10px] bg-dark text-cream text-[13.5px] font-bold hover:bg-dark-deep transition-colors">Смотреть мастерские <ArrowRight size={15} /></Link>
             </div>
           ) : (

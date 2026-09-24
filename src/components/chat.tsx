@@ -58,7 +58,7 @@ export function ChatModal({ open, onClose, kind, product, order }: {
     if (!text.trim()) return;
     const name = role === "buyer" ? (user?.name || "Покупатель") : (product ? "Мастер" : "Продавец");
     const res = send(key, role, name, text.trim());
-    if (res.blocked) setWarn("Общение и оплата происходят только внутри УютАрт для гарантии безопасной сделки и защиты от мошенников.");
+    if (res.blocked) setWarn("Общение и оплата происходят только внутри Quantiform для гарантии безопасной сделки и защиты от мошенников.");
     else setWarn(null);
     setCustomText("");
     setCustomOpen(false);
@@ -99,7 +99,7 @@ export function ChatModal({ open, onClose, kind, product, order }: {
           </p>
         )}
         {msgs.map((m) =>
-          m.role === "seller" && m.name === "УютАрт" ? (
+          m.role === "seller" && m.name === "Quantiform" ? (
             <div key={m.id} className="flex items-center gap-2 text-[12.5px] text-ink-soft bg-ai-soft rounded-[10px] px-3.5 py-2.5">
               <Archive size={14} className="shrink-0 text-ai" /> {m.text}
             </div>

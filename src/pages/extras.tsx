@@ -1686,7 +1686,7 @@ export function AboutPage() {
         <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20 sm:py-28">
           <Reveal>
             <p className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-accent mb-6">
-              <span className="w-6 h-px bg-accent" /> УютАрт — маркетплейс нового поколения
+              <span className="w-6 h-px bg-accent" /> Quantiform — маркетплейс нового поколения
             </p>
           </Reveal>
           <Reveal delay={80}>
@@ -1697,14 +1697,14 @@ export function AboutPage() {
           </Reveal>
           <Reveal delay={160}>
             <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-8">
-              УютАрт создан с одной амбициозной целью: изменить то, как люди находят, создают и покупают уникальные вещи.
+              Quantiform создан с одной амбициозной целью: изменить то, как люди находят, создают и покупают уникальные вещи.
               Мы наблюдали, как гиганты e-commerce превратили покупку товаров в безликий конвейер, где миллионы одинаковых
               SKU теряются в алгоритмах. А соцсети дали вдохновение, но не дали инструмента для его реализации.
             </p>
           </Reveal>
           <Reveal delay={240}>
             <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-5">
-              Мы закрываем этот разрыв. УютАрт — это первая в России вертикальная экосистема нового поколения, где
+              Мы закрываем этот разрыв. Quantiform — это первая в России вертикальная экосистема нового поколения, где
               передовые технологии искусственного интеллекта встречаются с талантами мастеров со всей страны. Мы объединяем
               широкий ассортимент уникальных товаров, возможность индивидуальных заказов и интеллектуальный подбор в едином
               пространстве. Мы превращаем хаотичный поиск в осмысленный процесс создания вашего идеального мира.
@@ -1750,7 +1750,7 @@ export function AboutPage() {
         <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
           <Reveal>
             <div className="max-w-3xl mb-14">
-              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Почему УютАрт</p>
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Почему Quantiform</p>
               <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">Это будущее e-commerce нового поколения</h2>
               <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
                 Мы проанализировали лучшие мировые практики (от Etsy и Westwing до Houzz и Pinterest) и создали решение,
@@ -1781,7 +1781,7 @@ export function AboutPage() {
                   <div className="flex items-center gap-2.5 pb-4 border-b border-line-soft">
                     <span className="w-9 h-9 rounded-full bg-ai-soft text-ai flex items-center justify-center"><Sparkles size={17} /></span>
                     <div>
-                      <p className="text-[13.5px] font-bold text-ink">AI-ассистент УютАрт</p>
+                      <p className="text-[13.5px] font-bold text-ink">AI-ассистент Quantiform</p>
                       <p className="text-[11px] text-success flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" /> помнит ваш стиль</p>
                     </div>
                   </div>
@@ -1846,7 +1846,7 @@ export function AboutPage() {
                   <PillarNum n="03" icon={Boxes} />
                   <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Широкий ассортимент уникальных товаров</h3>
                   <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
-                    Мы не ограничиваемся одной категорией. УютАрт — это экосистема, где представлены интерьерный декор и
+                    Мы не ограничиваемся одной категорией. Quantiform — это экосистема, где представлены интерьерный декор и
                     авторская мебель, уникальная одежда и аксессуары ручной работы, ювелирные изделия, керамика, текстиль,
                     предметы искусства, персональные подарки и товары для хобби — и многое другое от проверенных мастеров и
                     небольших производств.
@@ -1887,7 +1887,7 @@ export function AboutPage() {
                   <PillarNum n="04" icon={ShieldCheck} />
                   <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Бескомпромиссный кураторский отбор</h3>
                   <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
-                    Мы не гонимся за миллионами SKU. Каждый продавец на УютАрт проходит строгую верификацию (ИНН, ОГРН,
+                    Мы не гонимся за миллионами SKU. Каждый продавец на Quantiform проходит строгую верификацию (ИНН, ОГРН,
                     выписки), а каждый товар — ручную и автоматическую премодерацию. Мы гарантируем, что за каждым лотом
                     стоит реальный мастер, дизайнер или небольшое производство, а не перекупщик с масс-маркета.
                   </p>
@@ -2014,7 +2014,7 @@ export function AboutPage() {
               <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Присоединяйтесь</p>
               <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">К эволюции покупок</h2>
               <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
-                УютАрт — это больше, чем маркетплейс. Это экосистема, где технологии встречаются с творчеством, а каждый
+                Quantiform — это больше, чем маркетплейс. Это экосистема, где технологии встречаются с творчеством, а каждый
                 покупатель становится соавтором своего уникального мира.
               </p>
             </div>
@@ -2039,7 +2039,7 @@ export function AboutPage() {
 
           <Reveal delay={200}>
             <p className="font-lux text-[clamp(26px,4vw,46px)] leading-[1.2] text-ink text-center mt-20 max-w-3xl mx-auto">
-              УютАрт. Где технологии встречаются с <span className="text-accent-deep">искусством создания уникального</span>.
+              Quantiform. Где технологии встречаются с <span className="text-accent-deep">искусством создания уникального</span>.
             </p>
           </Reveal>
         </div>
@@ -2122,7 +2122,7 @@ export function LegalIndexPage() {
   return (
     <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Правовая информация</h1>
-      <p className="text-[14px] text-ink-soft mb-8">Здесь собраны все юридические документы и правила платформы УютАрт.</p>
+      <p className="text-[14px] text-ink-soft mb-8">Здесь собраны все юридические документы и правила платформы Quantiform.</p>
       <div className="grid sm:grid-cols-2 gap-4">
         {LEGAL_INDEX.map((d) => (
           <Link key={d.to} to={d.to}

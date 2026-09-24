@@ -140,7 +140,7 @@ export const useChatStore = create<ChatState>()(
           const d = s.dialogs[key];
           if (!d) return s;
           const sys: ChatMessage = {
-            id: "m-" + Date.now(), role: "seller", name: "УютАрт",
+            id: "m-" + Date.now(), role: "seller", name: "Quantiform",
             text: "Чат по этому заказу завершён. Спасибо за покупку! Если с товаром есть проблемы, используйте кнопку «Сообщить о проблеме».",
             createdAt: now(),
           };

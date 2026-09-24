@@ -35,7 +35,7 @@ export function AuthPage() {
     if (code !== "4242") { setError("Неверный код. Для демо введите 4242"); return; }
     setBusy(true);
     setTimeout(() => {
-      login({ id: "u" + Date.now(), name: "Покупатель УютАрт", email: phone + "@starttechpro.ru", phone, role: "buyer" });
+      login({ id: "u" + Date.now(), name: "Покупатель Quantiform", email: phone + "@starttechpro.ru", phone, role: "buyer" });
       nav("/profile");
     }, 500);
   };
@@ -63,7 +63,7 @@ export function AuthPage() {
     <div className="max-w-[860px] mx-auto px-4 sm:px-6 py-12">
       {!regOpen ? (
         <div className="max-w-[480px] mx-auto fade-up">
-          <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Вход в УютАрт</h1>
+          <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Вход в Quantiform</h1>
           <p className="text-[14px] text-ink-soft mb-8">Корзина, избранное и бонусы сохранятся в аккаунте.</p>
 
           <div className="inline-flex bg-line-soft rounded-[12px] p-1.5 mb-7">
