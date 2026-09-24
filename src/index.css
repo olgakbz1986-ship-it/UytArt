@@ -344,26 +344,3 @@ input[type="checkbox"], input[type="radio"] {
 }
 .kb-zoom { animation: kbZoom 18s ease-in-out infinite; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { .kb-zoom { animation: none; } }
-
-/* ========== Стеклянная текстура УютАрт ========== */
-body {
-  background-image: url("/img/glass_light.jpg");
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-blend-mode: multiply;
-  animation: glassDrift 90s ease-in-out infinite alternate;
-}
-.bg-dark {
-  background-image: linear-gradient(rgba(29,56,45,0.72), rgba(29,56,45,0.72)), url("/img/glass_dark.jpg");
-  background-size: cover, cover;
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, center;
-}
-@keyframes glassDrift {
-  from { background-position: 0% 0%; }
-  to { background-position: 0% 100%; }
-}
-@media (prefers-reduced-motion: reduce) {
-  body { animation: none; }
-}
