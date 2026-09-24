@@ -23,10 +23,14 @@ export function HouseMark({ size = 40, className = "" }: { size?: number; classN
 export function Logo() {
   return (
     <Link to="/" className="group flex items-center gap-2.5 shrink-0" aria-label="Quantiform — на главную">
-      <img src="/favicon.svg" alt="" className="w-9 h-9 group-hover:rotate-12 transition-transform" />
+      <svg viewBox="0 0 64 64" className="logo-q w-9 h-9" fill="none" aria-hidden="true">
+          <rect className="logo-q-frame" x="7" y="9" width="46" height="46" rx="13" stroke="#1e3a2f" strokeWidth="1.8" opacity="0.85" />
+          <path className="logo-q-ring" d="M48.8 38.8 A 20 20 0 1 0 36.8 50.8" stroke="#1e3a2f" strokeWidth="5.5" strokeLinecap="round" />
+          <path className="logo-q-tail" d="M38 40 L54 56" stroke="#d98e32" strokeWidth="5.5" strokeLinecap="round" />
+        </svg>
       <span className="leading-tight">
-        <span className="block font-display font-bold text-[18px] text-ink tracking-tight">Quantiform</span>
-        <span className="block text-[9px] font-semibold tracking-[0.14em] uppercase text-ink-mute">marketplace</span>
+        <span className="block font-display font-medium text-[18px] text-ink tracking-tight">Quantiform</span>
+        <span className="block text-[9px] font-semibold tracking-[0.14em] uppercase text-ink-mute">AI marketplace</span>
       </span>
     </Link>
   );

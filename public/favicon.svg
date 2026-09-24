@@ -1,17 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <!-- три грани изометрического куба (плоский вектор, без градиентов) -->
-  <!-- верхняя грань -->
-  <polygon points="32,12 52,24 32,32 12,24" fill="#2d5f4c"/>
-  <!-- левая грань -->
-  <polygon points="12,24 32,32 32,56 12,44" fill="#244534"/>
-  <!-- правая грань -->
-  <polygon points="32,32 52,24 52,44 32,56" fill="#1e3a2f"/>
-  <!-- шестигранный контур -->
-  <polygon points="32,12 52,24 52,44 32,56 12,44 12,24" fill="none" stroke="#1e3a2f" stroke-width="1.5" stroke-linejoin="round"/>
-  <!-- внутренние линии граней -->
-  <line x1="32" y1="32" x2="32" y2="56" stroke="#1e3a2f" stroke-width="1" opacity="0.5"/>
-  <line x1="32" y1="32" x2="12" y2="24" stroke="#1e3a2f" stroke-width="1" opacity="0.5"/>
-  <line x1="32" y1="32" x2="52" y2="24" stroke="#1e3a2f" stroke-width="1" opacity="0.5"/>
-  <!-- янтарный хвост под 45° — пересекает правую грань, читается как Q -->
-  <line x1="38" y1="46" x2="58" y2="66" stroke="#d98e32" stroke-width="5" stroke-linecap="round"/>
+  <rect x="7" y="9" width="46" height="46" rx="13" stroke="#1e3a2f" stroke-width="1.8" opacity="0.85"/>
+  <path d="M48.8 38.8 A 20 20 0 1 0 36.8 50.8" stroke="#1e3a2f" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M38 40 L54 56" stroke="#d98e32" stroke-width="5.5" stroke-linecap="round"/>
 </svg>
