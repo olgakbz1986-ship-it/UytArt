@@ -11,6 +11,7 @@ import { GroupImg } from "./ui";
 
 /* ---------- контурный логотип-домик ---------- */
 import { useNotifyStore } from "../lib/notify";
+import { startAgentWorker } from "../lib/agent";
 
 function NotifyBell() {
   const items = useNotifyStore((s) => s.items);
