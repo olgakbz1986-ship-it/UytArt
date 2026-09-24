@@ -7,6 +7,7 @@ import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscri
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
 import { useMarketStore } from "./extras";
+import AgentPanel from "../components/agent-panel";
 import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } from "../components/ui";
 import { usePrefsStore } from "../lib/prefs";
 import { ChatModal } from "../components/chat";
@@ -638,6 +639,8 @@ export default function ProfilePage() {
           </SettingsSection>
 
           {/* Уведомления — всем */}
+          <AgentPanel />
+
           <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
             <div className="space-y-3.5">
               {([["email", "Email", "Статусы заказов, чеки и ответы мастеров"], ["push", "Push", "Снижение цен, бонусы и акции"], ["telegram", "Telegram-бот", "Самое важное в мессенджер"]] as const).map(([k, t, d]) => (
