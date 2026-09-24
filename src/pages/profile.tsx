@@ -688,9 +688,6 @@ export default function ProfilePage() {
           </SettingsSection>
 
           {/* Куратор — «Премиум» */}
-          <SettingsSection title="Персональный куратор" icon={<Sparkles size={15} />} minLevel={3} level={tier.level} nextLabel="тариф «Премиум»" accent={tier.accent}>
-            <p className="text-[13px] text-ink-soft leading-relaxed">Ваш куратор — Анна. Приоритетная поддержка 24/7, помощь с подбором и индивидуальные предложения.</p>
-          </SettingsSection>
 
           <div className="bg-surface rounded-2xl shadow-card p-5">
             <p className="text-[13px] font-semibold text-ink mb-1 flex items-center gap-2"><CreditCard size={16} className="text-accent-deep" /> Тариф: {PLAN_NAME[buyerPlan]}</p>
