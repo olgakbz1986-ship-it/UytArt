@@ -22,11 +22,11 @@ export function HouseMark({ size = 40, className = "" }: { size?: number; classN
 
 export function Logo() {
   return (
-    <Link to="/" className="group flex items-center gap-2.5 shrink-0" aria-label="УютАрт — на главную">
-      <HouseMark size={34} className="text-dark" />
+    <Link to="/" className="group flex items-center gap-2.5 shrink-0" aria-label="Quantiform — на главную">
+      <img src="/favicon.svg" alt="" className="w-9 h-9 group-hover:rotate-12 transition-transform" />
       <span className="leading-tight">
-        <span className="block font-display font-bold text-[18px] text-ink">УютАрт</span>
-        <span className="block text-[9px] font-semibold tracking-[0.14em] uppercase text-ink-mute">AI-маркетплейс</span>
+        <span className="block font-display font-bold text-[18px] text-ink tracking-tight">Quantiform</span>
+        <span className="block text-[9px] font-semibold tracking-[0.14em] uppercase text-ink-mute">marketplace</span>
       </span>
     </Link>
   );
