@@ -392,3 +392,16 @@ body { background-attachment: fixed; }
   .logo-q-ring, .logo-q-tail, .logo-q-frame { animation: none; stroke-dashoffset: 0; }
   .group:hover .logo-q { transform: none; }
 }
+/* ========== Фирменный фон: хиро и тёмные блоки ========== */
+.bg-dark {
+  background-image: linear-gradient(rgba(20,40,30,0.8), rgba(20,40,30,0.8)), url("/img/hero-bg.jpg");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+.hero-bg {
+  background-image: linear-gradient(rgba(12,28,20,0.42), rgba(12,28,20,0.62)), url("/img/hero-bg.jpg");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}

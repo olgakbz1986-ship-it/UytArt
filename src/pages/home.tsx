@@ -12,7 +12,7 @@ export default function HomePage() {
   return (
     <div>
       {/* ---------- hero: слоган единым цветом, премиальный сериф, без CTA ---------- */}
-      <section className="relative overflow-hidden bg-dark text-cream">
+      <section className="hero-bg relative overflow-hidden bg-dark text-cream">
         <div className="absolute inset-0 opacity-[0.22]" style={{ backgroundImage: "radial-gradient(circle at 18% 28%, #D98E32 0, transparent 42%), radial-gradient(circle at 82% 72%, #2D5F4C 0, transparent 48%)" }} />
         <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20 sm:py-28 relative">
           <h1 className="font-lux text-[clamp(46px,6.2vw,80px)] leading-[1.02] text-cream fade-up" style={{ animationDelay: "60ms" }}>
