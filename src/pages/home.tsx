@@ -1,15 +1,13 @@
 import { Link } from "react-router-dom";
-import { ShieldCheck, Star, Wrench, ArrowRight, Sparkles } from "lucide-react";
+import { ShieldCheck, Star, Wrench, ArrowRight } from "lucide-react";
 import { fmt } from "../data/seed";
 import { marketProducts } from "../lib/market";
-import { useReviewStore } from "../lib/review";
 import { ProductGrid } from "../components/product";
-import { GroupImg, Reveal } from "../components/ui";
+import { Reveal } from "../components/ui";
 
 export default function HomePage() {
-  const featured = marketProducts().filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8).slice(0, 8);
-  const customMade = marketProducts().filter((p) => p.id.startsWith("sp-")).filter((p) => p.product_type === "custom_made").slice(0, 4);
-  const realReviews = useReviewStore((s) => s.reviews).filter((r) => r.status === "approved").slice(0, 3);
+  const sellerHits = marketProducts().filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8);
+  const featured = sellerHits.slice(0, 8);
 
   return (
     <div>
@@ -62,94 +60,18 @@ export default function HomePage() {
             </Link>
           </div>
         </Reveal>
-        <ProductGrid items={featured} />
-      </section>
-
-      {/* ---------- индивидуальное изготовление ---------- */}
-      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 pb-14">
-        <Reveal>
-          <div className="rounded-3xl overflow-hidden bg-dark text-cream relative">
-            <div className="absolute inset-0 opacity-25" style={{ backgroundImage: "radial-gradient(circle at 85% 15%, #D98E32 0, transparent 45%)" }} />
-            <div className="grid md:grid-cols-2 relative">
-              <div className="p-8 sm:p-12">
-                <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-accent mb-4">Custom-made</p>
-                <h2 className="font-display font-bold text-[clamp(24px,3vw,34px)] leading-tight">Вещь, которую сделают только для вас</h2>
-                <p className="text-cream/70 text-[14.5px] leading-relaxed mt-4 max-w-md">
-                  Мебель и зеркала по индивидуальным параметрам: мастер согласует эскиз в чате,
-                  а оплата пройдёт через безопасную сделку. Возврату такие изделия не подлежат —
-                  зато существуют в единственном экземпляре.
-                </p>
-                <Link to="/market" className="inline-flex items-center gap-2 mt-7 h-12 px-6 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep transition-colors">
-                  Разместить заказ <ArrowRight size={17} />
-                </Link>
-              </div>
-              <div className="grid grid-cols-2 gap-3 p-6 sm:p-8">
-                {customMade.map((p, i) => (
-                  <Link key={p.id} to={`/product/${p.slug}`} className={`group rounded-2xl overflow-hidden shadow-lift ${i % 2 ? "translate-y-4" : ""}`}>
-                    <div className="aspect-square">
-                      <GroupImg src={p.image} emoji={p.emoji} alt={p.name} pos={i + 2} />
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          {featured.length === 0 ? (
+            <div className="bg-surface rounded-2xl shadow-card p-12 text-center">
+              <p className="text-[40px] mb-3">🏺</p>
+              <p className="font-display font-bold text-[18px] text-ink mb-2">Здесь появятся первые хиты</p>
+              <p className="text-[13.5px] text-ink-soft max-w-md mx-auto">Мастерские только присоединяются к УютАрт. Как только мастера выставят товары — лучшие из них будут на этой странице.</p>
+              <Link to="/masters" className="inline-flex items-center gap-2 mt-6 h-11 px-6 rounded-[10px] bg-dark text-cream text-[13.5px] font-bold hover:bg-dark-deep transition-colors">Смотреть мастерские <ArrowRight size={15} /></Link>
             </div>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* ---------- отзывы ---------- */}
-      <section className="bg-cream border-t border-line-soft py-14">
-        <div className="max-w-[1280px] mx-auto px-4 sm:px-6">
-          <Reveal>
-            <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-accent-deep mb-2">Слово покупателям</p>
-            <h2 className="font-display font-bold text-[clamp(26px,3.4vw,38px)] text-ink mb-8">Почему нам доверяют</h2>
-          </Reveal>
-          {realReviews.length === 0 && (
-            <p className="text-[13.5px] text-ink-soft bg-cream rounded-[14px] px-5 py-6 text-center mb-4">Отзывы появятся после первых покупок — их оставляют только проверенные покупатели.</p>
+          ) : (
+            <ProductGrid items={featured} />
           )}
-          <div className="grid md:grid-cols-3 gap-4">
-            {realReviews.map((r, i) => (
-              <Reveal key={r.id} delay={i * 80}>
-                <figure className="bg-surface rounded-2xl shadow-card p-6 h-full flex flex-col">
-                  <div className="flex gap-0.5 mb-4">
-                    {[...Array(r.rating)].map((_, j) => <Star key={j} size={15} className="text-accent fill-accent" />)}
-                  </div>
-                  <blockquote className="font-quote text-[19px] leading-[1.45] text-ink flex-1">«{r.text}»</blockquote>
-                  <figcaption className="mt-5 flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[15px]">{r.userName[0]}</span>
-                    <span>
-                      <span className="block text-[13.5px] font-bold text-ink">{r.userName}</span>
-                      <span className="block text-[12px] text-ink-mute">проверенная покупка</span>
-                    </span>
-                  </figcaption>
-                </figure>
-              </Reveal>
-            ))}
-          </div>
-        </div>
       </section>
 
-      {/* ---------- мастера ---------- */}
-      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-14">
-        <div className="bg-dark rounded-[24px] p-10 text-center text-cream">
-          <h2 className="font-display font-bold text-[clamp(24px,3vw,34px)] mb-3">Мастера со всей России</h2>
-          <p className="text-[14px] text-cream/70 max-w-[560px] mx-auto mb-6">Первые мастерские присоединяются к УютАрт. Добавьте свои товары — и ваша мастерская появится здесь и в каталоге.</p>
-          <Link to="/seller/register" className="inline-flex h-[48px] px-7 items-center rounded-[12px] bg-accent text-ink font-bold hover:bg-accent-deep hover:text-cream transition-colors">Стать мастером</Link>
-        </div>
-      </section>
-
-      {/* ---------- CTA AI ---------- */}
-      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 pb-16">
-        <Reveal>
-          <Link to="/ai-assistant" className="group flex items-center justify-between gap-6 rounded-3xl bg-ai text-cream px-8 sm:px-12 py-10 hover:bg-dark-deep transition-colors">
-            <div>
-              <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.16em] text-cream/60 mb-3"><Sparkles size={15} /> AI-дизайнер</p>
-              <h2 className="font-display font-bold text-[clamp(22px,3vw,32px)] leading-tight">Опишите комнату — соберём образ из реальных товаров</h2>
-            </div>
-            <ArrowRight size={34} className="shrink-0 text-accent group-hover:translate-x-2 transition-transform" />
-          </Link>
-        </Reveal>
-      </section>
     </div>
   );
 }

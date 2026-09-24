@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, CreditCard, Smartphone, Wallet, CheckCircle2 } from "lucide-react";
@@ -103,6 +104,9 @@ export function CheckoutPage() {
   const buyerPlan2 = useSubStore((s) => s.getBuyerPlan(accountId2));
   const lim = buyerLimits(buyerPlan2);
   const nav = useNavigate();
+  const sess = useAppStore((s) => s.session);
+  useEffect(() => { if (!sess) nav("/auth"); }, [sess, nav]);
+  if (!sess) return null;
 
   const [addrId, setAddrId] = useState(addresses[0]?.id || "");
   const [deliveryId, setDeliveryId] = useState(DELIVERY[0].id);
