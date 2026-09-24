@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles } from "lucide-react";
+import { Bot, Send, Sparkles, Image as ImageIcon } from "lucide-react";
+import { ProductImg } from "./ui";
+import { PRODUCTS } from "../data/seed";
 import { useAgentStore } from "../lib/agent";
 import { AGENT_TEMPLATES } from "../lib/agent-kb";
 import { useAppStore } from "../lib/store";
@@ -13,6 +15,7 @@ export default function AgentPanel() {
   const tasks = useAgentStore((s) => s.tasks);
   const session = useAppStore((s) => s.session);
   const [input, setInput] = useState("");
+  const [photo, setPhoto] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   /* приветствие один раз */
@@ -33,7 +36,11 @@ export default function AgentPanel() {
       const low = text.toLowerCase();
       if (/фото|хочу вот это|похож/i.test(text)) {
         say(AGENT_TEMPLATES.photoAck);
-        const id = addTask({ kind: "search", title: "Визуальный поиск", payload: { query: text, count: 4 } });
+        const found = PRODUCTS.slice(0, 4);
+        setTimeout(() => {
+          say(`Нашёл ${found.length} похожих позиций. Если нужно точь-в-точь, могу оформить индивидуальный заказ.`);
+        }, 8500);
+        const id = addTask({ kind: "search", title: "Визуальный поиск", payload: { query: text, count: 4, products: found.map((p: any) => p.id) } });
         updateTask(id, { status: "working", steps: ["Принято к исполнению"] });
       } else if (/ремонт|интерьер|проект/i.test(text)) {
         say("Понял, это проект. Уточняю стиль, бюджет и объём — соберу концепт и корзину.");
@@ -46,7 +53,7 @@ export default function AgentPanel() {
   };
 
   const quick = [
-    { label: "🖼️ Хочу вот это (фото)", text: "Хочу вот это" },
+    { label: "🖼️ Хочу вот это (фото)", text: "Хочу вот это", withPhoto: true },
     { label: "🏠 Собери проект ремонта", text: "Собери проект ремонта" },
     { label: "📋 Правила возврата", text: "Как работает возврат?" },
   ];
@@ -79,10 +86,38 @@ export default function AgentPanel() {
         ))}
       </div>
 
+      {tasks.some(t => t.kind === "search" && t.status === "done") && (
+        <div className="px-5 py-4 bg-cream/30 border-t border-line-soft">
+          <p className="text-[12.5px] font-bold text-ink mb-3">Найденные товары:</p>
+          <div className="grid grid-cols-2 gap-3">
+            {PRODUCTS.slice(0, 4).map((p: any) => (
+              <div key={p.id} className="bg-surface rounded-xl p-2.5 border border-line-soft">
+                <ProductImg p={p} className="w-full h-24 rounded-lg mb-2" />
+                <p className="text-[11.5px] font-semibold text-ink leading-tight">{p.name}</p>
+                <p className="text-[12px] font-bold text-accent mt-1">{p.price.toLocaleString("ru-RU")} ₽</p>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => {
+            const id = addTask({ kind: "custom", title: "Индивидуальный заказ", payload: { products: PRODUCTS.slice(0, 4).map((p: any) => p.id), photo } });
+            updateTask(id, { status: "working", steps: ["Черновик создан"] });
+            say("Отлично, оформляю индивидуальный заказ с вашим фото. Через несколько секунд придёт подтверждение.");
+          }} className="w-full mt-3 h-10 rounded-[10px] bg-accent text-ink text-[13px] font-bold hover:bg-accent-deep cursor-pointer">
+            Оформить индивидуальный заказ
+          </button>
+        </div>
+      )}
+
       <div className="px-5 py-3 bg-surface border-t border-line-soft">
         <div className="flex gap-2 mb-3 flex-wrap">
           {quick.map((q) => (
-            <button key={q.label} onClick={() => { setInput(q.text); }} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[12px] font-semibold hover:bg-line cursor-pointer">{q.label}</button>
+            <button key={q.label} onClick={() => { 
+              setInput(q.text); 
+              if ((q as any).withPhoto) setPhoto("/img/hero-bg.jpg");
+            }} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[12px] font-semibold hover:bg-line cursor-pointer">
+              {(q as any).withPhoto && <ImageIcon size={12} className="inline mr-1" />}
+              {q.label}
+            </button>
           ))}
         </div>
         <div className="flex gap-2">

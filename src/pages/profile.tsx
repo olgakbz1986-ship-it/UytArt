@@ -1,6 +1,6 @@
 import { useState, useRef, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check } from "lucide-react";
+import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot} from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
@@ -13,7 +13,7 @@ import { usePrefsStore } from "../lib/prefs";
 import { ChatModal } from "../components/chat";
 import { ReviewModal, TicketModal } from "../components/review";
 
-type Tab = "orders" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
+type Tab = "orders" | "agent" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
 
 const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
 
@@ -200,6 +200,7 @@ export default function ProfilePage() {
 
   const TABS: { id: Tab; label: string; icon: typeof Package; locked?: boolean }[] = [
     { id: "orders", label: "Заказы", icon: Package },
+    { id: "agent", label: "Агент", icon: Bot },
     { id: "favorites", label: "Избранное", icon: Heart },
     { id: "concepts", label: "Мои концепты", icon: Sparkles, locked: !isPaid },
     { id: "prices", label: "Отслеживание цен", icon: BellRing, locked: !isPaid },
@@ -293,6 +294,10 @@ export default function ProfilePage() {
         <div className="min-w-0">
 
       {/* ЗАКАЗЫ */}
+      {tab === "agent" && (
+        <div className="fade-up"><AgentPanel /></div>
+      )}
+
       {tab === "orders" && (
         <div className="space-y-4 fade-up">
           {orders.length === 0 && (
@@ -639,7 +644,6 @@ export default function ProfilePage() {
           </SettingsSection>
 
           {/* Уведомления — всем */}
-          <AgentPanel />
 
           <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={tier.level} accent={tier.accent}>
             <div className="space-y-3.5">
