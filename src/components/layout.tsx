@@ -228,6 +228,7 @@ export function Header() {
   const cart = useAppStore((s) => s.cart);
   const session = useAppStore((s) => s.session);
   const logout = useAppStore((s) => s.logout);
+  useEffect(() => { startAgentWorker(); }, []);
   const sellerReg = useSellerReg();
   const [menuOpen, setMenuOpen] = useState(false);
   const [closing, setClosing] = useState(false);
