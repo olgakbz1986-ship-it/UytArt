@@ -36,11 +36,14 @@ interface AgentState {
   role: AgentRole;
   profile: AgentProfile;
   dialog: AgentMsg[];
+  dialogSeller: AgentMsg[];
   tasks: AgentTask[];
   journal: { id: string; action: string; at: number; resolved: "accepted" | "declined" }[];
   /* диалог */
   say: (text: string) => void;
   userSaid: (text: string) => void;
+  saySeller: (text: string) => void;
+  userSaidSeller: (text: string) => void;
   /* задачи */
   addTask: (t: Omit<AgentTask, "id" | "startedAt" | "steps" | "status">) => string;
   updateTask: (id: string, patch: Partial<AgentTask>) => void;
@@ -56,10 +59,13 @@ export const useAgentStore = create<AgentState>()(
       role: "buyer",
       profile: { style: [], palette: [], budget: 0, anti: [], feedbacks: [] },
       dialog: [],
+      dialogSeller: [],
       tasks: [],
       journal: [],
       say: (text) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] })),
       userSaid: (text) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "user", text, at: Date.now() }] })),
+      saySeller: (text) => set((s) => ({ dialogSeller: [...s.dialogSeller, { id: "ms-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] })),
+      userSaidSeller: (text) => set((s) => ({ dialogSeller: [...s.dialogSeller, { id: "ms-" + Date.now().toString(36), from: "user", text, at: Date.now() }] })),
       addTask: (t) => {
         const id = "t-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
         set((s) => ({ tasks: [{ ...t, id, startedAt: Date.now(), status: "queued", steps: [] }, ...s.tasks] }));

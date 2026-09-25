@@ -9,7 +9,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp } from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -737,11 +737,13 @@ const levelOf = (lt: SellerLegalType, planId: string) => {
    Кабинет продавца: товары (медиа + AI), заказы, финансы,
    аналитика, команда, настройки — гейтится тарифом
    ============================================================ */
+import AgentPanelSeller from "../components/agent-panel-seller";
+
 export function SellerDashboardPage() {
   const s = useSellerReg();
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
   const allOrders = useAppStore((s) => s.orders);
   const advanceStatus = useAppStore((s) => s.advanceStatus);
   const myOrders = allOrders.filter((o) => o.items.some((i) => i.productId.startsWith("sp-")));
@@ -867,6 +869,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
   const TABS = [
     { id: "products" as const, label: "Товары", icon: Boxes },
+    { id: "agent" as const, label: "Агент", icon: Bot },
     { id: "orders" as const, label: "Заказы", icon: FileText },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
@@ -973,6 +976,10 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         <div className="min-w-0">
 
       {/* ТОВАРЫ */}
+      {tab === "agent" && (
+        <div className="fade-up"><AgentPanelSeller /></div>
+      )}
+
       {tab === "products" && (
         <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
           <div className="bg-surface rounded-2xl shadow-card p-6">
