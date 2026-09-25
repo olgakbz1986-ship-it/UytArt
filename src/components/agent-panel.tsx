@@ -2,9 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, Send, Sparkles, Paperclip, X } from "lucide-react";
 import { ProductImg } from "./ui";
 import { PRODUCTS } from "../data/seed";
+import { Link } from "react-router-dom";
+import { useNotifyStore, notifyActions } from "../lib/notify";
+import { useMarketStore } from "../pages/extras";
 import { useAgentStore } from "../lib/agent";
 import { AGENT_TEMPLATES } from "../lib/agent-kb";
 import { useAppStore } from "../lib/store";
+
+notifyActions["agent_custom_send"] = (payload) => {
+  const oid = String(payload.orderId);
+  useMarketStore.setState((st: any) => ({ orders: st.orders.map((o: any) => (o.id === oid ? { ...o, status: "moderation", agentDraft: false } : o)) }));
+  useNotifyStore.getState().push({ kind: "report", title: "Агент: заказ отправлен мастерам", text: "Черновик переведён в статус «на модерации»." });
+};
 
 export default function AgentPanel() {
   const dialog = useAgentStore((s) => s.dialog);
@@ -103,17 +112,35 @@ export default function AgentPanel() {
           <p className="text-[12.5px] font-bold text-ink mb-3">Найденные товары:</p>
           <div className="grid grid-cols-2 gap-3">
             {PRODUCTS.slice(0, 4).map((p: any) => (
-              <div key={p.id} className="bg-surface rounded-xl p-2.5 border border-line-soft">
+              <Link key={p.id} to={`/product/${p.slug}`} className="block bg-surface rounded-xl p-2.5 border border-line-soft hover:border-accent transition-colors">
                 <ProductImg p={p} className="w-full h-24 rounded-lg mb-2" />
                 <p className="text-[11.5px] font-semibold text-ink leading-tight">{p.name}</p>
                 <p className="text-[12px] font-bold text-accent mt-1">{p.price.toLocaleString("ru-RU")} ₽</p>
-              </div>
+              </Link>
             ))}
           </div>
           <button onClick={() => {
-            const id = addTask({ kind: "custom", title: "Индивидуальный заказ", payload: { products: PRODUCTS.slice(0, 4).map((p: any) => p.id), photo } });
-            updateTask(id, { status: "working", steps: ["Черновик создан"] });
-            say("Отлично, оформляю индивидуальный заказ с вашим фото. Через несколько секунд придёт подтверждение.");
+            const found = PRODUCTS.slice(0, 4);
+            const budget = found.reduce((a: number, p: any) => a + p.price, 0);
+            useMarketStore.getState().addOrder({
+              title: "Индивидуальный заказ по фото: " + (found[0]?.name || "похожее изделие"),
+              type: (found[0] as any)?.category || "Декор",
+              desc: "Черновик агента: состав из " + found.length + " позиций-референсов, фото покупателя прикреплено.",
+              material: "по согласованию с мастером",
+              budget,
+              term: "по согласованию",
+              region: "Москва",
+              refName: found[0]?.name,
+              agentPhoto: photo || undefined,
+              agentItems: found.map((p: any) => p.id),
+              agentDraft: true,
+            });
+            useMarketStore.setState((st: any) => ({ orders: st.orders.map((o: any, i: number) => (i === 0 ? { ...o, status: "draft" } : o)) }));
+            const orderId = (useMarketStore.getState() as any).orders[0]?.id;
+            const tid = addTask({ kind: "custom", title: "Индивидуальный заказ", payload: { orderId } });
+            updateTask(tid, { status: "awaiting_confirm", steps: ["Черновик создан на бирже"] });
+            say("Черновик создан на бирже — откройте вкладку «Индивидуальные заказы», проверьте состав и фото. Подтверждение отправки мастерам придёт в колокольчик.");
+            useNotifyStore.getState().push({ kind: "confirm", title: "Агент: черновик индивидуального заказа", text: "Проверьте черновик во вкладке «Индивидуальные заказы» и подтвердите отправку мастерам.", actionLabel: "Отправить мастерам", actionType: "agent_custom_send", payload: { orderId } });
           }} className="w-full mt-3 h-10 rounded-[10px] bg-accent text-ink text-[13px] font-bold hover:bg-accent-deep cursor-pointer">
             Оформить индивидуальный заказ
           </button>

@@ -35,7 +35,8 @@ import { usePrefsStore } from "../lib/prefs";
 export interface MarketOrder {
   id: string; title: string; type: string; desc: string; material: string;
   budget: number; term: string; region: string; refName?: string; refType?: "image" | "video";
-  date: string; status: "moderation" | "published"; responses: number; myOwn?: boolean;
+  date: string; status: "draft" | "moderation" | "published"; responses: number; myOwn?: boolean;
+  agentPhoto?: string; agentItems?: string[]; agentDraft?: boolean;
 }
 interface MarketState {
   orders: MarketOrder[];

@@ -473,6 +473,8 @@ export default function ProfilePage() {
               <div key={o.id} className="bg-surface rounded-2xl shadow-card p-5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="font-bold text-[15px] text-ink">{o.title}</p>
+                  {(o as any).agentDraft && <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-soft text-accent-deep text-[10.5px] font-bold">Черновик агента</span>}
+                  {(o as any).agentPhoto && <img src={(o as any).agentPhoto} alt="" className="mt-2 w-16 h-16 object-cover rounded-[10px]" />}
                   <Badge tone={o.responses > 0 ? "ai" : "honey"}>{o.responses > 0 ? `Предложений: ${o.responses}` : "На рассмотрении"}</Badge>
                 </div>
                 <p className="text-[13px] text-ink-soft mt-2">{o.desc}</p>
