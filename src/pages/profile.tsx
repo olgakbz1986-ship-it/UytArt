@@ -10,6 +10,7 @@ import { useMarketStore } from "./extras";
 import AgentPanel from "../components/agent-panel";
 import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } from "../components/ui";
 import { usePrefsStore } from "../lib/prefs";
+import { useNotifyStore } from "../lib/notify";
 import { ChatModal } from "../components/chat";
 import { ReviewModal, TicketModal } from "../components/review";
 
@@ -37,13 +38,13 @@ const BUYER_TIER: Record<string, { level: number; accent: string; soft: string; 
     level: 2,
     accent: "#c77e28", soft: "#f9ebd2", tagline: "Ценитель уникального",
     unlocked: ["50 AI-генераций", "10 индивидуальных заказов", "Скидка 5%", "Ранний доступ к коллекциям", "Безлимит отслеживания цен"],
-    locked: ["Персональный куратор", "VIP-статус и закрытые распродажи"],
+    locked: ["AI-агент: проекты интерьера и корзина (10 задач)", "VIP-статус и закрытые распродажи"],
     next: "premium",
   },
   premium: {
     level: 3,
     accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей",
-    unlocked: ["Безлимит AI-генераций и заказов", "Скидка 7%", "Персональный куратор", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
+    unlocked: ["Безлимит AI-генераций и заказов", "Скидка 7%", "AI-агент-партнёр: безлимит задач и черновики заказов", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
     locked: [],
   },
 };
@@ -283,8 +284,14 @@ export default function ProfilePage() {
         {/* Вертикальная навигация */}
         <nav className="flex flex-col gap-2 fade-up">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
+            <button key={t.id} onClick={() => {
+                if (t.locked) {
+                  useNotifyStore.getState().push({ kind: "alert", title: "Раздел закрыт тарифом", text: `«${t.label}» доступно с тарифа «Старт». Переключитесь в Настройках.` });
+                  return;
+                }
+                setTab(t.id);
+              }}
+              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all ${t.locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
               <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
             </button>
           ))}
