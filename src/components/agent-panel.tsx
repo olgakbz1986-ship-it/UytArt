@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles, Paperclip, X } from "lucide-react";
+import { Bot, Send, Sparkles, Paperclip, X, Plus, Search, Trash2, Download, MessageSquare } from "lucide-react";
 import { ProductImg } from "./ui";
 import { PRODUCTS } from "../data/seed";
 import { Link } from "react-router-dom";
@@ -16,7 +16,17 @@ notifyActions["agent_custom_send"] = (payload) => {
 };
 
 export default function AgentPanel() {
-  const dialog = useAgentStore((s) => s.dialog);
+  const sessions = useAgentStore((s) => s.sessions);
+  const currentSessionId = useAgentStore((s) => s.currentSessionId);
+  const newSession = useAgentStore((s) => s.newSession);
+  const deleteSession = useAgentStore((s) => s.deleteSession);
+  const switchSession = useAgentStore((s) => s.switchSession);
+  const deleteMessage = useAgentStore((s) => s.deleteMessage);
+  const exportAll = useAgentStore((s) => s.exportAll);
+  const [searchQ, setSearchQ] = useState("");
+  const [sidebarQ, setSidebarQ] = useState("");
+  const current = sessions.find(s => s.id === currentSessionId);
+  const dialog = current?.messages || [];
   const say = useAgentStore((s) => s.say);
   const userSaid = useAgentStore((s) => s.userSaid);
   const addTask = useAgentStore((s) => s.addTask);
@@ -38,12 +48,16 @@ export default function AgentPanel() {
 
   /* приветствие один раз */
   useEffect(() => {
-    if (dialog.length === 0) say(AGENT_TEMPLATES.greet(session?.name || ""));
-  }, []);
+    if (sessions.length === 0) { newSession(); return; }
+    if (!currentSessionId && sessions[0]) switchSession(sessions[0].id);
+  }, [sessions.length]);
+  useEffect(() => {
+    if (current && current.messages.length === 0) say(AGENT_TEMPLATES.greet(session?.name || ""));
+  }, [current?.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [dialog]);
+  }, [current?.messages.length]);
 
   const send = () => {
     const text = input.trim();
@@ -97,14 +111,57 @@ export default function AgentPanel() {
         <Sparkles size={16} className="text-accent" />
       </header>
 
-      <div ref={scrollRef} className="h-[340px] overflow-auto px-5 py-4 space-y-3 bg-cream/40">
-        {dialog.map((m) => (
-          <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-snug ${
-              m.from === "user" ? "bg-accent text-ink rounded-br-sm" : "bg-surface text-ink border border-line-soft rounded-bl-sm"
-            }`}>{m.photo && <img src={m.photo} alt="" className="block w-20 h-20 object-cover rounded-[10px] mb-1.5" />}{m.text}</div>
+      <div className="flex" style={{height: "380px"}}>
+        {/* Сайдбар: список сессий */}
+        <aside className="w-[220px] shrink-0 border-r border-line-soft bg-cream/30 flex flex-col">
+          <div className="p-3 border-b border-line-soft flex gap-2">
+            <button onClick={newSession} className="flex-1 h-9 rounded-[8px] bg-dark text-cream text-[12px] font-bold flex items-center justify-center gap-1.5 hover:bg-dark-deep cursor-pointer"><Plus size={14} /> Новый чат</button>
           </div>
-        ))}
+          <div className="px-3 pt-2 pb-1">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-mute" />
+              <input value={sidebarQ} onChange={(e) => setSidebarQ(e.target.value)} placeholder="Поиск…" className="w-full h-8 pl-8 pr-2 rounded-[8px] bg-surface border border-line-soft text-[11.5px]" />
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto px-2 py-1 space-y-1">
+            {sessions.filter(s => !sidebarQ || s.title.toLowerCase().includes(sidebarQ.toLowerCase())).map(s => (
+              <div key={s.id} className={`group flex items-center gap-1.5 px-2.5 py-2 rounded-[8px] cursor-pointer text-[12px] ${s.id === currentSessionId ? "bg-accent-soft text-ink" : "text-ink-soft hover:bg-line-soft"}`} onClick={() => switchSession(s.id)}>
+                <MessageSquare size={13} className="shrink-0" />
+                <span className="flex-1 truncate">{s.title}</span>
+                <button onClick={(e) => { e.stopPropagation(); if (confirm("Удалить чат «" + s.title + "»?")) deleteSession(s.id); }} className="opacity-0 group-hover:opacity-100 text-ink-mute hover:text-error cursor-pointer"><Trash2 size={12} /></button>
+              </div>
+            ))}
+            {sessions.length === 0 && <p className="text-[11px] text-ink-mute text-center py-4">Нет чатов</p>}
+          </div>
+          <div className="p-2 border-t border-line-soft">
+            <button onClick={() => { const blob = new Blob([exportAll()], {type:"application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "agent-export-" + new Date().toISOString().slice(0,10) + ".json"; a.click(); URL.revokeObjectURL(url); }} className="w-full h-8 rounded-[8px] bg-line-soft text-ink-soft text-[11.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-line cursor-pointer"><Download size={12} /> Экспорт всех диалогов</button>
+          </div>
+        </aside>
+
+        {/* Контент: поиск + сообщения */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="px-4 py-2 border-b border-line-soft bg-surface flex items-center gap-2">
+            <Search size={13} className="text-ink-mute" />
+            <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Поиск в текущем чате…" className="flex-1 h-7 bg-transparent text-[12px] outline-none placeholder:text-ink-mute" />
+            {searchQ && <button onClick={() => setSearchQ("")} className="text-ink-mute hover:text-error cursor-pointer"><X size={13} /></button>}
+          </div>
+          <div ref={scrollRef} className="flex-1 overflow-auto px-5 py-4 space-y-3 bg-cream/40">
+            {dialog.filter(m => !searchQ || m.text.toLowerCase().includes(searchQ.toLowerCase())).map((m) => {
+              const hit = searchQ && m.text.toLowerCase().includes(searchQ.toLowerCase());
+              return (
+                <div key={m.id} className={`group flex ${m.from === "user" ? "justify-end" : "justify-start"} items-start gap-1.5`}>
+                  {m.from === "agent" && <div className={`flex-1 max-w-[78%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-snug bg-surface text-ink border ${hit ? "border-accent" : "border-line-soft"} rounded-bl-sm`}>{m.photo && <img src={m.photo} alt="" className="block w-20 h-20 object-cover rounded-[10px] mb-1.5" />}{m.text}</div>}
+                  {m.from === "user" && (
+                    <>
+                      <button onClick={() => deleteMessage(m.id)} className="opacity-0 group-hover:opacity-100 mt-1 text-ink-mute hover:text-error cursor-pointer"><Trash2 size={12} /></button>
+                      <div className={`flex-1 max-w-[78%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-snug bg-accent text-ink ${hit ? "ring-2 ring-accent-deep" : ""} rounded-br-sm`}>{m.photo && <img src={m.photo} alt="" className="block w-20 h-20 object-cover rounded-[10px] mb-1.5" />}{m.text}</div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {tasks.some(t => t.kind === "search" && t.status === "done") && (

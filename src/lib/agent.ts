@@ -24,6 +24,13 @@ export interface AgentMsg {
   photo?: string;
   at: number;
 }
+export interface AgentSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: AgentMsg[];
+}
 
 interface AgentProfile {
   style: string[];
@@ -36,8 +43,10 @@ interface AgentProfile {
 interface AgentState {
   role: AgentRole;
   profile: AgentProfile;
-  dialog: AgentMsg[];
-  dialogSeller: AgentMsg[];
+  sessions: AgentSession[];
+  sessionsSeller: AgentSession[];
+  currentSessionId: string;
+  currentSessionIdSeller: string;
   tasks: AgentTask[];
   journal: { id: string; action: string; at: number; resolved: "accepted" | "declined" }[];
   /* диалог */
@@ -45,6 +54,15 @@ interface AgentState {
   userSaid: (text: string, photo?: string) => void;
   saySeller: (text: string) => void;
   userSaidSeller: (text: string) => void;
+  newSession: () => string;
+  newSessionSeller: () => string;
+  deleteSession: (id: string) => void;
+  deleteSessionSeller: (id: string) => void;
+  switchSession: (id: string) => void;
+  switchSessionSeller: (id: string) => void;
+  deleteMessage: (msgId: string) => void;
+  deleteMessageSeller: (msgId: string) => void;
+  exportAll: () => string;
   /* задачи */
   addTask: (t: Omit<AgentTask, "id" | "startedAt" | "steps" | "status">) => string;
   updateTask: (id: string, patch: Partial<AgentTask>) => void;
@@ -56,17 +74,53 @@ interface AgentState {
 
 export const useAgentStore = create<AgentState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       role: "buyer",
       profile: { style: [], palette: [], budget: 0, anti: [], feedbacks: [] },
-      dialog: [],
-      dialogSeller: [],
+      sessions: [],
+      sessionsSeller: [],
+      currentSessionId: "",
+      currentSessionIdSeller: "",
       tasks: [],
       journal: [],
-      say: (text) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] })),
-      userSaid: (text, photo) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "user", text, photo, at: Date.now() }]})),
-      saySeller: (text) => set((s) => ({ dialogSeller: [...s.dialogSeller, { id: "ms-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] })),
-      userSaidSeller: (text) => set((s) => ({ dialogSeller: [...s.dialogSeller, { id: "ms-" + Date.now().toString(36), from: "user", text, at: Date.now() }] })),
+      say: (text) => set((s) => {
+        if (!s.currentSessionId) {
+          const sid = "s-" + Date.now().toString(36);
+          return { sessions: [{ id: sid, title: "Новый чат", createdAt: Date.now(), updatedAt: Date.now(), messages: [{ id: "m-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] }], currentSessionId: sid };
+        }
+        return { sessions: s.sessions.map(x => x.id === s.currentSessionId ? { ...x, updatedAt: Date.now(), messages: [...x.messages, { id: "m-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] } : x) };
+      }),
+      userSaid: (text, photo) => set((s) => {
+        const msg: AgentMsg = { id: "m-" + Date.now().toString(36), from: "user", text, photo, at: Date.now() };
+        if (!s.currentSessionId) {
+          const sid = "s-" + Date.now().toString(36);
+          return { sessions: [{ id: sid, title: text.slice(0, 40) || "Новый чат", createdAt: Date.now(), updatedAt: Date.now(), messages: [msg] }], currentSessionId: sid };
+        }
+        return { sessions: s.sessions.map(x => {
+          if (x.id !== s.currentSessionId) return x;
+          const isFirst = x.messages.length === 0;
+          return { ...x, updatedAt: Date.now(), title: isFirst && text ? text.slice(0, 40) : x.title, messages: [...x.messages, msg] };
+        }) };
+      }),
+      saySeller: (text) => set((s) => {
+        if (!s.currentSessionIdSeller) {
+          const sid = "ss-" + Date.now().toString(36);
+          return { sessionsSeller: [{ id: sid, title: "Новый чат", createdAt: Date.now(), updatedAt: Date.now(), messages: [{ id: "ms-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] }], currentSessionIdSeller: sid };
+        }
+        return { sessionsSeller: s.sessionsSeller.map(x => x.id === s.currentSessionIdSeller ? { ...x, updatedAt: Date.now(), messages: [...x.messages, { id: "ms-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] } : x) };
+      }),
+      userSaidSeller: (text) => set((s) => {
+        const msg: AgentMsg = { id: "ms-" + Date.now().toString(36), from: "user", text, at: Date.now() };
+        if (!s.currentSessionIdSeller) {
+          const sid = "ss-" + Date.now().toString(36);
+          return { sessionsSeller: [{ id: sid, title: text.slice(0, 40) || "Новый чат", createdAt: Date.now(), updatedAt: Date.now(), messages: [msg] }], currentSessionIdSeller: sid };
+        }
+        return { sessionsSeller: s.sessionsSeller.map(x => {
+          if (x.id !== s.currentSessionIdSeller) return x;
+          const isFirst = x.messages.length === 0;
+          return { ...x, updatedAt: Date.now(), title: isFirst && text ? text.slice(0, 40) : x.title, messages: [...x.messages, msg] };
+        }) };
+      }),
       addTask: (t) => {
         const id = "t-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
         set((s) => ({ tasks: [{ ...t, id, startedAt: Date.now(), status: "queued", steps: [] }, ...s.tasks] }));
@@ -75,6 +129,16 @@ export const useAgentStore = create<AgentState>()(
       updateTask: (id, patch) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
       learn: (signal) => set((s) => ({ profile: { ...s.profile, feedbacks: [signal, ...s.profile.feedbacks.slice(0, 49)] } })),
       log: (action, resolved) => set((s) => ({ journal: [{ id: "j-" + Date.now(), action, at: Date.now(), resolved }, ...s.journal.slice(0, 99)] })),
+      newSession: () => { const id = "s-" + Date.now().toString(36); set((s) => ({ sessions: [{ id, title: "Новый чат", createdAt: Date.now(), updatedAt: Date.now(), messages: [] }, ...s.sessions], currentSessionId: id })); return id; },
+      newSessionSeller: () => { const id = "ss-" + Date.now().toString(36); set((s) => ({ sessionsSeller: [{ id, title: "Новый чат", createdAt: Date.now(), updatedAt: Date.now(), messages: [] }, ...s.sessionsSeller], currentSessionIdSeller: id })); return id; },
+      deleteSession: (id) => set((s) => { const rest = s.sessions.filter(x => x.id !== id); return { sessions: rest, currentSessionId: s.currentSessionId === id ? (rest[0]?.id || "") : s.currentSessionId }; }),
+      deleteSessionSeller: (id) => set((s) => { const rest = s.sessionsSeller.filter(x => x.id !== id); return { sessionsSeller: rest, currentSessionIdSeller: s.currentSessionIdSeller === id ? (rest[0]?.id || "") : s.currentSessionIdSeller }; }),
+      switchSession: (id) => set({ currentSessionId: id }),
+      switchSessionSeller: (id) => set({ currentSessionIdSeller: id }),
+      deleteMessage: (msgId) => set((s) => ({ sessions: s.sessions.map(x => x.id === s.currentSessionId ? { ...x, messages: x.messages.filter(m => m.id !== msgId) } : x) })),
+      deleteMessageSeller: (msgId) => set((s) => ({ sessionsSeller: s.sessionsSeller.map(x => x.id === s.currentSessionIdSeller ? { ...x, messages: x.messages.filter(m => m.id !== msgId) } : x) })),
+      exportAll: () => JSON.stringify({ buyer: get().sessions, seller: get().sessionsSeller }, null, 2),
+
     }),
     { name: "quantiform-agent" }
   )
