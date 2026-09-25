@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Bot, Send, Sparkles, Paperclip, X } from "lucide-react";
 import { ProductImg } from "./ui";
 import { PRODUCTS } from "../data/seed";
 import { useAgentStore } from "../lib/agent";
@@ -16,6 +16,15 @@ export default function AgentPanel() {
   const session = useAppStore((s) => s.session);
   const [input, setInput] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoName, setPhotoName] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onFile = (f: File | null) => {
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { setPhoto(String(r.result)); setPhotoName(f.name); };
+    r.readAsDataURL(f);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   /* приветствие один раз */
@@ -35,12 +44,13 @@ export default function AgentPanel() {
     setTimeout(() => {
       const low = text.toLowerCase();
       if (/фото|хочу вот это|похож/i.test(text)) {
+        if (!photo) { say("Прикрепите фото скрепкой рядом с полем ввода — и я начну визуальный поиск по всему сервису."); return; }
         say(AGENT_TEMPLATES.photoAck);
         const found = PRODUCTS.slice(0, 4);
         setTimeout(() => {
           say(`Нашёл ${found.length} похожих позиций. Если нужно точь-в-точь, могу оформить индивидуальный заказ.`);
         }, 8500);
-        const id = addTask({ kind: "search", title: "Визуальный поиск", payload: { query: text, count: 4, products: found.map((p: any) => p.id) } });
+        const id = addTask({ kind: "search", title: "Визуальный поиск", payload: { query: text, count: 4, products: found.map((p: any) => p.id), photo } });
         updateTask(id, { status: "working", steps: ["Принято к исполнению"] });
       } else if (/ремонт|интерьер|проект/i.test(text)) {
         say("Понял, это проект. Уточняю стиль, бюджет и объём — соберу концепт и корзину.");
@@ -53,7 +63,7 @@ export default function AgentPanel() {
   };
 
   const quick = [
-    { label: "🖼️ Хочу вот это (фото)", text: "Хочу вот это", withPhoto: true },
+    { label: "🖼️ Хочу вот это", text: "Хочу вот это" },
     { label: "🏠 Собери проект ремонта", text: "Собери проект ремонта" },
     { label: "📋 Правила возврата", text: "Как работает возврат?" },
   ];
@@ -111,18 +121,21 @@ export default function AgentPanel() {
       <div className="px-5 py-3 bg-surface border-t border-line-soft">
         <div className="flex gap-2 mb-3 flex-wrap">
           {quick.map((q) => (
-            <button key={q.label} onClick={() => { 
-              setInput(q.text); 
-              if ((q as any).withPhoto) setPhoto("/img/hero-bg.jpg");
-            }} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[12px] font-semibold hover:bg-line cursor-pointer">
-              {(q as any).withPhoto && <ImageIcon size={12} className="inline mr-1" />}
-              {q.label}
-            </button>
+            <button key={q.label} onClick={() => setInput(q.text)} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[12px] font-semibold hover:bg-line cursor-pointer">{q.label}</button>
           ))}
         </div>
+        {photo && (
+          <div className="flex items-center gap-2 mb-2 bg-cream border border-line-soft rounded-[10px] p-2">
+            <img src={photo} alt="" className="w-9 h-9 rounded-[8px] object-cover" />
+            <span className="text-[11.5px] text-ink-soft flex-1 truncate">{photoName || "фото прикреплено"}</span>
+            <button onClick={() => { setPhoto(null); setPhotoName(""); }} className="text-ink-mute hover:text-error cursor-pointer"><X size={14} /></button>
+          </div>
+        )}
         <div className="flex gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
             placeholder="Напишите агенту…" className="flex-1 h-11 px-4 rounded-[10px] bg-cream border border-line-soft text-[13.5px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent" />
+          <input type="file" accept="image/*" ref={fileRef} className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
+          <button onClick={() => fileRef.current?.click()} aria-label="Прикрепить фото" className="w-11 h-11 rounded-[10px] bg-line-soft text-ink-soft flex items-center justify-center hover:bg-line cursor-pointer"><Paperclip size={17} /></button>
           <button onClick={send} className="w-11 h-11 rounded-[10px] bg-dark text-cream flex items-center justify-center hover:bg-dark-deep cursor-pointer"><Send size={17} /></button>
         </div>
       </div>
