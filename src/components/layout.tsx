@@ -15,6 +15,7 @@ import { startAgentWorker } from "../lib/agent";
 
 function NotifyBell() {
   const items = useNotifyStore((s) => s.items);
+  const nav = useNavigate();
   const markRead = useNotifyStore((s) => s.markRead);
   const markAll = useNotifyStore((s) => s.markAll);
   const resolve = useNotifyStore((s) => s.resolve);
@@ -39,7 +40,7 @@ function NotifyBell() {
           </div>
           {items.length === 0 && <p className="text-[12.5px] text-ink-mute px-2 py-6 text-center">Пока тихо. Агент и сервис будут писать сюда.</p>}
           {items.map((i) => (
-            <div key={i.id} onClick={() => markRead(i.id)} className={`rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"}`}>
+            <div key={i.id} onClick={() => { markRead(i.id); if ((i as any).deepLink) nav((i as any).deepLink); }} className={`rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"} ${(i as any).deepLink ? "hover:ring-2 hover:ring-accent/30" : ""}`}>
               <div className="flex items-start gap-2.5">
                 <span className="mt-0.5">{kindIcon(i.kind)}</span>
                 <div className="flex-1 min-w-0">

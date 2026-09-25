@@ -197,7 +197,7 @@ export default function AgentPanel() {
             const tid = addTask({ kind: "custom", title: "Индивидуальный заказ", payload: { orderId } });
             updateTask(tid, { status: "awaiting_confirm", steps: ["Черновик создан на бирже"] });
             say("Черновик создан на бирже — откройте вкладку «Индивидуальные заказы», проверьте состав и фото. Подтверждение отправки мастерам придёт в колокольчик.");
-            useNotifyStore.getState().push({ kind: "confirm", title: "Агент: черновик индивидуального заказа", text: "Проверьте черновик во вкладке «Индивидуальные заказы» и подтвердите отправку мастерам.", actionLabel: "Отправить мастерам", actionType: "agent_custom_send", payload: { orderId } });
+            useNotifyStore.getState().push({ kind: "confirm", title: "Агент: черновик индивидуального заказа", text: "Нажмите на уведомление, чтобы проверить и доработать черновик на бирже, или подтвердите отправку мастерам.", actionLabel: "Отправить мастерам", actionType: "agent_custom_send", payload: { orderId }, deepLink: "/market?focus=" + orderId });
           }} className="w-full mt-3 h-10 rounded-[10px] bg-accent text-ink text-[13px] font-bold hover:bg-accent-deep cursor-pointer">
             Оформить индивидуальный заказ
           </button>

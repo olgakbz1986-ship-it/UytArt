@@ -13,6 +13,7 @@ export interface NotifyItem {
   actionLabel?: string;
   actionType?: string;
   payload?: Record<string, unknown>;
+  deepLink?: string;
   resolved?: "accepted" | "declined";
 }
 

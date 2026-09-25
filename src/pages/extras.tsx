@@ -3,14 +3,14 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { useSearchParams,  Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot} from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -62,6 +62,20 @@ export const useMarketStore = create<MarketState>()(
 );
 
 export function MarketPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = searchParams.get("focus") || "";
+  const [editingDraft, setEditingDraft] = useState<string | null>(null);
+  useEffect(() => {
+    if (focusId) {
+      const el = document.getElementById("order-" + focusId);
+      if (el) { setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 200); }
+      const t = setTimeout(() => { const p = new URLSearchParams(searchParams); p.delete("focus"); setSearchParams(p, { replace: true }); }, 4000);
+      return () => clearTimeout(t);
+    }
+  }, [focusId]);
+  const [draftForm, setDraftForm] = useState<any>({});
+  const [editOrderId, setEditOrderId] = useState<string | null>(null);
+  const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const user = useAppStore((s) => s.session);
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
   const lim = buyerLimits(buyerPlan);
@@ -71,6 +85,25 @@ export function MarketPage() {
   const respond = useMarketStore((s) => s.respond);
   const sellerActive = useSellerReg((s) => s.status === "active");
 
+
+  const patchOrder = (id: string, patch: any) => useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
+  const removeOrder = (id: string) => useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
+  const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); setRef(null); setFErr(""); setWizardOpen(true); };
+  const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
+  const cancelEdit = () => { setEditingDraft(null); };
+  const sendDraft = (id: string) => { patchOrder(id, { status: "moderation", agentDraft: false }); useNotifyStore.getState().push({ kind: "report", title: "Черновик отправлен мастерам", text: "Ваш заказ поступил на модерацию биржи." }); };
+  const saveDraft = (send: boolean) => {
+    if (!editOrderId) return;
+    if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
+    const patch: any = { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion };
+    if (editPhoto) patch.agentPhoto = editPhoto;
+    if (ref?.name) patch.refName = ref.name;
+    if (send) { patch.status = "moderation"; patch.agentDraft = false; }
+    useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === editOrderId ? { ...o, ...patch } : o)) }));
+    useNotifyStore.getState().push({ kind: "report", title: send ? "Черновик отправлен мастерам" : "Черновик обновлён", text: send ? "Заказ поступил на модерацию биржи." : "Изменения сохранены, включая фото референса." });
+    setEditOrderId(null); setEditPhoto(null); setRef(null); setFErr(""); setWizardOpen(false);
+  };
+  const deleteDraft = (id: string) => { if (confirm("Удалить черновик безвозвратно?")) { removeOrder(id); useNotifyStore.getState().push({ kind: "report", title: "Черновик удалён", text: "Запись убрана с биржи." }); } };
   const [wizardOpen, setWizardOpen] = useState(false);
   const [fType, setFType] = useState("Мебель");
   const [fBudget, setFBudget] = useState("30000");
@@ -91,6 +124,13 @@ export function MarketPage() {
 
   const publish = () => {
     if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
+    if (editOrderId) {
+      patchOrder(editOrderId, { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion });
+      useNotifyStore.getState().push({ kind: "report", title: "Черновик обновлён", text: "Изменения сохранены. Черновик остаётся на бирже до отправки мастерам." });
+      setEditOrderId(null); setFTitle(""); setFDesc(""); setRef(null); setFErr("");
+      setWizardOpen(false);
+      return;
+    }
     if (overLimit) { setFErr(`Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
     addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: ref?.name, refType: ref?.type });
@@ -105,7 +145,7 @@ export function MarketPage() {
           <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Биржа индивидуальных заказов</h1>
           <p className="text-[14px] text-ink-soft max-w-xl">Опишите, что нужно изготовить, — мастера пришлют предложения. Сделка защищена: предоплата резервируется на платформе.</p>
         </div>
-        <Btn size="lg" onClick={() => setWizardOpen(true)}><Sparkles size={18} /> Создать заказ</Btn>
+        <Btn size="lg" onClick={() => { setEditOrderId(null); setFTitle(""); setFDesc(""); setFMaterial(""); setFBudget(""); setRef(null); setFErr(""); setWizardOpen(true); }}><Sparkles size={18} /> Создать заказ</Btn>
       </div>
 
       {overLimit && (
@@ -135,11 +175,12 @@ export function MarketPage() {
           </div>
         )}
         {visible.map((o, i) => (
-          <div key={o.id} className="bg-surface rounded-2xl shadow-card p-6 fade-up" style={{ animationDelay: `${(i % 6) * 60}ms` }}>
+          <div id={"order-" + o.id} key={o.id} className={`bg-surface rounded-2xl shadow-card p-6 fade-up ${focusId === o.id ? "ring-2 ring-accent" : ""} ${(o as any).agentDraft ? "border-2 border-accent/40" : ""}`} style={{ animationDelay: `${(i % 6) * 60}ms` }}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <h2 className="font-bold text-[16px] text-ink">{o.title}</h2>
               {o.status === "moderation"
                 ? <Badge tone="honey">На модерации</Badge>
+                : (o as any).agentDraft ? <Badge tone="ai">Черновик агента</Badge>
                 : o.myOwn ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
             </div>
             <p className="text-[13.5px] text-ink-soft leading-relaxed mt-2">{o.desc}</p>
@@ -148,14 +189,25 @@ export function MarketPage() {
                 {o.refType === "video" ? <Video size={12} /> : <Camera size={12} />} Референс: {o.refName}
               </p>
             )}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px] mt-4">
-              <p><span className="text-ink-mute">Бюджет:</span> <span className="font-semibold text-ink">до {fmt(o.budget)}</span></p>
-              <p><span className="text-ink-mute">Срок:</span> <span className="font-semibold text-ink">{o.term}</span></p>
-              <p><span className="text-ink-mute">Материал:</span> <span className="font-semibold text-ink">{o.material}</span></p>
-              <p><span className="text-ink-mute">Регион:</span> <span className="font-semibold text-ink">{o.region}</span></p>
+            {(o as any).agentPhoto && (
+              <img src={(o as any).agentPhoto} alt="" className="mt-3 w-24 h-24 object-cover rounded-[12px] border border-line-soft" />
+            )}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px] mt-4">
+                <p><span className="text-ink-mute">Бюджет:</span> <span className="font-semibold text-ink">до {fmt(o.budget)}</span></p>
+                <p><span className="text-ink-mute">Срок:</span> <span className="font-semibold text-ink">{o.term}</span></p>
+                <p><span className="text-ink-mute">Материал:</span> <span className="font-semibold text-ink">{o.material}</span></p>
+                <p><span className="text-ink-mute">Регион:</span> <span className="font-semibold text-ink">{o.region}</span></p>
+              
             </div>
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft gap-2 flex-wrap">
               <span className="text-[12px] text-ink-mute">{fmtDate(o.date)} · откликов: <strong className="text-ink">{o.responses + (responded.includes(o.id) ? 1 : 0)}</strong></span>
+              {(o as any).agentDraft && o.status === "draft" && (
+                <div className="flex gap-1.5">
+                  <button onClick={() => startEdit(o)} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[11.5px] font-bold hover:bg-line cursor-pointer flex items-center gap-1"><Edit3 size={12} /> Редактировать</button>
+                  <button onClick={() => deleteDraft(o.id)} className="h-8 px-3 rounded-[8px] bg-line-soft text-error text-[11.5px] font-bold hover:bg-line cursor-pointer flex items-center gap-1"><Trash2 size={12} /> Удалить</button>
+                  <button onClick={() => sendDraft(o.id)} className="h-8 px-3 rounded-[8px] bg-accent text-ink text-[11.5px] font-bold hover:bg-accent-deep cursor-pointer flex items-center gap-1"><Send size={12} /> Отправить мастерам</button>
+                </div>
+              )}
               {sellerActive && !o.myOwn && o.status === "published" && (
                 responded.includes(o.id)
                   ? <Badge tone="success"><CheckCircle2 size={11} /> Вы откликнулись</Badge>
@@ -175,7 +227,7 @@ export function MarketPage() {
       )}
 
       {/* AI-визард */}
-      <Modal open={wizardOpen} onClose={() => setWizardOpen(false)} title="Новый индивидуальный заказ" wide>
+      <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : "Новый индивидуальный заказ"} wide>
         <p className="text-[13px] text-ink-soft mb-5 flex items-center gap-2"><Sparkles size={15} className="text-ai" /> AI-помощник поможет мастеру понять задачу. Прикрепите референс и опишите детали.</p>
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Название" required>
@@ -194,11 +246,13 @@ export function MarketPage() {
           </Field>
           <Field label="Срок">
             <select className="field" value={fTerm} onChange={(e) => setFTerm(e.target.value)}>
+              {!["2–3 недели", "1–2 месяца", "2–3 месяца", "Не срочно"].includes(fTerm) && <option>{fTerm}</option>}
               {["2–3 недели", "1–2 месяца", "2–3 месяца", "Не срочно"].map((t) => <option key={t}>{t}</option>)}
             </select>
           </Field>
           <Field label="Регион доставки">
             <select className="field" value={fRegion} onChange={(e) => setFRegion(e.target.value)}>
+              {!DISTRICTS.some((d) => d.id === fRegion) && <option value={fRegion}>{fRegion}</option>}
               {DISTRICTS.map((d) => <option key={d.id} value={d.id}>{d.name} округ</option>)}
             </select>
           </Field>
@@ -214,17 +268,28 @@ export function MarketPage() {
             <span className="text-[13px] font-semibold text-ink-soft">
               {ref ? (
                 <span className="flex items-center gap-1.5">{ref.type === "video" ? <Video size={13} className="text-ai" /> : <Camera size={13} className="text-ai" />} {ref.name}</span>
+              ) : editPhoto ? (
+                <span className="flex items-center gap-2"><img src={editPhoto} alt="" className="w-10 h-10 object-cover rounded-[8px]" /> Фото черновика прикреплено</span>
               ) : "Прикрепить фото или видео-референс"}
             </span>
             <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) setRef({ name: f.name, type: f.type.startsWith("video") ? "video" : "image" });
+              if (!f) return;
+              setRef({ name: f.name, type: f.type.startsWith("video") ? "video" : "image" });
+              if (f.type.startsWith("image")) { const r = new FileReader(); r.onload = () => setEditPhoto(String(r.result)); r.readAsDataURL(f); }
             }} />
             {ref && <button onClick={(e) => { e.preventDefault(); setRef(null); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
           </label>
         </div>
         {fErr && <p className="text-[12.5px] font-semibold text-error mt-3">{fErr}</p>}
-        <Btn size="lg" className="w-full mt-5" onClick={publish}>Опубликовать заказ</Btn>
+        {editOrderId ? (
+          <div className="flex gap-3 mt-5">
+            <Btn size="lg" className="flex-1" variant="outline" onClick={() => saveDraft(false)}>Сохранить черновик</Btn>
+            <Btn size="lg" className="flex-1" onClick={() => saveDraft(true)}>Сохранить и отправить</Btn>
+          </div>
+        ) : (
+          <Btn size="lg" className="w-full mt-5" onClick={publish}>Опубликовать заказ</Btn>
+        )}
       </Modal>
     </div>
   );
