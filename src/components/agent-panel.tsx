@@ -39,12 +39,14 @@ export default function AgentPanel() {
   const send = () => {
     const text = input.trim();
     if (!text) return;
-    userSaid(text);
+    const attached = photo;
+    userSaid(text, attached || undefined);
     setInput("");
+    if (attached) { setPhoto(null); setPhotoName(""); }
     setTimeout(() => {
       const low = text.toLowerCase();
-      if (/фото|хочу вот это|похож/i.test(text)) {
-        if (!photo) { say("Прикрепите фото скрепкой рядом с полем ввода — и я начну визуальный поиск по всему сервису."); return; }
+      if (attached || /фото|хочу вот это|похож|найди|вот эт|подбери/i.test(text)) {
+        if (!attached) { say("Прикрепите фото скрепкой рядом с полем ввода — и я начну визуальный поиск по всему сервису."); return; }
         say(AGENT_TEMPLATES.photoAck);
         const found = PRODUCTS.slice(0, 4);
         setTimeout(() => {
@@ -91,7 +93,7 @@ export default function AgentPanel() {
           <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-snug ${
               m.from === "user" ? "bg-accent text-ink rounded-br-sm" : "bg-surface text-ink border border-line-soft rounded-bl-sm"
-            }`}>{m.text}</div>
+            }`}>{m.photo && <img src={m.photo} alt="" className="block w-20 h-20 object-cover rounded-[10px] mb-1.5" />}{m.text}</div>
           </div>
         ))}
       </div>

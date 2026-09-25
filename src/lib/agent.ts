@@ -21,6 +21,7 @@ export interface AgentMsg {
   id: string;
   from: "user" | "agent";
   text: string;
+  photo?: string;
   at: number;
 }
 
@@ -41,7 +42,7 @@ interface AgentState {
   journal: { id: string; action: string; at: number; resolved: "accepted" | "declined" }[];
   /* диалог */
   say: (text: string) => void;
-  userSaid: (text: string) => void;
+  userSaid: (text: string, photo?: string) => void;
   saySeller: (text: string) => void;
   userSaidSeller: (text: string) => void;
   /* задачи */
@@ -63,7 +64,7 @@ export const useAgentStore = create<AgentState>()(
       tasks: [],
       journal: [],
       say: (text) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] })),
-      userSaid: (text) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "user", text, at: Date.now() }] })),
+      userSaid: (text, photo) => set((s) => ({ dialog: [...s.dialog, { id: "m-" + Date.now().toString(36), from: "user", text, photo, at: Date.now() }]})),
       saySeller: (text) => set((s) => ({ dialogSeller: [...s.dialogSeller, { id: "ms-" + Date.now().toString(36), from: "agent", text, at: Date.now() }] })),
       userSaidSeller: (text) => set((s) => ({ dialogSeller: [...s.dialogSeller, { id: "ms-" + Date.now().toString(36), from: "user", text, at: Date.now() }] })),
       addTask: (t) => {
