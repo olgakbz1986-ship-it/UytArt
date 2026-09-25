@@ -1,3 +1,4 @@
+import { useNotifyStore } from "../lib/notify";
 import { useRef } from "react";
 import { Camera, X } from "lucide-react";
 import { useSellerReg } from "../lib/seller";
@@ -9,7 +10,7 @@ export function SellerAvatar() {
 
   const pick = (f: File | undefined, field: "shopLogo" | "masterAvatar") => {
     if (!f) return;
-    if (f.size > 1500000) { alert("Файл до 1.5 МБ"); return; }
+    if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: "Максимум 1.5 МБ" }); return; }
     const v = new FileReader();
     v.onload = () => {
       const data = v.result as string;

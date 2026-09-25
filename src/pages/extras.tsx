@@ -1,3 +1,4 @@
+import { useNotifyStore } from "../lib/notify";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
@@ -1591,9 +1592,9 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             </Field>
             <Btn className="w-full mt-5" disabled={!+withdrawSum || +withdrawSum < 100 || +withdrawSum > available} onClick={() => {
               const mid = (document.querySelector('input[name="wMethod"]:checked') as HTMLInputElement)?.value;
-              if (!mid) { alert("Выберите способ вывода"); return; }
+              if (!mid) { useNotifyStore.getState().push({ kind: "alert", title: "Ошибка", text: "Выберите способ вывода" }); return; }
               const err = finance.requestPayout(+withdrawSum, mid);
-              if (err) { alert(err); return; }
+              if (err) { useNotifyStore.getState().push({ kind: "alert", title: "Ошибка", text: String(err) }); return; }
               setWithdrawSum(""); setWithdrawOpen(false);
             }}>
               <Wallet size={16} /> Отправить заявку в ЮKassa
@@ -2283,7 +2284,7 @@ export function MasterProfileBlock() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина</p>
-                    <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { alert("Файл до 1.5 МБ"); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />
+                    <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: "Максимум 1.5 МБ" }); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />
                     {s.shopLogo && <img src={s.shopLogo} alt="Логотип" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
                   </div>
                   <div>
@@ -2294,7 +2295,7 @@ export function MasterProfileBlock() {
                 </div>
                 <div className="mt-4">
                   <p className="text-[12.5px] font-semibold text-ink mb-1.5">Фотовитрина производства (до 6 фото, каждое до 1.5 МБ)</p>
-                  <input type="file" accept="image/*" multiple className="field" onChange={(e) => { Array.from(e.target.files || []).slice(0, 6).forEach((f) => { if (f.size > 1500000) { alert(f.name + ": больше 1.5 МБ — пропущено"); return; } const r = new FileReader(); r.onload = () => { const cur = useSellerReg.getState().productionGallery; s.setInfo({ productionGallery: [...cur, r.result as string] }); }; r.readAsDataURL(f); }); e.target.value = ""; }} />
+                  <input type="file" accept="image/*" multiple className="field" onChange={(e) => { Array.from(e.target.files || []).slice(0, 6).forEach((f) => { if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл пропущен", text: f.name + ": больше 1.5 МБ" }); return; } const r = new FileReader(); r.onload = () => { const cur = useSellerReg.getState().productionGallery; s.setInfo({ productionGallery: [...cur, r.result as string] }); }; r.readAsDataURL(f); }); e.target.value = ""; }} />
                   {s.productionGallery.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {s.productionGallery.map((g, i) => (
