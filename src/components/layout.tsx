@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing } from "lucide-react";
+import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing , Trash2} from "lucide-react";
 import { marketProducts } from "../lib/market";
 import { CATEGORIES, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
@@ -18,9 +18,36 @@ function NotifyBell() {
   const nav = useNavigate();
   const markRead = useNotifyStore((s) => s.markRead);
   const markAll = useNotifyStore((s) => s.markAll);
+  const remove = useNotifyStore((s) => s.remove);
   const resolve = useNotifyStore((s) => s.resolve);
   const [open, setOpen] = useState(false);
   const unread = items.filter((i) => !i.read).length;
+  useEffect(() => {
+    if (open) {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const toClean = items.filter((i) => i.read && i.createdAt < sevenDaysAgo);
+      toClean.forEach((i) => remove(i.id));
+    }
+  }, [open]);
+
+  const groupByDate = (list: typeof items) => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const groups: { label: string; list: typeof items }[] = [];
+    const t = list.filter((i) => i.createdAt >= today.getTime());
+    const y = list.filter((i) => i.createdAt >= yesterday.getTime() && i.createdAt < today.getTime());
+    const o = list.filter((i) => i.createdAt < yesterday.getTime());
+    if (t.length) groups.push({ label: "Сегодня", list: t });
+    if (y.length) groups.push({ label: "Вчера", list: y });
+    if (o.length) groups.push({ label: "Ранее", list: o });
+    return groups;
+  };
+
+  const clearRead = () => { items.filter((i) => i.read).forEach((i) => remove(i.id)); };
+
+
+  const [filter, setFilter] = useState<"all" | "unread" | "pending">("all");
+  const pending = items.filter((i) => i.kind === "confirm" && !i.resolved).length;
   const kindIcon = (k: string) =>
     k === "confirm" ? <UserCheck size={15} className="text-accent" /> :
     k === "question" ? <HelpCircle size={15} className="text-ai" /> :
@@ -36,16 +63,27 @@ function NotifyBell() {
         <div className="absolute right-0 top-[52px] w-[360px] max-h-[440px] overflow-auto bg-surface rounded-2xl shadow-card border border-line-soft z-50 p-3">
           <div className="flex items-center justify-between px-2 pb-2">
             <span className="text-[13px] font-bold text-ink">Уведомления</span>
-            <button onClick={markAll} className="text-[11.5px] font-semibold text-accent-deep hover:text-accent cursor-pointer">Прочитать все</button>
+            <div className="flex gap-2">
+              <button onClick={clearRead} className="text-[11.5px] font-semibold text-ink-mute hover:text-error cursor-pointer">Очистить прочитанные</button>
+              <button onClick={markAll} className="text-[11.5px] font-semibold text-accent-deep hover:text-accent cursor-pointer">Прочитать все</button>
+            </div>
           </div>
-          {items.length === 0 && <p className="text-[12.5px] text-ink-mute px-2 py-6 text-center">Пока тихо. Агент и сервис будут писать сюда.</p>}
-          {items.map((i) => (
-            <div key={i.id} onClick={() => { markRead(i.id); if ((i as any).deepLink) nav((i as any).deepLink); }} className={`rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"} ${(i as any).deepLink ? "hover:ring-2 hover:ring-accent/30" : ""}`}>
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5">{kindIcon(i.kind)}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12.5px] font-bold text-ink leading-snug">{i.title}</p>
-                  <p className="text-[12px] text-ink-soft leading-snug mt-1">{i.text}</p>
+          <div className="flex gap-1 px-1 pb-3 border-b border-line-soft mb-2">
+            <button onClick={() => setFilter("all")} className={`flex-1 h-8 px-2 rounded-[8px] text-[11.5px] font-bold transition-colors cursor-pointer ${filter === "all" ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>Все ({items.length})</button>
+            <button onClick={() => setFilter("unread")} className={`flex-1 h-8 px-2 rounded-[8px] text-[11.5px] font-bold transition-colors cursor-pointer ${filter === "unread" ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>Непрочит. ({unread})</button>
+            <button onClick={() => setFilter("pending")} className={`flex-1 h-8 px-2 rounded-[8px] text-[11.5px] font-bold transition-colors cursor-pointer ${filter === "pending" ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>Действие ({pending})</button>
+          </div>
+          {items.filter((i) => filter === "all" ? true : filter === "unread" ? !i.read : i.kind === "confirm" && !i.resolved).length === 0 && <p className="text-[12.5px] text-ink-mute px-2 py-6 text-center">Пока тихо. Агент и сервис будут писать сюда.</p>}
+          {groupByDate(items.filter((i) => filter === "all" ? true : filter === "unread" ? !i.read : i.kind === "confirm" && !i.resolved)).map((g) => (
+            <div key={g.label}>
+              <p className="text-[10.5px] font-bold text-ink-mute uppercase tracking-wide px-2 pt-1 pb-1.5">{g.label}</p>
+              {g.list.map((i) => (
+                <div key={i.id} onClick={() => { markRead(i.id); if ((i as any).deepLink) nav((i as any).deepLink); }} className={`group rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"} ${(i as any).deepLink ? "hover:ring-2 hover:ring-accent/30" : ""}`}>
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5">{kindIcon(i.kind)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12.5px] font-bold text-ink leading-snug">{i.title}</p>
+                      <p className="text-[12px] text-ink-soft leading-snug mt-1">{i.text}</p>
                   {i.kind === "confirm" && !i.resolved && (
                     <div className="flex gap-2 mt-2.5">
                       <button onClick={(e) => { e.stopPropagation(); resolve(i.id, "accepted"); }} className="h-8 px-3 rounded-[8px] bg-dark text-cream text-[11.5px] font-bold hover:bg-dark-deep cursor-pointer">Подтвердить</button>
@@ -54,7 +92,10 @@ function NotifyBell() {
                   )}
                   {i.resolved && <p className={`text-[11px] font-bold mt-1.5 ${i.resolved === "accepted" ? "text-success" : "text-ink-mute"}`}>{i.resolved === "accepted" ? "Подтверждено ✓" : "Отклонено"}</p>}
                 </div>
+                <button onClick={(e) => { e.stopPropagation(); remove(i.id); }} className="opacity-0 group-hover:opacity-100 mt-0.5 text-ink-mute hover:text-error cursor-pointer shrink-0" aria-label="Удалить уведомление"><Trash2 size={14} /></button>
               </div>
+            </div>
+              ))}
             </div>
           ))}
         </div>
