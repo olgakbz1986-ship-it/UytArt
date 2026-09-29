@@ -282,6 +282,9 @@ export interface SellerProductItem {
   minOrder?: number;
   restored?: boolean;
   fileFormat?: string;
+  style?: string;
+  color?: string;
+  size?: string;
   animation?: {
     frames: string[];
     captions: string[];

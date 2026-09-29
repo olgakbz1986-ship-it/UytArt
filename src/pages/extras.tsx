@@ -810,7 +810,7 @@ export function SellerDashboardPage() {
   const s = useSellerReg();
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "settings">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings">("products");
   const allOrders = useAppStore((s) => s.orders);
   const advanceStatus = useAppStore((s) => s.advanceStatus);
   const myOrders = allOrders.filter((o) => o.items.some((i) => i.productId.startsWith("sp-")));
@@ -941,6 +941,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
     { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
+    { id: "studio" as const, label: "Студия Quantiform", icon: Sparkles },
     { id: "settings" as const, label: "Настройки", icon: UserPlus },
   ];
 
@@ -1539,6 +1540,41 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {tab === "studio" && (
+        <div className="fade-up">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="w-11 h-11 rounded-2xl bg-dark text-cream flex items-center justify-center"><Sparkles size={20} /></span>
+            <div>
+              <h2 className="font-display font-bold text-[24px] text-ink">Студия Quantiform</h2>
+              <p className="text-[13px] text-ink-soft">Инструментарий продавца: карточки, фотосессии, SEO, видео, агенты и модели — в одном месте.</p>
+            </div>
+          </div>
+          <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}.</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {([
+              ["🧾", "Редактор характеристик", "Материалы, стиль, цвет, размер, вес и доп. параметры + автозаполнение ИИ прямо в мастере карточки.", "done", ""],
+              ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "soon", "ЭТАП 2"],
+              ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "soon", "ЭТАП 2"],
+              ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "soon", "ЭТАП 3"],
+              ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "soon", "ЭТАП 3"],
+              ["📸", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "soon", "ЭТАП 4"],
+              ["🎬", "Видеостудия", "Видеообложка из фото, шаблонный видеообзор, субтитры и крупные планы.", "soon", "ЭТАП 4"],
+              ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "soon", "ЭТАП 5"],
+            ] as [string, string, string, string, string][]).map(([em, name, desc, st, eta]) => (
+              <div key={name} className={`bg-surface rounded-2xl shadow-card p-5 border ${st === "done" ? "border-success" : "border-line-soft"}`}>
+                <div className="flex items-start justify-between mb-2">
+                  <span className="text-[26px]">{em}</span>
+                  <span className={`text-[10.5px] font-bold px-2 py-1 rounded-full ${st === "done" ? "bg-success text-cream" : "bg-line-soft text-ink-mute"}`}>{st === "done" ? "✅ ДОСТУПНО" : "🔜 " + eta}</span>
+                </div>
+                <p className="font-display font-bold text-[15px] text-ink mb-1">{name}</p>
+                <p className="text-[12px] text-ink-soft">{desc}</p>
+                {st === "done" && <p className="text-[11px] text-ink-mute mt-2">Где: «Товары» → «Изменить» → шаг 3 «Детали».</p>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

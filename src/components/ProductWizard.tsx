@@ -14,6 +14,8 @@ type Draft = {
   minOrder?: string;
   restored?: boolean;
   fileFormat?: string;
+  style?: string; color?: string; size?: string; weight?: string;
+  specs?: { key: string; value: string }[];
   materials: string[]; newMaterial: string; manufacturer: string;
   dims: { length: string; width: string; height: string; unit: "см" | "мм" | "м" };
   tags: string[]; newTag: string; media: Media[];
@@ -24,6 +26,7 @@ type Draft = {
 const empty: Draft = {
   name: "", category: CATEGORIES[0]?.name || "", price: "", description: "",
   serviceMode: "both", slots: [], instant: false, minOrder: "", restored: false, fileFormat: "zip",
+  style: "", color: "", size: "", weight: "", specs: [],
   materials: [], newMaterial: "", manufacturer: "",
   dims: { length: "", width: "", height: "", unit: "см" },
   tags: [], newTag: "", media: [],
@@ -43,6 +46,7 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
     if (editItem) {
       setDraft({
         name: editItem.name, category: editItem.category, price: String(editItem.price),
+        style: editItem.style || "", color: editItem.color || "", size: editItem.size || "", weight: editItem.weight ? String(editItem.weight) : "", specs: editItem.specs || [],
         description: editItem.description || "", materials: editItem.materials || [], newMaterial: "",
         manufacturer: editItem.manufacturer || "",
         dims: {
@@ -106,6 +110,11 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
       minOrder: draft.minOrder ? +draft.minOrder : undefined,
       restored: draft.restored,
       fileFormat: draft.fileFormat || undefined,
+      style: draft.style?.trim() || undefined,
+      color: draft.color?.trim() || undefined,
+      size: draft.size?.trim() || undefined,
+      weight: draft.weight ? +draft.weight : undefined,
+      specs: (draft.specs || []).filter((x) => x.key.trim() && x.value.trim()),
       name: draft.name.trim(),
       category: draft.category,
       price: +draft.price,
@@ -295,6 +304,38 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
 
           {step === 3 && (
             <div className="space-y-4">
+              {/* === Студия Quantiform: редактор характеристик === */}
+              <div className="bg-surface-soft rounded-xl p-4 mb-4 border border-line-soft">
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <p className="text-[12px] font-bold text-ink">🧾 Характеристики товара</p>
+                  <button type="button" onClick={() => {
+                    const src = (draft.name + " " + draft.category + " " + draft.description).toLowerCase();
+                    const mat = /глин|керамик|фарфор/.test(src) ? "Керамика" : /дерев|дуб|ясень|сосн/.test(src) ? "Дерево" : /латун|стал|метал/.test(src) ? "Металл" : /кож/.test(src) ? "Кожа" : /льн|хлоп|шерст|ткан/.test(src) ? "Текстиль" : /стекл/.test(src) ? "Стекло" : "";
+                    const st = /бохо/.test(src) ? "Бохо" : /лофт/.test(src) ? "Лофт" : /сканд/.test(src) ? "Сканди" : /минимал/.test(src) ? "Минимализм" : /неоклас/.test(src) ? "Неоклассика" : /прованс/.test(src) ? "Прованс" : /эко/.test(src) ? "Эко" : /джапанд/.test(src) ? "Джапанди" : "";
+                    const col = /графит/.test(src) ? "Графит" : /слонов|бел/.test(src) ? "Слоновая кость" : /шалфей|зелён|зелен/.test(src) ? "Шалфей" : /терракот|корич/.test(src) ? "Терракота" : /медов|беж/.test(src) ? "Медовый" : /олив/.test(src) ? "Оливковый" : /розов/.test(src) ? "Пыльная роза" : /индиго|син/.test(src) ? "Индиго" : "";
+                    const sz = draft.dims.length && draft.dims.width ? draft.dims.length + "×" + draft.dims.width + " " + draft.dims.unit : "";
+                    setDraft({ ...draft,
+                      style: draft.style || st, color: draft.color || col, size: draft.size || sz,
+                      materials: draft.materials.length ? draft.materials : (mat ? [mat] : draft.materials) });
+                  }} className="h-8 px-3 rounded-[8px] bg-accent text-ink text-[11.5px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer">✍️ Заполнить ИИ</button>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Стиль"><input className="field" value={draft.style || ""} onChange={(e) => setDraft({ ...draft, style: e.target.value })} placeholder="Бохо, сканди, лофт…" /></Field>
+                  <Field label="Цвет"><input className="field" value={draft.color || ""} onChange={(e) => setDraft({ ...draft, color: e.target.value })} placeholder="Шалфей, терракота…" /></Field>
+                  <Field label="Размер"><input className="field" value={draft.size || ""} onChange={(e) => setDraft({ ...draft, size: e.target.value })} placeholder="Ø 20 см, 40×60 см…" /></Field>
+                  <Field label="Вес, кг"><input className="field" inputMode="decimal" value={draft.weight || ""} onChange={(e) => setDraft({ ...draft, weight: e.target.value.replace(/[^\d.]/g, "") })} placeholder="1.2" /></Field>
+                </div>
+                <p className="text-[11px] font-bold text-ink-mute mt-3 mb-1.5">Дополнительные параметры (ключ — значение)</p>
+                {(draft.specs || []).map((sp, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input className="field" value={sp.key} onChange={(e) => setDraft({ ...draft, specs: (draft.specs || []).map((x, xi) => xi === i ? { ...x, key: e.target.value } : x) })} placeholder="Параметр (например, Комплектация)" />
+                    <input className="field" value={sp.value} onChange={(e) => setDraft({ ...draft, specs: (draft.specs || []).map((x, xi) => xi === i ? { ...x, value: e.target.value } : x) })} placeholder="Значение" />
+                    <button type="button" onClick={() => setDraft({ ...draft, specs: (draft.specs || []).filter((_, xi) => xi !== i) })} className="w-9 h-9 shrink-0 rounded-[8px] bg-line-soft text-ink-mute hover:bg-error hover:text-white cursor-pointer">×</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setDraft({ ...draft, specs: [...(draft.specs || []), { key: "", value: "" }] })} className="h-8 px-3 rounded-[8px] bg-line-soft text-[11.5px] font-bold text-ink-soft hover:bg-line cursor-pointer">+ Добавить параметр</button>
+              </div>
+
               <Field label="Производитель / мастер">
                 <input className="field" value={draft.manufacturer} onChange={(e) => setDraft({ ...draft, manufacturer: e.target.value })} placeholder="Мастерская «Глиняный дом»" />
               </Field>
