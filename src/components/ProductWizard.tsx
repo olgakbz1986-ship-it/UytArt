@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import {  useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller";
 import { CITIES, zoneLabel } from "../lib/geo";
@@ -8,6 +8,12 @@ import { Modal, Btn, Field, Badge } from "./ui";
 type Media = { type: "image" | "video"; url: string; name: string };
 type Draft = {
   name: string; category: string; price: string; description: string;
+  serviceMode?: "online" | "visit" | "both";
+  slots?: string[];
+  instant?: boolean;
+  minOrder?: string;
+  restored?: boolean;
+  fileFormat?: string;
   materials: string[]; newMaterial: string; manufacturer: string;
   dims: { length: string; width: string; height: string; unit: "см" | "мм" | "м" };
   tags: string[]; newTag: string; media: Media[];
@@ -17,6 +23,7 @@ type Draft = {
 };
 const empty: Draft = {
   name: "", category: CATEGORIES[0]?.name || "", price: "", description: "",
+  serviceMode: "both", slots: [], instant: false, minOrder: "", restored: false, fileFormat: "zip",
   materials: [], newMaterial: "", manufacturer: "",
   dims: { length: "", width: "", height: "", unit: "см" },
   tags: [], newTag: "", media: [],
@@ -93,6 +100,12 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
     const data = {
       sellerCity: draft.sellerCity || sellerReg.city || "",
       deliveryZone: draft.deliveryZone || { mode: "nationwide" },
+      serviceMode: draft.serviceMode,
+      slots: draft.slots,
+      instant: draft.instant,
+      minOrder: draft.minOrder ? +draft.minOrder : undefined,
+      restored: draft.restored,
+      fileFormat: draft.fileFormat || undefined,
       name: draft.name.trim(),
       category: draft.category,
       price: +draft.price,
@@ -187,6 +200,89 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
                     {CATEGORIES.map((c) => <option key={c.slug}>{c.name}</option>)}
                   </select>
                 </Field>
+
+                {/* === Ветвление по группе (цифра / услуги / фудкорт / вещи) === */}
+                {(() => {
+                  const cat = CATEGORIES.find((c) => c.name === draft.category);
+                  const group = cat?.group;
+                  if (group === "digital") return (
+                    <div className="bg-surface-soft rounded-xl p-4 space-y-3 fade-up border border-line-soft">
+                      <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">⚡ Мгновенная доставка</p>
+                      <p className="text-[11.5px] text-ink-soft">Цифровой товар — покупатель получает доступ сразу после оплаты. Логистика не нужна.</p>
+                      <Field label="Формат файла">
+                        <select className="field" value={draft.fileFormat} onChange={(e) => setDraft({ ...draft, fileFormat: e.target.value })}>
+                          <option value="zip">Архив (zip)</option>
+                          <option value="pdf">PDF</option>
+                          <option value="psd">PSD / исходники</option>
+                          <option value="fig">Figma / Sketch</option>
+                          <option value="mp4">Видео (mp4)</option>
+                          <option value="link">Ссылка / облако</option>
+                        </select>
+                      </Field>
+                      <label className="flex items-center gap-2 text-[12.5px] cursor-pointer">
+                        <input type="checkbox" checked={draft.instant} onChange={(e) => setDraft({ ...draft, instant: e.target.checked })} />
+                        <span>Автоматическая выдача ссылки после оплаты</span>
+                      </label>
+                    </div>
+                  );
+                  if (group === "services") return (
+                    <div className="bg-surface-soft rounded-xl p-4 space-y-3 fade-up border border-line-soft">
+                      <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">🛠 Режим оказания услуги</p>
+                      <div className="inline-flex bg-line-soft rounded-[10px] p-1">
+                        {([["online","Онлайн"],["visit","Выезд к клиенту"],["both","Оба варианта"]] as const).map(([v,l]) => (
+                          <button key={v} type="button" onClick={() => setDraft({ ...draft, serviceMode: v })}
+                            className={`h-9 px-3 rounded-[8px] text-[11.5px] font-bold transition-all ${draft.serviceMode === v ? "bg-dark text-cream" : "text-ink-soft"}`}>{l}</button>
+                        ))}
+                      </div>
+                      {(draft.serviceMode === "visit" || draft.serviceMode === "both") && (
+                        <Field label="Зона выезда" hint="Укажите до какого радиуса выезжаете">
+                          <select className="field" value={draft.deliveryZone?.mode || "city"} onChange={(e) => {
+                            const mode = e.target.value as any;
+                            setDraft({ ...draft, deliveryZone: mode === "radius" ? { mode, km: 30 } : mode === "region" ? { mode } : mode === "nationwide" ? { mode } : { mode, withDistrict: false } });
+                          }}>
+                            <option value="city">В пределах города</option>
+                            <option value="radius">Город + радиус (км)</option>
+                            <option value="region">Область / регион</option>
+                            <option value="nationwide">Вся Россия (командировки)</option>
+                          </select>
+                        </Field>
+                      )}
+                    </div>
+                  );
+                  if (group === "foodcourt") return (
+                    <div className="bg-surface-soft rounded-xl p-4 space-y-3 fade-up border border-line-soft">
+                      <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">🕐 Слоты доставки</p>
+                      <p className="text-[11.5px] text-ink-soft">Выберите окна, в которые вы готовы доставлять. Покупатель видит только доступные.</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {["сегодня 12:00–14:00","сегодня 18:00–20:00","завтра 12:00–14:00","завтра 18:00–20:00","послезавтра 12:00–14:00","послезавтра 18:00–20:00"].map((slot) => (
+                          <label key={slot} className="flex items-center gap-2 text-[11.5px] cursor-pointer bg-cream rounded-lg px-3 py-2 border border-line-soft">
+                            <input type="checkbox" checked={(draft.slots || []).includes(slot)} onChange={(e) => setDraft({ ...draft, slots: e.target.checked ? [...(draft.slots || []), slot] : (draft.slots || []).filter(x => x !== slot) })} />
+                            <span>{slot}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <Field label="Минимальная сумма заказа, ₽" hint="Заказы ниже суммы не принимаются">
+                        <input className="field" inputMode="numeric" value={draft.minOrder} onChange={(e) => setDraft({ ...draft, minOrder: e.target.value.replace(/\D/g, "") })} placeholder="800" />
+                      </Field>
+                      <Field label="Зона доставки">
+                        <select className="field" value={draft.deliveryZone?.mode || "city"} onChange={(e) => {
+                          const mode = e.target.value as any;
+                          setDraft({ ...draft, deliveryZone: mode === "radius" ? { mode, km: 10 } : { mode, withDistrict: true } });
+                        }}>
+                          <option value="city">По городу</option>
+                          <option value="radius">Город + пригород</option>
+                        </select>
+                      </Field>
+                    </div>
+                  );
+                  return null;
+                })()}
+
+                {/* Бейдж Реставрация — доступен для любой группы */}
+                <label className="flex items-center gap-2 text-[12.5px] cursor-pointer mt-2">
+                  <input type="checkbox" checked={draft.restored} onChange={(e) => setDraft({ ...draft, restored: e.target.checked })} />
+                  <span>♻️ Это восстановленный / винтажный товар (получит бейдж в каталоге)</span>
+                </label>
                 <Field label="Цена, ₽" required>
                   <input className="field" inputMode="numeric" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/\D/g, "") })} placeholder="4900" />
                 </Field>

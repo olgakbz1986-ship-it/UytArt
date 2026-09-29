@@ -12,6 +12,8 @@ import { SellerRegWizard } from "./extras";
 export function AuthPage() {
   const [sp] = useSearchParams();
   const login = useAppStore((s) => s.login);
+  const authLogin = useAppStore((s) => s.authLogin);
+  const authRegister = useAppStore((s) => s.authRegister);
   const nav = useNavigate();
 
   const [tab, setTab] = useState<"sms" | "email">("sms");
@@ -25,6 +27,7 @@ export function AuthPage() {
   const [regOpen, setRegOpen] = useState(sp.get("mode") === "register");
   const [regTab, setRegTab] = useState<"buyer" | "seller">(sp.get("role") === "seller" ? "seller" : "buyer");
   const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, styles: [] as string[] });
+  const [confirmInfo, setConfirmInfo] = useState<null | { email: string; devUrl?: string }>(null);
 
   const sendCode = () => {
     if (phone.replace(/\D/g, "").length < 10) { setError("Введите номер полностью"); return; }
@@ -40,27 +43,45 @@ export function AuthPage() {
     }, 500);
   };
 
-  const emailLogin = () => {
+  const emailLogin = async () => {
     if (!emailForm.email.includes("@") || emailForm.password.length < 6) { setError("Проверьте email и пароль (минимум 6 символов)"); return; }
     setError("");
     setBusy(true);
-    setTimeout(() => {
-      login({ id: "u" + Date.now(), name: emailForm.email.split("@")[0], email: emailForm.email, role: "buyer" });
-      nav("/profile");
-    }, 500);
+    const r = await authLogin(emailForm.email.trim(), emailForm.password);
+    setBusy(false);
+    if (!r.ok) {
+      setError(r.error === "need_confirm" ? "Email не подтверждён. Проверьте письмо (в dev-режиме ссылка в консоли сервера)." : r.error === "bad_credentials" ? "Неверный email или пароль" : "Ошибка входа, попробуйте ещё раз");
+      return;
+    }
+    nav("/profile");
   };
 
   const STYLES8 = ["Сканди", "Лофт", "Джапанди", "Неоклассика", "Бохо", "Минимализм", "Прованс", "Эко"];
-  const finishReg = () => {
+  const finishReg = async () => {
     setBusy(true);
-    setTimeout(() => {
-      login({ id: "u" + Date.now(), name: reg.name, email: reg.email, phone: reg.phone, role: "buyer" });
-      nav("/profile");
-    }, 600);
+    const r = await authRegister({ name: reg.name, email: reg.email, password: reg.password });
+    setBusy(false);
+    if (!r.ok) {
+      setError(r.error === "exists" ? "Такой email уже зарегистрирован — войдите" : r.error === "short_password" ? "Пароль должен быть не короче 8 символов" : "Ошибка регистрации, попробуйте ещё раз");
+      setRegOpen(false);
+      return;
+    }
+    setConfirmInfo({ email: reg.email, devUrl: r.devConfirmUrl });
   };
 
   return (
     <div className="max-w-[860px] mx-auto px-4 sm:px-6 py-12">
+      {confirmInfo && (
+        <div className="max-w-[520px] mx-auto bg-surface rounded-2xl shadow-card p-7 mb-8 fade-up text-center">
+          <CheckCircle2 size={34} className="text-success mx-auto mb-3" />
+          <h2 className="font-display font-bold text-[22px] text-ink mb-2">Письмо отправлено</h2>
+          <p className="text-[13.5px] text-ink-soft mb-4">Подтвердите email <b>{confirmInfo.email}</b> по ссылке из письма, затем войдите.</p>
+          {confirmInfo.devUrl && (
+            <a href={confirmInfo.devUrl} target="_blank" rel="noreferrer" className="inline-block h-11 px-5 rounded-[10px] bg-accent text-ink font-bold leading-[44px] hover:bg-accent-deep hover:text-cream transition-colors">DEV: открыть ссылку подтверждения</a>
+          )}
+          <div className="mt-4"><Btn variant="ghost" size="sm" onClick={() => { setConfirmInfo(null); setRegOpen(false); }}>Перейти ко входу</Btn></div>
+        </div>
+      )}
       {!regOpen ? (
         <div className="max-w-[480px] mx-auto fade-up">
           <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Вход в Quantiform</h1>

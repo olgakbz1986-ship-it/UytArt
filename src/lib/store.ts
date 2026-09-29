@@ -73,6 +73,9 @@ interface AppState {
 
   login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
+  authRegister: (p: { name: string; email: string; password: string }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string }>;
+  authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  restoreSession: () => Promise<void>;
   setActiveAccount: (email: string, role: UserRole, sellerType?: SellerType) => void;
   updateUser: (patch: Partial<User>) => void;
   addToCart: (productId: string, qty?: number) => void;
@@ -89,6 +92,8 @@ interface AppState {
   addBonus: (amount: number, reason: string, sellerId?: string, sellerName?: string) => void;
   spendBonuses: (entries: { sellerId: string; amount: number }[]) => void;
 }
+
+import { api } from "./api";
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -135,8 +140,27 @@ export const useAppStore = create<AppState>()(
         return { accounts: updatedAccounts, session: newSession };
       }),
 
-      /* Выход: полная очистка активной сессии */
-      logout: () => set({ session: null }),
+      /* Выход: полная очистка активной сессии + запрос на сервер */
+      logout: () => { api.logout().catch(() => {}); set({ session: null }); },
+
+      /* Реальная аутентификация через бэкенд StartTechPro */
+      authRegister: async (p) => api.register(p),
+      authLogin: async (email, password) => {
+        const r = await api.login(email, password);
+        if (!r.ok || !r.profile) return { ok: false, error: r.error };
+        const pr = r.profile;
+        useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
+        return { ok: true };
+      },
+      restoreSession: async () => {
+        try {
+          const r = await api.me();
+          if (r.ok && r.profile) {
+            const pr = r.profile;
+            useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
+          }
+        } catch { /* сервер недоступен — остаёмся в демо-режиме */ }
+      },
 
       /* Переключение на другой аккаунт из реестра по email+role */
       setActiveAccount: (email, role, sellerType) => set((s) => {

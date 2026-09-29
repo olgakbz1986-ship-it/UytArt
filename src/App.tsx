@@ -2,6 +2,7 @@ import React from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { usePrefsStore, applyTheme } from "./lib/prefs";
+import { useAppStore } from "./lib/store";
 import { Header, Footer } from "./components/layout";
 import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
@@ -37,6 +38,11 @@ function ThemeSync() {
   return null;
 }
 
+function SessionRestore() {
+  useEffect(() => { useAppStore.getState().restoreSession(); }, []);
+  return null;
+}
+
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
@@ -69,6 +75,7 @@ export default function App() {
       <ErrorBoundary>
         <ScrollToTop />
         <ThemeSync />
+        <SessionRestore />
         <div className="min-h-screen flex flex-col">
           <Header />
           <main className="flex-1">

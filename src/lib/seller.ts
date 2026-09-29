@@ -253,6 +253,8 @@ export type DeliveryZone =
   | { mode: "radius"; km: number }
   | { mode: "region" }
   | { mode: "nationwide" };
+export type ServiceMode = "online" | "visit" | "both";
+export type SlotTime = string;
 
 export interface SellerProductItem {
   id: string;
@@ -274,6 +276,12 @@ export interface SellerProductItem {
   specs?: { key: string; value: string }[];
   sellerCity?: string;
   deliveryZone?: DeliveryZone;
+  serviceMode?: ServiceMode;
+  slots?: SlotTime[];
+  instant?: boolean;
+  minOrder?: number;
+  restored?: boolean;
+  fileFormat?: string;
   animation?: {
     frames: string[];
     captions: string[];
