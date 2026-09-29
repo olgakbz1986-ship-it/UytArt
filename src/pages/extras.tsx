@@ -1,6 +1,9 @@
 import { StudioCanvas } from "../components/StudioCanvas";
 import { StudioLibrary } from "../components/StudioLibrary";
 import { StudioSEO } from "../components/StudioSEO";
+import { StudioPhoto } from "../components/StudioPhoto";
+import { StudioVideo } from "../components/StudioVideo";
+import { StudioAgent } from "../components/StudioAgent";
 import { ProductWizard } from "../components/ProductWizard";
 import { useNotifyStore } from "../lib/notify";
 import {
@@ -819,6 +822,9 @@ export function SellerDashboardPage() {
   const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [seoOpen, setSeoOpen] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardPrefill, setWizardPrefill] = useState<any>(null);
   const [studioInfo, setStudioInfo] = useState<null | { name: string; desc: string; eta: string; bullets: string[] }>(null);
@@ -1604,12 +1610,12 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
               ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "done", "", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
               ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "done", "", ["YandexGPT и Kandinsky из коробки", "Свой API-ключ внешних моделей", "Выбор модели под каждую задачу"]],
-              ["📸", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "soon", "ЭТАП 4", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
+              ["", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "done", "", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
               ["🎬", "Видеостудия", "Видеообложка из фото, шаблонный видеообзор, субтитры и крупные планы.", "soon", "ЭТАП 4", ["Видеообложка 5 сек из фото", "Шаблонный видеообзор товара", "Субтитры и крупные планы"]],
-              ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "soon", "ЭТАП 5", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
+              ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "done", "", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
             ] as [string, string, string, string, string, string[]][]).map(([em, name, desc, st, eta, bullets]) => (
               <button type="button" key={name}
-                onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : name === "SEO-копирайтер" ? (setSeoOpen(true), setStudioInfo(null)) : name === "Модели" ? (setTab("settings"), setTimeout(() => { document.getElementById("settings-models")?.scrollIntoView({ behavior: "smooth" }); }, 100)) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
+                onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : name === "SEO-копирайтер" ? (setSeoOpen(true), setStudioInfo(null)) : name === "ИИ-фотосессия" ? (setPhotoOpen(true), setStudioInfo(null)) : name === "Видеостудия" ? (setVideoOpen(true), setStudioInfo(null)) : name === "Конструктор агентов" ? (setAgentOpen(true), setStudioInfo(null)) : name === "Модели" ? (setTab("settings"), setTimeout(() => { document.getElementById("settings-models")?.scrollIntoView({ behavior: "smooth" }); }, 100)) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
                 className={`text-left bg-surface rounded-2xl shadow-card p-5 border transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift ${st === "done" ? "border-success" : "border-line-soft"}`}>
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-[26px]">{em}</span>
@@ -1657,6 +1663,9 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <StudioLibrary open={libraryOpen} onClose={() => setLibraryOpen(false)}
             onOpenWork={(id) => { setCanvasWorkId(id); setLibraryOpen(false); setCanvasOpen(true); }}
             onPublish={(w) => { setWizardPrefill({ name: w.data?.title || w.name, description: w.data?.desc || "", photo: w.data?.photo || w.preview, tags: w.data?.tags || [] }); setLibraryOpen(false); setWizardOpen(true); }} />
+          <StudioPhoto open={photoOpen} onClose={() => setPhotoOpen(false)} />
+          <StudioVideo open={videoOpen} onClose={() => setVideoOpen(false)} />
+          <StudioAgent open={agentOpen} onClose={() => setAgentOpen(false)} />
 {tab === "settings" && (
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
