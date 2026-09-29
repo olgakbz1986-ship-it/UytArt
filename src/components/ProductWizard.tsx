@@ -1,3 +1,4 @@
+import { StudioSEO } from "./StudioSEO";
 import { StudioCanvas } from "./StudioCanvas";
 import {  useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
@@ -34,9 +35,10 @@ const empty: Draft = {
   deliveryZone: { mode: "nationwide" },
 };
 
-export function ProductWizard({ open, onClose, editId }: { open: boolean; onClose: () => void; editId?: string | null }) {
+export function ProductWizard({ open, onClose, editId, initialData }: { open: boolean; onClose: () => void; editId?: string | null; initialData?: { name?: string; description?: string; category?: string; photo?: string; tags?: string[] } }) {
   const [step, setStep] = useState(1);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [seoOpen, setSeoOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,6 +62,15 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
         tags: editItem.tags || [], newTag: "", media: editItem.media || [],
         sellerCity: editItem.sellerCity || sellerReg.city || "",
         deliveryZone: editItem.deliveryZone || { mode: "nationwide" },
+      });
+    } else if (initialData) {
+      setDraft({
+        ...empty,
+        name: initialData.name || "",
+        description: initialData.description || "",
+        category: initialData.category || CATEGORIES[0]?.name || "",
+        tags: initialData.tags || [],
+        media: initialData.photo ? [{ type: "image", url: initialData.photo, name: "from-studio.jpg" }] : [],
       });
     } else {
       setDraft(empty);
@@ -524,6 +535,8 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
           </div>
         </div>
       </div>
+      <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} initialName={draft.name} initialCategory={draft.category}
+        onApply={(data) => setDraft({ ...draft, name: data.name, description: data.description, tags: data.tags })} />
       <StudioCanvas open={studioOpen} onClose={() => setStudioOpen(false)} />
     </Modal>
   );

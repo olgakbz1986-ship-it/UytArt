@@ -1,5 +1,7 @@
 import { StudioCanvas } from "../components/StudioCanvas";
 import { StudioLibrary } from "../components/StudioLibrary";
+import { StudioSEO } from "../components/StudioSEO";
+import { ProductWizard } from "../components/ProductWizard";
 import { useNotifyStore } from "../lib/notify";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -27,7 +29,7 @@ import {
 } from "../lib/subscriptions";
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
 import { Markdown } from "../components/markdown";
-import { ProductWizard } from "../components/ProductWizard";
+;
 import { SellerAvatar } from "../components/SellerAvatar";
 import { usePrefsStore } from "../lib/prefs";
 
@@ -816,6 +818,9 @@ export function SellerDashboardPage() {
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [seoOpen, setSeoOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardPrefill, setWizardPrefill] = useState<any>(null);
   const [studioInfo, setStudioInfo] = useState<null | { name: string; desc: string; eta: string; bullets: string[] }>(null);
   const [waitlist, setWaitlist] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("qf_studio_waitlist") || "[]"); } catch { return []; } });
   const allOrders = useAppStore((s) => s.orders);
@@ -1547,7 +1552,39 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               </div>
             </>
           )}
-        </div>
+        
+
+            {/* === Блок интеграций с ИИ-моделями === */}
+            <div id="settings-models" className="mt-8 bg-surface-soft rounded-2xl p-6 border border-line-soft">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-9 h-9 rounded-xl bg-dark text-cream flex items-center justify-center">🔌</span>
+                <h3 className="font-display font-bold text-[18px] text-ink">Интеграции с ИИ-моделями</h3>
+              </div>
+              <p className="text-[12.5px] text-ink-soft mb-5">Подключите свои ключи для расширенного функционала Студии. Базовая модель включена во всех тарифах.</p>
+              {([
+                ["YandexGPT", "yagpt_key", "OAuth-токен Yandex Cloud", "Тексты, SEO, характеристики, описания"],
+                ["YandexART / Kandinsky", "kandinsky_key", "API-ключ генерации изображений", "ИИ-фотосессии, сцены, инфографика"],
+                ["GigaChat (Сбер)", "gigachat_key", "Ключ API GigaChat", "Альтернативная языковая модель"],
+                ["OpenAI / Claude", "openai_key", "Ваш API-ключ (на ваш счёт)", "Внешние модели по желанию"],
+              ] as [string, string, string, string][]).map(([name, key, hint, use]) => {
+                const v = localStorage.getItem("qf_model_" + key) || "";
+                return (
+                  <div key={key} className="mb-3 pb-3 border-b border-line-soft last:border-0 last:mb-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="font-display font-bold text-[13px] text-ink">{name}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v ? "bg-success text-cream" : "bg-line-soft text-ink-mute"}`}>{v ? "✅ ПОДКЛЮЧЕНО" : "не подключено"}</span>
+                    </div>
+                    <p className="text-[11px] text-ink-mute mb-1.5">{use}</p>
+                    <input className="field font-mono text-[12px]" type="password" value={v} placeholder={hint}
+                      onChange={(e) => localStorage.setItem("qf_model_" + key, e.target.value)} />
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-ink-mute mt-4 flex items-start gap-1.5">
+                <span>🔒</span>
+                <span>Ключи хранятся только в вашем браузере (localStorage) и не уходят на серверы платформы. При переезде в Yandex Cloud (следующий этап) ключи перенесутся в защищённое хранилище.</span>
+              </p>
+            </div></div>
       )}
 
       {tab === "studio" && (
@@ -1565,14 +1602,14 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               ["🧾", "Редактор характеристик", "Материалы, стиль, цвет, размер, вес и доп. параметры + автозаполнение ИИ прямо в мастере карточки.", "done", "", ["Автозаполнение ИИ по названию и описанию", "Таблица доп. параметров ключ-значение", "Сохранение в карточку товара"]],
               ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "done", "", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
               ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
-              ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "soon", "ЭТАП 3", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
-              ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "soon", "ЭТАП 3", ["YandexGPT и Kandinsky из коробки", "Свой API-ключ внешних моделей", "Выбор модели под каждую задачу"]],
+              ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "done", "", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
+              ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "done", "", ["YandexGPT и Kandinsky из коробки", "Свой API-ключ внешних моделей", "Выбор модели под каждую задачу"]],
               ["📸", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "soon", "ЭТАП 4", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
               ["🎬", "Видеостудия", "Видеообложка из фото, шаблонный видеообзор, субтитры и крупные планы.", "soon", "ЭТАП 4", ["Видеообложка 5 сек из фото", "Шаблонный видеообзор товара", "Субтитры и крупные планы"]],
               ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "soon", "ЭТАП 5", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
             ] as [string, string, string, string, string, string[]][]).map(([em, name, desc, st, eta, bullets]) => (
               <button type="button" key={name}
-                onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
+                onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : name === "SEO-копирайтер" ? (setSeoOpen(true), setStudioInfo(null)) : name === "Модели" ? (setTab("settings"), setTimeout(() => { document.getElementById("settings-models")?.scrollIntoView({ behavior: "smooth" }); }, 100)) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
                 className={`text-left bg-surface rounded-2xl shadow-card p-5 border transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift ${st === "done" ? "border-success" : "border-line-soft"}`}>
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-[26px]">{em}</span>
@@ -1614,10 +1651,12 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       )}
 
       
+          <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} />
+          <ProductWizard open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
           <StudioCanvas open={canvasOpen} onClose={() => setCanvasOpen(false)} initialWorkId={canvasWorkId} />
           <StudioLibrary open={libraryOpen} onClose={() => setLibraryOpen(false)}
             onOpenWork={(id) => { setCanvasWorkId(id); setLibraryOpen(false); setCanvasOpen(true); }}
-            onPublish={(w) => { alert("Откроется мастер создания товара с предзаполненными данными (этап 3)\nРабота: " + w.name); }} />
+            onPublish={(w) => { setWizardPrefill({ name: w.data?.title || w.name, description: w.data?.desc || "", photo: w.data?.photo || w.preview, tags: w.data?.tags || [] }); setLibraryOpen(false); setWizardOpen(true); }} />
 {tab === "settings" && (
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
