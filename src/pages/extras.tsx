@@ -811,6 +811,8 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings">("products");
+  const [studioInfo, setStudioInfo] = useState<null | { name: string; desc: string; eta: string; bullets: string[] }>(null);
+  const [waitlist, setWaitlist] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("qf_studio_waitlist") || "[]"); } catch { return []; } });
   const allOrders = useAppStore((s) => s.orders);
   const advanceStatus = useAppStore((s) => s.advanceStatus);
   const myOrders = allOrders.filter((o) => o.items.some((i) => i.productId.startsWith("sp-")));
@@ -1552,29 +1554,57 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               <p className="text-[13px] text-ink-soft">Инструментарий продавца: карточки, фотосессии, SEO, видео, агенты и модели — в одном месте.</p>
             </div>
           </div>
-          <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}.</p>
+          <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}. Нажмите на модуль, чтобы открыть его.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {([
-              ["🧾", "Редактор характеристик", "Материалы, стиль, цвет, размер, вес и доп. параметры + автозаполнение ИИ прямо в мастере карточки.", "done", ""],
-              ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "soon", "ЭТАП 2"],
-              ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "soon", "ЭТАП 2"],
-              ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "soon", "ЭТАП 3"],
-              ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "soon", "ЭТАП 3"],
-              ["📸", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "soon", "ЭТАП 4"],
-              ["🎬", "Видеостудия", "Видеообложка из фото, шаблонный видеообзор, субтитры и крупные планы.", "soon", "ЭТАП 4"],
-              ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "soon", "ЭТАП 5"],
-            ] as [string, string, string, string, string][]).map(([em, name, desc, st, eta]) => (
-              <div key={name} className={`bg-surface rounded-2xl shadow-card p-5 border ${st === "done" ? "border-success" : "border-line-soft"}`}>
+              ["🧾", "Редактор характеристик", "Материалы, стиль, цвет, размер, вес и доп. параметры + автозаполнение ИИ прямо в мастере карточки.", "done", "", ["Автозаполнение ИИ по названию и описанию", "Таблица доп. параметров ключ-значение", "Сохранение в карточку товара"]],
+              ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "soon", "ЭТАП 2", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
+              ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "soon", "ЭТАП 2", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
+              ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "soon", "ЭТАП 3", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
+              ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "soon", "ЭТАП 3", ["YandexGPT и Kandinsky из коробки", "Свой API-ключ внешних моделей", "Выбор модели под каждую задачу"]],
+              ["📸", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "soon", "ЭТАП 4", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
+              ["🎬", "Видеостудия", "Видеообложка из фото, шаблонный видеообзор, субтитры и крупные планы.", "soon", "ЭТАП 4", ["Видеообложка 5 сек из фото", "Шаблонный видеообзор товара", "Субтитры и крупные планы"]],
+              ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "soon", "ЭТАП 5", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
+            ] as [string, string, string, string, string, string[]][]).map(([em, name, desc, st, eta, bullets]) => (
+              <button type="button" key={name}
+                onClick={() => st === "done" ? setTab("products") : setStudioInfo({ name, desc, eta, bullets })}
+                className={`text-left bg-surface rounded-2xl shadow-card p-5 border transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift ${st === "done" ? "border-success" : "border-line-soft"}`}>
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-[26px]">{em}</span>
                   <span className={`text-[10.5px] font-bold px-2 py-1 rounded-full ${st === "done" ? "bg-success text-cream" : "bg-line-soft text-ink-mute"}`}>{st === "done" ? "✅ ДОСТУПНО" : "🔜 " + eta}</span>
                 </div>
                 <p className="font-display font-bold text-[15px] text-ink mb-1">{name}</p>
                 <p className="text-[12px] text-ink-soft">{desc}</p>
-                {st === "done" && <p className="text-[11px] text-ink-mute mt-2">Где: «Товары» → «Изменить» → шаг 3 «Детали».</p>}
-              </div>
+                <p className="text-[11px] text-ink-mute mt-2">{st === "done" ? "Открыть редактор →" : waitlist.includes(name) ? "🔔 Вы в листе ожидания · подробнее →" : "Подробнее о модуле →"}</p>
+              </button>
             ))}
           </div>
+
+          {studioInfo && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setStudioInfo(null)}>
+              <div className="bg-surface rounded-2xl shadow-lift max-w-[520px] w-full p-7" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-3 gap-3">
+                  <h3 className="font-display font-bold text-[20px] text-ink">{studioInfo.name}</h3>
+                  <button type="button" className="w-8 h-8 shrink-0 rounded-full bg-line-soft text-ink-mute hover:bg-error hover:text-white cursor-pointer" onClick={() => setStudioInfo(null)}>×</button>
+                </div>
+                <p className="text-[13px] text-ink-soft mb-4">{studioInfo.desc}</p>
+                <p className="text-[11px] font-bold text-ink-mute mb-2">ЧТО ВОЙДЁТ ({studioInfo.eta}):</p>
+                <ul className="space-y-1.5 mb-5">
+                  {studioInfo.bullets.map((b) => <li key={b} className="text-[12.5px] text-ink-soft flex gap-2"><span className="text-success">✓</span>{b}</li>)}
+                </ul>
+                <button type="button" className="h-11 w-full rounded-[10px] bg-dark text-cream font-bold hover:bg-accent-deep transition-colors cursor-pointer"
+                  onClick={() => {
+                    const key = "qf_studio_waitlist";
+                    const wl = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+                    const next = wl.includes(studioInfo.name) ? wl.filter((x) => x !== studioInfo.name) : [...wl, studioInfo.name];
+                    localStorage.setItem(key, JSON.stringify(next));
+                    setWaitlist(next);
+                  }}>
+                  {waitlist.includes(studioInfo.name) ? "✅ Вы в листе ожидания — снять" : "🔔 В лист ожидания"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
