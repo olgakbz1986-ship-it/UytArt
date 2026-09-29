@@ -1,3 +1,5 @@
+import { StudioCanvas } from "../components/StudioCanvas";
+import { StudioLibrary } from "../components/StudioLibrary";
 import { useNotifyStore } from "../lib/notify";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -811,6 +813,9 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings">("products");
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [studioInfo, setStudioInfo] = useState<null | { name: string; desc: string; eta: string; bullets: string[] }>(null);
   const [waitlist, setWaitlist] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("qf_studio_waitlist") || "[]"); } catch { return []; } });
   const allOrders = useAppStore((s) => s.orders);
@@ -1558,8 +1563,8 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {([
               ["🧾", "Редактор характеристик", "Материалы, стиль, цвет, размер, вес и доп. параметры + автозаполнение ИИ прямо в мастере карточки.", "done", "", ["Автозаполнение ИИ по названию и описанию", "Таблица доп. параметров ключ-значение", "Сохранение в карточку товара"]],
-              ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "soon", "ЭТАП 2", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
-              ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "soon", "ЭТАП 2", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
+              ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "done", "", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
+              ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
               ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "soon", "ЭТАП 3", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
               ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "soon", "ЭТАП 3", ["YandexGPT и Kandinsky из коробки", "Свой API-ключ внешних моделей", "Выбор модели под каждую задачу"]],
               ["📸", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "soon", "ЭТАП 4", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
@@ -1567,7 +1572,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "soon", "ЭТАП 5", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
             ] as [string, string, string, string, string, string[]][]).map(([em, name, desc, st, eta, bullets]) => (
               <button type="button" key={name}
-                onClick={() => st === "done" ? setTab("products") : setStudioInfo({ name, desc, eta, bullets })}
+                onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
                 className={`text-left bg-surface rounded-2xl shadow-card p-5 border transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift ${st === "done" ? "border-success" : "border-line-soft"}`}>
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-[26px]">{em}</span>
@@ -1608,7 +1613,12 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         </div>
       )}
 
-      {tab === "settings" && (
+      
+          <StudioCanvas open={canvasOpen} onClose={() => setCanvasOpen(false)} initialWorkId={canvasWorkId} />
+          <StudioLibrary open={libraryOpen} onClose={() => setLibraryOpen(false)}
+            onOpenWork={(id) => { setCanvasWorkId(id); setLibraryOpen(false); setCanvasOpen(true); }}
+            onPublish={(w) => { alert("Откроется мастер создания товара с предзаполненными данными (этап 3)\nРабота: " + w.name); }} />
+{tab === "settings" && (
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 

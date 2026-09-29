@@ -1,3 +1,4 @@
+import { StudioCanvas } from "./StudioCanvas";
 import {  useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller";
@@ -35,6 +36,7 @@ const empty: Draft = {
 
 export function ProductWizard({ open, onClose, editId }: { open: boolean; onClose: () => void; editId?: string | null }) {
   const [step, setStep] = useState(1);
+  const [studioOpen, setStudioOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -162,7 +164,10 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
 
           {step === 1 && (
             <div>
-              <h3 className="font-display font-bold text-[18px] text-ink mb-2">Загрузите фото и видео</h3>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                <h3 className="font-display font-bold text-[18px] text-ink">Загрузите фото и видео</h3>
+                <button type="button" onClick={() => setStudioOpen(true)} className="h-9 px-3 rounded-[8px] bg-dark text-cream text-[11.5px] font-bold hover:bg-accent-deep transition-colors cursor-pointer flex items-center gap-1.5">🎨 Создать в Студии</button>
+              </div>
               <p className="text-[13px] text-ink-soft mb-4">До 10 файлов. Первое фото станет обложкой. Видео повышает конверсию на 30%.</p>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4">
                 {draft.media.map((m, i) => (
@@ -519,6 +524,7 @@ export function ProductWizard({ open, onClose, editId }: { open: boolean; onClos
           </div>
         </div>
       </div>
+      <StudioCanvas open={studioOpen} onClose={() => setStudioOpen(false)} />
     </Modal>
   );
 }

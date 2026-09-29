@@ -292,10 +292,27 @@ export interface SellerProductItem {
   };
 }
 
+/* ---------- работы в Студии Quantiform ---------- */
+export interface WorkItem {
+  id: string;
+  type: "card" | "photo" | "seo" | "video" | "agent";
+  name: string;
+  folder: string;
+  spec: "qf" | "wb" | "ozon";
+  createdAt: string;
+  updatedAt: string;
+  preview: string;
+  data: any;
+}
+
 export interface TeamMember { id: string; name: string; role: "Менеджер" | "Мастер" | "Кладовщик";
   email?: string; }
 
 interface SellerAccountState {
+  works: WorkItem[];
+  saveWork: (w: Omit<WorkItem, "id" | "createdAt" | "updatedAt">) => string;
+  updateWork: (id: string, patch: Partial<WorkItem>) => void;
+  deleteWork: (id: string) => void;
   planIdsByAccount: Record<string, Record<SellerLegalType, string>>; /* key = accountId */
   setPlan: (accountId: string, t: SellerLegalType, id: string) => void;
   getPlan: (accountId: string, t: SellerLegalType) => string;
@@ -319,6 +336,15 @@ interface SellerAccountState {
 export const useSellerAccount = create<SellerAccountState>()(
   persist(
     (set, get) => ({
+      works: [],
+      saveWork: (w) => {
+        const id = "w" + Date.now().toString(36);
+        const now = new Date().toISOString();
+        set((s) => ({ works: [{ ...w, id, createdAt: now, updatedAt: now }, ...s.works] }));
+        return id;
+      },
+      updateWork: (id, patch) => set((s) => ({ works: s.works.map((w) => w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w) })),
+      deleteWork: (id) => set((s) => ({ works: s.works.filter((w) => w.id !== id) })),
       planIdsByAccount: {},
       setPlan: (accountId, t, id) => set((s) => {
         const current = s.planIdsByAccount[accountId] || { self_employed: "free", ip: "free", ooo: "free" };
