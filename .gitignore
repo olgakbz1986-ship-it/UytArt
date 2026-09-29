@@ -63,3 +63,9 @@ htmlcov/
 *.tar.xz
 *.tar.zst
 ```server/dev-db.json
+
+# Локальные артефакты разработки
+server/dev-db.json
+server.log
+patch.json
+qf.txt
