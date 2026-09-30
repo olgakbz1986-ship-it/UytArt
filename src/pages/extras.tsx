@@ -4,7 +4,7 @@ import { StudioSEO } from "../components/StudioSEO";
 import { StudioPhoto } from "../components/StudioPhoto";
 import { StudioVideo } from "../components/StudioVideo";
 import { StudioAgent } from "../components/StudioAgent";
-import { ProductWizard } from "../components/ProductWizard";
+import { ProductWizard_v2 } from "../components/ProductWizard_v2";
 import { useNotifyStore } from "../lib/notify";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -1069,7 +1069,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       {tab === "products" && (
         <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
           <div className="bg-surface rounded-2xl shadow-card p-6">
-            <div className="flex items-center justify-between mb-4"><h2 className="font-display font-bold text-[17px] text-ink">Создать карточку</h2><button onClick={() => setProdWizardOpen(true)} className="group flex items-center gap-2.5 rounded-xl bg-gradient-to-br from-[#d98e32] to-[#b96f1f] px-4 py-2.5 text-cream shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 cursor-pointer">
+            <div className="flex items-center justify-between mb-4"><h2 className="font-display font-bold text-[17px] text-ink">Создать карточку</h2><button onClick={() => window.location.hash = "/seller/product/new"} className="group flex items-center gap-2.5 rounded-xl bg-gradient-to-br from-[#d98e32] to-[#b96f1f] px-4 py-2.5 text-cream shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 cursor-pointer">
               <span className="w-8 h-8 rounded-lg bg-cream/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300"><Sparkles size={15} /></span>
               <span className="leading-tight text-left whitespace-nowrap">
                 <span className="block text-[13px] font-bold">Мастер карточки</span>
@@ -1138,7 +1138,8 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             {acc.products.map((p) => (
               <div key={p.id} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-4">
                 {plan.massEdit && (
-                  <input type="checkbox" checked={bulk.includes(p.id)} aria-label={`Выбрать ${p.name}`}
+                  <input type="checkbox" checked={bulk.includes(p.id)} aria-label={`Выбрать ${p.name}
+                    {p.isDraft && <Badge tone="warning">Черновик</Badge>}`}
                     onChange={() => setBulk((sel) => (sel.includes(p.id) ? sel.filter((x) => x !== p.id) : [...sel, p.id]))} />
                 )}
                 {p.media && p.media.length > 0 && (
@@ -1159,7 +1160,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                   </p>
                   <p className="text-[12px] text-ink-mute mt-0.5">{p.category} · {fmt(p.price)} · {fmtDate(p.createdAt)}</p>
                 </div>
-                <button onClick={() => { setEditProductId(p.id); setProdWizardOpen(true); }} className="text-[12px] font-semibold text-ink-soft hover:text-accent-deep cursor-pointer transition-colors">Изменить</button>
+                <button onClick={() => window.location.hash = "/seller/product/" + p.id + "/edit"} className="text-[12px] font-semibold text-accent hover:text-accent-deep cursor-pointer transition-colors">Изменить</button>
                 <button onClick={() => acc.toggleArchive(p.id)} className="text-[12px] font-semibold text-ink-soft hover:text-ink cursor-pointer transition-colors">{p.archived ? "Вернуть" : "Архив"}</button>
                 <button onClick={() => acc.removeProduct(p.id)} className="w-9 h-9 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft cursor-pointer transition-colors"><X size={16} /></button>
               </div>
@@ -1605,7 +1606,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}. Нажмите на модуль, чтобы открыть его.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {([
-              ["🧾", "Редактор характеристик", "Материалы, стиль, цвет, размер, вес и доп. параметры + автозаполнение ИИ прямо в мастере карточки.", "done", "", ["Автозаполнение ИИ по названию и описанию", "Таблица доп. параметров ключ-значение", "Сохранение в карточку товара"]],
+              ["✨", "Мастер карточки 5 минут", "Полноценное создание товара: медиа, характеристики, SEO, доставка. ИИ-помощники на каждом шаге.", "done", "", ["5 шагов до публикации", "Автозаполнение характеристик ИИ", "SEO-оптимизация под WB/Ozon", "Инфографика преимуществ"]],
               ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "done", "", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
               ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
               ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "done", "", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
@@ -1658,7 +1659,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       
           <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} />
-          <ProductWizard open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
+          <ProductWizard_v2 open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
           <StudioCanvas open={canvasOpen} onClose={() => setCanvasOpen(false)} initialWorkId={canvasWorkId} />
           <StudioLibrary open={libraryOpen} onClose={() => setLibraryOpen(false)}
             onOpenWork={(id) => { setCanvasWorkId(id); setLibraryOpen(false); setCanvasOpen(true); }}
@@ -1751,7 +1752,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           </div>
         </div>
       )}
-      <ProductWizard open={prodWizardOpen} editId={editProductId} onClose={() => { setProdWizardOpen(false); setEditProductId(null); }} />
+      <ProductWizard_v2 open={prodWizardOpen} editId={editProductId} onClose={() => { setProdWizardOpen(false); setEditProductId(null); }} />
 
       {/* вывод средств */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Вывод средств">

@@ -15,6 +15,7 @@ import {
   PlansPage, MarketPage, SellerRegisterPage, SellerDashboardPage,
   AboutPage, LegalIndexPage, LegalPage, ContactsPage, NotFoundPage,
 } from "./pages/extras";
+import { ProductEditorPage } from "./pages/ProductEditor";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -94,6 +95,8 @@ export default function App() {
               <Route path="/market" element={<MarketPage />} />
               <Route path="/seller/register" element={<SellerRegisterPage />} />
               <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
+              <Route path="/seller/product/new" element={<ProductEditorPage />} />
+              <Route path="/seller/product/:id/edit" element={<ProductEditorPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/legal" element={<LegalIndexPage />} />
               <Route path="/legal/:type" element={<LegalPage />} />

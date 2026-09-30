@@ -62,7 +62,7 @@ export function CatalogPage() {
   const browseMode = !q && group === "all" && cat === "all";
 
   const items = useMemo(() => {
-    let l = marketProducts().filter((x) => x.id.startsWith("sp-")); /* демо скрыто: витрина только для реальных товаров */
+    let l = marketProducts().filter((x) => x.id.startsWith("sp-") && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
     if (q) {
       l = l.filter((p) => {
         const c = catBySlug(p.categoryId);

@@ -262,6 +262,8 @@ export interface SellerProductItem {
   category: string;
   price: number;
   createdAt: string;
+  isDraft?: boolean;
+  draftSavedAt?: string;
   archived?: boolean;
   views?: number;
   aiGenerated?: boolean;
@@ -300,6 +302,8 @@ export interface WorkItem {
   folder: string;
   spec: "qf" | "wb" | "ozon";
   createdAt: string;
+  isDraft?: boolean;
+  draftSavedAt?: string;
   updatedAt: string;
   preview: string;
   data: any;

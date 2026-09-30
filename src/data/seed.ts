@@ -307,7 +307,9 @@ export interface Product {
   product_type: ProductType; is_non_returnable: boolean; production_time_days?: number;
   rating: number; reviewsCount: number; stock: number; views: number;
   material: string; style: string; color: string; size: string; tags: string[];
-  description: string; createdAt: string; isHit?: boolean; isNew?: boolean;
+  description: string; createdAt: string;
+  isDraft?: boolean;
+  draftSavedAt?: string; isHit?: boolean; isNew?: boolean;
   // Поля для AI-анимации (опционально)
   animation?: { frames: string[]; captions: string[]; frameMs?: number };
 }
