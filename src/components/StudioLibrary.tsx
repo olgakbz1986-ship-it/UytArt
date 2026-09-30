@@ -28,7 +28,7 @@ export function StudioLibrary({ open, onClose, onOpenWork, onPublish }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] top-16 bg-black/60 flex items-center justify-center p-3" onClick={onClose}>
       <div className="bg-surface rounded-2xl shadow-lift max-w-[1000px] w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-surface z-10 px-6 py-4 border-b border-line-soft flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">

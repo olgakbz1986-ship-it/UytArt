@@ -201,8 +201,8 @@ export function StudioVideo({ open, onClose, initialPhotos = [] }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3" onClick={onClose}>
-      <div className="bg-surface rounded-2xl shadow-lift max-w-[1100px] w-full max-h-[95vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] top-16 bg-black/60 flex items-center justify-center p-3" onClick={onClose}>
+      <div className="bg-surface rounded-2xl shadow-lift max-w-[1000px] w-full max-h-[calc(100vh-8rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-surface z-10 px-6 py-4 border-b border-line-soft flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <span className="w-10 h-10 rounded-xl bg-dark text-cream flex items-center justify-center"><Video size={18} /></span>
