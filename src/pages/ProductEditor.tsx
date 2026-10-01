@@ -60,6 +60,7 @@ export function ProductEditorPage() {
   const acc = useSellerAccount();
   const sellerReg = useSellerReg();
   const fileRef = useRef<HTMLInputElement>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
 
   const [draft, setDraft] = useState<Draft>(empty);
   const [studioOpen, setStudioOpen] = useState(false);
@@ -68,6 +69,7 @@ export function ProductEditorPage() {
   const [publishing, setPublishing] = useState(false);
   const [savedDraft, setSavedDraft] = useState(false);
   const [published, setPublished] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
 
   const editItem = id ? acc.products.find((pp) => pp.id === id) : undefined;
 
@@ -92,6 +94,58 @@ export function ProductEditorPage() {
       setDraft({ ...empty, sellerCity: sellerReg.city || "" });
     }
   }, [editItem, sellerReg.city]);
+
+  // Автосохранение при изменениях draft
+  useEffect(() => {
+    autoSaveDraft();
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [draft]);
+
+  // Сохранение при закрытии вкладки/переходе
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (draft.name.trim() || draft.media.length > 0 || draft.description.trim()) {
+        const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
+        const data = {
+          id: draftIdToUse,
+          name: draft.name.trim() || "Без названия",
+          category: draft.category,
+          price: draft.price ? +draft.price : 0,
+          description: draft.description.trim(),
+          materials: draft.materials,
+          style: draft.style || undefined,
+          color: draft.color || undefined,
+          size: draft.size || undefined,
+          weight: draft.weight ? +draft.weight : undefined,
+          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()),
+          media: draft.media,
+          sellerCity: draft.sellerCity,
+          instant: draft.instant,
+          isDraft: true,
+          draftSavedAt: new Date().toISOString(),
+          createdAt: editItem?.createdAt || new Date().toISOString(),
+        };
+        
+        if (id) {
+          acc.updateProduct(id, data);
+        } else {
+          if (!draftId) {
+            acc.addProduct(data);
+            setDraftId(draftIdToUse);
+          } else {
+            acc.updateProduct(draftId, data);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [draft, id, draftId]);
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
@@ -186,8 +240,9 @@ export function ProductEditorPage() {
   };
 
   const handleSaveDraft = () => {
+    const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
     const data = {
-      id: id || "d" + Date.now().toString(36),
+      id: draftIdToUse,
       name: draft.name.trim() || "Без названия",
       category: draft.category,
       price: draft.price ? +draft.price : 0,
@@ -209,11 +264,63 @@ export function ProductEditorPage() {
     if (id) {
       acc.updateProduct(id, data);
     } else {
-      acc.addProduct(data);
+      if (!draftId) {
+        // Первый раз создаём черновик
+        acc.addProduct(data);
+        setDraftId(draftIdToUse);
+      } else {
+        // Обновляем существующий черновик
+        acc.updateProduct(draftId, data);
+      }
     }
     
     setSavedDraft(true);
     setTimeout(() => setSavedDraft(false), 2000);
+  };
+
+  // Автосохранение черновика (вызывается при изменениях с дебаунсом)
+  const autoSaveDraft = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      // Автосохраняем только если есть хоть какие-то данные
+      if (draft.name.trim() || draft.media.length > 0 || draft.description.trim()) {
+        const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
+        const data = {
+          id: draftIdToUse,
+          name: draft.name.trim() || "Без названия",
+          category: draft.category,
+          price: draft.price ? +draft.price : 0,
+          description: draft.description.trim(),
+          materials: draft.materials,
+          style: draft.style || undefined,
+          color: draft.color || undefined,
+          size: draft.size || undefined,
+          weight: draft.weight ? +draft.weight : undefined,
+          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()),
+          media: draft.media,
+          sellerCity: draft.sellerCity,
+          instant: draft.instant,
+          isDraft: true,
+          draftSavedAt: new Date().toISOString(),
+          createdAt: editItem?.createdAt || new Date().toISOString(),
+        };
+        
+        if (id) {
+          acc.updateProduct(id, data);
+        } else {
+          if (!draftId) {
+            // Первый раз создаём черновик
+            acc.addProduct(data);
+            setDraftId(draftIdToUse);
+          } else {
+            // Обновляем существующий черновик
+            acc.updateProduct(draftId, data);
+          }
+        }
+      }
+    }, 3000); // Сохраняем через 3 секунды после последнего изменения
   };
 
   return (

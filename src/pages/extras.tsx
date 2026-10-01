@@ -1138,8 +1138,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             {acc.products.map((p) => (
               <div key={p.id} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-4">
                 {plan.massEdit && (
-                  <input type="checkbox" checked={bulk.includes(p.id)} aria-label={`Выбрать ${p.name}
-                    {p.isDraft && <Badge tone="warning">Черновик</Badge>}`}
+                  <input type="checkbox" checked={bulk.includes(p.id)} aria-label={`Выбрать ${p.name}`}
                     onChange={() => setBulk((sel) => (sel.includes(p.id) ? sel.filter((x) => x !== p.id) : [...sel, p.id]))} />
                 )}
                 {p.media && p.media.length > 0 && (
@@ -1155,6 +1154,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                 <div className="flex-1 min-w-[200px]">
                   <p className="font-bold text-[14.5px] text-ink flex items-center gap-2">
                     {p.name}
+                    {p.isDraft && <Badge tone="warning">Черновик</Badge>}
                     {p.aiGenerated && <Badge tone="ai"><Sparkles size={10} /> AI</Badge>}
                     {p.archived && <Badge tone="neutral">Архив</Badge>}
                   </p>

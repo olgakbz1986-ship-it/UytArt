@@ -5,7 +5,7 @@ import { useAppStore } from "./store";
 
 /* Преобразует активные товары продавца в формат витрины */
 export function sellerMarketProducts(): Product[] {
-  const items = useSellerAccount.getState().products.filter((p) => !p.archived);
+  const items = useSellerAccount.getState().products.filter((p) => !p.archived && !p.isDraft);
   return items.map((p) => {
     const cat = CATEGORIES.find((c) => c.name === p.category);
     const firstImg = p.media?.find((m) => m.type === "image")?.url;
