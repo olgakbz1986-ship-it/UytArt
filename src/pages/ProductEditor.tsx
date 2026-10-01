@@ -542,8 +542,6 @@ export function ProductEditorPage() {
               <h2 className="font-display font-bold text-[18px] text-ink">📸 Фото и видео товара</h2>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setPhotoOpen(true)} className="h-9 px-3 rounded-[8px] bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-1.5">📸 ИИ-фотосессия</button>
-              <button type="button" onClick={() => setStudioOpen(true)} className="h-9 px-3 rounded-[8px] bg-dark text-cream text-[11px] font-bold hover:bg-accent-deep transition-colors cursor-pointer flex items-center gap-1.5">🎨 Конструктор карточек</button>
             </div>
           </div>
           <p className="text-[13px] text-ink-soft mb-4">Загрузите до 10 файлов. Первое фото станет обложкой. Видео повышает конверсию на 30%.</p>
