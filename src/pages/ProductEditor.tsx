@@ -532,6 +532,18 @@ export function ProductEditorPage() {
                 <input className="field" inputMode="numeric" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/\D/g, "") })} placeholder="4900" />
               </Field>
             </div>
+            
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Производитель / Бренд" hint="Автозаполнено из профиля | Можно изменить">
+                <input className="field" value={draft.manufacturer} onChange={(e) => setDraft({ ...draft, manufacturer: e.target.value })} placeholder="Например: Мастерская «Утро», ИП Иванова" />
+              </Field>
+              <Field label="Артикул (SKU)">
+                <div className="flex gap-2">
+                  <input className="field flex-1" value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} placeholder="SP-123456" />
+                  <button type="button" onClick={() => setDraft({ ...draft, sku: "SP-" + Math.floor(100000 + Math.random() * 900000) })} className="h-9 px-3 rounded-[8px] bg-line-soft text-ink-mute hover:bg-line cursor-pointer" title="Сгенерировать заново">🔄</button>
+                </div>
+              </Field>
+            </div>
 
             <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
               <label className="text-[11.5px] font-bold text-ink-mute">Описание товара</label>
@@ -567,6 +579,55 @@ export function ProductEditorPage() {
             </Field>
             <Field label="Вес, кг">
               <input className="field" inputMode="decimal" value={draft.weight} onChange={(e) => setDraft({ ...draft, weight: e.target.value.replace(/[^\d.]/g, "") })} placeholder="1.2" />
+            </Field>
+          </div>
+
+          {/* ТЕГИ */}
+          <div className="mb-4">
+            <Field label="Теги (ключевые слова для поиска)" hint="Максимум 10 тегов. Нажмите Enter или введите через запятую">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {draft.tags.map((tag, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent/10 text-accent-deep text-[12px] font-medium border border-accent/20">
+                    {tag}
+                    <button type="button" onClick={() => setDraft({ ...draft, tags: draft.tags.filter((_, idx) => idx !== i) })} className="hover:text-error cursor-pointer">×</button>
+                  </span>
+                ))}
+                {draft.tags.length < 10 && (
+                  <input 
+                    className="field flex-1 min-w-[120px] text-[13px] py-1" 
+                    placeholder={draft.tags.length === 0 ? "Введите тег и нажмите Enter..." : "Ещё тег..."}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const val = (e.target as HTMLInputElement).value.trim().replace(',', '');
+                        if (val && !draft.tags.includes(val)) {
+                          setDraft({ ...draft, tags: [...draft.tags, val] });
+                          (e.target as HTMLInputElement).value = "";
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim().replace(',', '');
+                      if (val && !draft.tags.includes(val) && draft.tags.length < 10) {
+                        setDraft({ ...draft, tags: [...draft.tags, val] });
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[11px] text-ink-mute mr-1">🏷️ Популярные:</span>
+                {["ручная работа", "декор", "интерьер", "подарок", "эко", "дизайн"].map(t => (
+                  <button key={t} type="button" onClick={() => {
+                    if (!draft.tags.includes(t) && draft.tags.length < 10) {
+                      setDraft({ ...draft, tags: [...draft.tags, t] });
+                    }
+                  }} className="text-[11px] px-2 py-0.5 rounded-full bg-line-soft text-ink-soft hover:bg-accent/10 hover:text-accent-deep transition-colors cursor-pointer">
+                    + {t}
+                  </button>
+                ))}
+              </div>
             </Field>
           </div>
 
@@ -666,12 +727,22 @@ export function ProductEditorPage() {
 
         {/* БЛОК 5: ПРЕДПРОСМОТР */}
         <section className="bg-white rounded-2xl shadow-card p-6 border border-line-soft">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">5</span>
-            <h2 className="font-display font-bold text-[18px] text-ink">👁 Предпросмотр карточки (как увидит покупатель)</h2>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">5</span>
+              <h2 className="font-display font-bold text-[18px] text-ink">👁 Предпросмотр карточки</h2>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setShowPreview(!showPreview)} 
+              className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-mute text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1.5"
+            >
+              {showPreview ? "🙈 Скрыть" : "👁 Показать"}
+            </button>
           </div>
           
-          <div className="bg-cream rounded-xl p-6 border border-line-soft">
+          {showPreview && (
+            <div className="bg-cream rounded-xl p-6 border border-line-soft">
             <div className="grid md:grid-cols-[300px_1fr] gap-6">
               <div className="aspect-square rounded-xl overflow-hidden bg-line-soft">
                 {draft.media[0] ? (
@@ -689,26 +760,58 @@ export function ProductEditorPage() {
               <div>
                 <h3 className="font-display font-bold text-[20px] text-ink mb-2">{draft.name || "Название товара"}</h3>
                 <p className="text-[24px] font-bold text-accent mb-3">{draft.price ? `${+draft.price.toLocaleString()} ₽` : "Цена"}</p>
-                <p className="text-[13px] text-ink-soft mb-3">{draft.category}</p>
-                {draft.description && (
-                  <p className="text-[13px] text-ink-soft mb-4 whitespace-pre-wrap">{draft.description.slice(0, 300)}{draft.description.length > 300 ? "..." : ""}</p>
-                )}
-                {(draft.materials.length > 0 || draft.style || draft.color || draft.size) && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {draft.materials.map((m, i) => <span key={i} className="text-[11px] px-2 py-1 bg-line-soft rounded-full text-ink-soft">{m}</span>)}
-                    {draft.style && <span className="text-[11px] px-2 py-1 bg-line-soft rounded-full text-ink-soft">{draft.style}</span>}
-                    {draft.color && <span className="text-[11px] px-2 py-1 bg-line-soft rounded-full text-ink-soft">{draft.color}</span>}
-                    {draft.size && <span className="text-[11px] px-2 py-1 bg-line-soft rounded-full text-ink-soft">{draft.size}</span>}
+                
+                <div className="space-y-1 mb-4">
+                  <p className="text-[13px] text-ink-soft">{draft.category}</p>
+                  {draft.manufacturer && <p className="text-[12px] text-ink-mute">🏭 Производитель: {draft.manufacturer}</p>}
+                  {draft.sku && <p className="text-[11px] text-ink-mute">🏷️ Артикул: {draft.sku}</p>}
+                </div>
+
+                {draft.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {draft.tags.map((t, i) => (
+                      <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-accent/10 text-accent-deep border border-accent/20 font-medium">{t}</span>
+                    ))}
                   </div>
                 )}
-                <div className="text-[12px] text-ink-soft space-y-1">
-                  <p>📍 {draft.sellerCity || "Город не указан"}</p>
-                  <p> {draft.deliveryRussia ? "Доставка по РФ" : "Самовывоз"}</p>
-                  <p>⏱ Обработка: {draft.processingDays || 1} дн.</p>
+
+                {draft.description && (
+                  <div className="mb-4">
+                    <p className="text-[12px] font-bold text-ink-mute mb-1">Описание</p>
+                    <p className="text-[13px] text-ink-soft whitespace-pre-wrap leading-relaxed">{draft.description}</p>
+                  </div>
+                )}
+
+                {(draft.materials.length > 0 || draft.style || draft.color || draft.size || draft.weight) && (
+                  <div className="mb-4">
+                    <p className="text-[12px] font-bold text-ink-mute mb-2">Характеристики</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
+                      {draft.materials.length > 0 && <p><span className="text-ink-soft">Материал:</span> <span className="text-ink">{draft.materials.join(", ")}</span></p>}
+                      {draft.style && <p><span className="text-ink-soft">Стиль:</span> <span className="text-ink">{draft.style}</span></p>}
+                      {draft.color && <p><span className="text-ink-soft">Цвет:</span> <span className="text-ink">{draft.color}</span></p>}
+                      {draft.size && <p><span className="text-ink-soft">Размер:</span> <span className="text-ink">{draft.size}</span></p>}
+                      {draft.weight && <p><span className="text-ink-soft">Вес:</span> <span className="text-ink">{draft.weight} кг</span></p>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-4 border-t border-line-soft">
+                  <p className="text-[12px] font-bold text-ink-mute mb-2">Доставка и условия</p>
+                  <div className="text-[12px] text-ink-soft space-y-1.5">
+                    <p>📍 {draft.sellerCity || "Город не указан"}</p>
+                    <p>⏱ Обработка заказа: {draft.processingDays || 1} дн.</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {draft.deliveryPickup && <span className="px-2 py-0.5 bg-line-soft rounded text-[11px]">Самовывоз</span>}
+                      {draft.deliveryCourier && <span className="px-2 py-0.5 bg-line-soft rounded text-[11px]">Курьер</span>}
+                      {draft.deliveryRussia && <span className="px-2 py-0.5 bg-line-soft rounded text-[11px]">Доставка по РФ</span>}
+                      {draft.instant && <span className="px-2 py-0.5 bg-accent/10 text-accent-deep rounded text-[11px]">Мгновенная цифровая</span>}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+          )}
         </section>
 
         {/* Кнопки публикации */}
