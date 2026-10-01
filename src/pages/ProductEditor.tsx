@@ -224,7 +224,6 @@ export function ProductEditorPage() {
           draftSavedAt: new Date().toISOString(),
           createdAt: existing?.createdAt || new Date().toISOString(),
         };
-        console.log('[UNMOUNT SAVE] Сохраняю черновик при выходе (merge):', data.name, data.manufacturer, data.sku);
         
         // Используем getState() для доступа к АКТУАЛЬНОМУ store (не через замыкание acc)
         const store = useSellerAccount.getState();
@@ -235,7 +234,6 @@ export function ProductEditorPage() {
         } else {
           store.addProduct(data);
         }
-        console.log('[UNMOUNT SAVE] ГОТОВО! Товаров в store теперь:', useSellerAccount.getState().products.length);
       }
     };
   }, []);
@@ -474,7 +472,6 @@ export function ProductEditorPage() {
     }
     autoSaveTimerRef.current = window.setTimeout(() => {
       const currentDraft = draftRef.current;
-      console.log("[AUTO-SAVE] Сохраняю:", currentDraft.name, currentDraft.manufacturer, currentDraft.sku);
       if (currentDraft.name.trim() || currentDraft.media.length > 0 || currentDraft.description.trim()) {
         const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
         const data = {
