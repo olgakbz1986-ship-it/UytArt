@@ -264,6 +264,9 @@ export interface SellerProductItem {
   createdAt: string;
   isDraft?: boolean;
   draftSavedAt?: string;
+  manufacturer?: string;
+  sku?: string;
+  tags?: string[];
   archived?: boolean;
   views?: number;
   aiGenerated?: boolean;
@@ -271,11 +274,9 @@ export interface SellerProductItem {
   // Новые поля для AI-студии
   description?: string;
   materials?: string[];
-  manufacturer?: string;
   dimensions?: { length?: number; width?: number; height?: number; unit?: "см" | "мм" | "м" };
-  tags?: string[];
   weight?: number;
-  specs?: { key: string; value: string }[];
+  specs?: { id?: string; key: string; value: string }[];
   sellerCity?: string;
   deliveryZone?: DeliveryZone;
   serviceMode?: ServiceMode;
@@ -304,6 +305,9 @@ export interface WorkItem {
   createdAt: string;
   isDraft?: boolean;
   draftSavedAt?: string;
+  manufacturer?: string;
+  sku?: string;
+  tags?: string[];
   updatedAt: string;
   preview: string;
   data: any;

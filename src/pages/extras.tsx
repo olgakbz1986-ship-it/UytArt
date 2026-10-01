@@ -1159,6 +1159,16 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                     {p.archived && <Badge tone="neutral">Архив</Badge>}
                   </p>
                   <p className="text-[12px] text-ink-mute mt-0.5">{p.category} · {fmt(p.price)} · {fmtDate(p.createdAt)}</p>
+                  {p.manufacturer && <p className="text-[11px] text-ink-soft mt-0.5">🏭 {p.manufacturer}</p>}
+                  {p.sku && <p className="text-[11px] text-ink-soft">🏷️ {p.sku}</p>}
+                  {p.tags && p.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.tags.slice(0, 3).map((t, i) => (
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent-deep">#{t}</span>
+                      ))}
+                      {p.tags.length > 3 && <span className="text-[10px] text-ink-soft">+{p.tags.length - 3}</span>}
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => window.location.hash = "/seller/product/" + p.id + "/edit"} className="text-[12px] font-semibold text-accent hover:text-accent-deep cursor-pointer transition-colors">Изменить</button>
                 <button onClick={() => acc.toggleArchive(p.id)} className="text-[12px] font-semibold text-ink-soft hover:text-ink cursor-pointer transition-colors">{p.archived ? "Вернуть" : "Архив"}</button>

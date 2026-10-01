@@ -30,6 +30,9 @@ type Draft = {
   instant: boolean;
   deliveryZoneText: string;
   serviceMode: "online" | "visit" | "both";
+  manufacturer: string;
+  sku: string;
+  tags: string[];
 };
 
 const empty: Draft = {
@@ -44,6 +47,9 @@ const empty: Draft = {
   weight: "",
   specs: [],
   description: "",
+  manufacturer: "",
+  sku: "",
+  tags: [],
   sellerCity: "",
   processingDays: "1",
   deliveryPickup: false,
@@ -70,6 +76,8 @@ export function ProductEditorPage() {
   const [savedDraft, setSavedDraft] = useState(false);
   const [published, setPublished] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(true);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const editItem = id ? acc.products.find((pp) => pp.id === id) : undefined;
 
@@ -86,6 +94,9 @@ export function ProductEditorPage() {
         color: editItem.color || "",
         size: editItem.size || "",
         weight: editItem.weight ? String(editItem.weight) : "",
+        tags: editItem.tags || [],
+        manufacturer: editItem.manufacturer || "",
+        sku: editItem.sku || "",
         specs: (editItem.specs || []).map((sp: any) => ({ id: sp.id || "spec-" + Math.random().toString(36).slice(2), key: sp.key || "", value: sp.value || "" })),
         description: editItem.description || "",
         sellerCity: editItem.sellerCity || sellerReg.city || "",
@@ -184,17 +195,112 @@ export function ProductEditorPage() {
     setDraft({ ...draft, media: draft.media.filter((_, i) => i !== idx) });
   };
 
+  // База знаний для "умных" подсказок ИИ
+  const aiSuggestions = {
+    vases: {
+      material: "Керамика, шамотная глина",
+      style: "Бохо, скандинавский минимализм",
+      color: "Терракота, шалфей, натуральный",
+      tags: ["ваза", "керамика", "ручная работа", "декор", "интерьер"],
+      sizeHint: "Например: Ø 15 см, высота 25 см",
+      weightHint: "Например: 1.2",
+      description: `Уникальная [Название] ручной работы. Идеально дополнит интерьер в стиле [Стиль].
+
+Особенности:
+- Материал: [Материал]
+- Уход: Протирать влажной тканью, беречь от ударов.
+
+Каждое изделие уникально и может незначительно отличаться от фото.`
+    },
+    textile: {
+      material: "100% хлопок, лен",
+      style: "Скандинавский, прованс",
+      color: "Натуральный, бежевый, молочный",
+      tags: ["текстиль", "хлопок", "уют", "ручная работа", "эко"],
+      sizeHint: "Например: 40x60 см",
+      weightHint: "Например: 0.3",
+      description: `Уютный текстиль ручной работы из натуральных материалов.
+
+Особенности:
+- Состав: [Материал]
+- Уход: Бережная стирка при 30°C.
+
+Создаст атмосферу тепла и комфорта в вашем доме.`
+    },
+    candles: {
+      material: "Соевый воск, хлопковый фитиль",
+      style: "Минимализм, лофт",
+      color: "Белый, черный, пастельные тона",
+      tags: ["свеча", "соевый воск", "аромат", "уют", "подарок"],
+      sizeHint: "Например: Ø 7 см, высота 10 см",
+      weightHint: "Например: 0.2",
+      description: `Ароматическая свеча ручной работы из натурального воска.
+
+Особенности:
+- Материал: [Материал]
+- Время горения: около 30-40 часов.
+
+Идеальный подарок или элемент декора для создания атмосферы.`
+    },
+    toys: {
+      material: "Дерево, гипоаллергенные краски",
+      style: "Эко, Монтессори",
+      color: "Натуральный, пастельный",
+      tags: ["игрушка", "дерево", "эко", "для детей", "ручная работа"],
+      sizeHint: "Например: 15x10x5 см",
+      weightHint: "Например: 0.15",
+      description: `Безопасная деревянная игрушка ручной работы.
+
+Особенности:
+- Материал: [Материал]
+- Безопасность: Покрыта натуральным маслом или гипоаллергенной краской.
+
+Развивает мелкую моторику и воображение ребенка.`
+    },
+    default: {
+      material: "Натуральные материалы",
+      style: "Универсальный, современный",
+      color: "Уточняется",
+      tags: ["ручная работа", "уникальный дизайн", "подарок", "авторская работа"],
+      sizeHint: "Укажите точные габариты (ДхШхВ)",
+      weightHint: "Укажите вес в кг",
+      description: `Уникальное изделие ручной работы.
+
+Особенности:
+- Материал: [Материал]
+- Уход: [Уточните правила ухода]
+
+Сделано с любовью и вниманием к деталям.`
+    }
+  };
+
   const autoFillCharacteristics = () => {
-    const src = (draft.name + " " + draft.category).toLowerCase();
-    const mat = /глин|керамик|фарфор/.test(src) ? "Керамика" : /дерев|дуб|ясень|сосн/.test(src) ? "Дерево" : /латун|стал|метал/.test(src) ? "Металл" : /кож/.test(src) ? "Кожа" : /льн|хлоп|шерст|ткан/.test(src) ? "Текстиль" : /стекл/.test(src) ? "Стекло" : "";
-    const st = /бохо/.test(src) ? "Бохо" : /лофт/.test(src) ? "Лофт" : /сканд/.test(src) ? "Сканди" : /минимал/.test(src) ? "Минимализм" : /неоклас/.test(src) ? "Неоклассика" : /прованс/.test(src) ? "Прованс" : /эко/.test(src) ? "Эко" : "";
-    const col = /графит/.test(src) ? "Графит" : /слонов|бел/.test(src) ? "Слоновая кость" : /шалфей|зелён|зелен/.test(src) ? "Шалфей" : /терракот|корич/.test(src) ? "Терракота" : /медов|беж/.test(src) ? "Медовый" : "";
+    setIsAiLoading(true);
     
-    setDraft({ ...draft,
-      materials: mat ? [mat] : draft.materials,
-      style: st || draft.style,
-      color: col || draft.color,
-    });
+    setTimeout(() => {
+      const cat = draft.category.toLowerCase();
+      let suggestion = aiSuggestions.default;
+      
+      if (cat.includes("ваз") || cat.includes("кашпо")) suggestion = aiSuggestions.vases;
+      else if (cat.includes("текстиль") || cat.includes("плед") || cat.includes("подушк")) suggestion = aiSuggestions.textile;
+      else if (cat.includes("свеч") || cat.includes("мыло")) suggestion = aiSuggestions.candles;
+      else if (cat.includes("игруш") || cat.includes("кукл")) suggestion = aiSuggestions.toys;
+
+      setDraft({
+        ...draft,
+        materials: [suggestion.material],
+        style: suggestion.style,
+        color: suggestion.color,
+        tags: suggestion.tags,
+        size: suggestion.sizeHint,
+        weight: suggestion.weightHint,
+        description: suggestion.description.replace("[Название]", draft.name || "Изделие").replace("[Стиль]", suggestion.style).replace("[Материал]", suggestion.material),
+      });
+      
+      setIsAiLoading(false);
+      setSavedDraft(true);
+      setTimeout(() => setSavedDraft(false), 2000);
+    }, 1500);
   };
 
   const generateAIDescription = () => {
