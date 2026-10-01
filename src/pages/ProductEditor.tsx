@@ -449,12 +449,44 @@ export function ProductEditorPage() {
           <p className="text-[11px] font-bold text-ink-mute mb-2">Дополнительные параметры (ключ — значение)</p>
           {draft.specs.map((sp, i) => (
             <div key={i} className="flex gap-2 mb-2">
-              <input className="field flex-1" value={sp.key} onChange={(e) => setDraft({ ...draft, specs: draft.specs.map((x, xi) => xi === i ? { ...x, key: e.target.value } : x) })} placeholder="Параметр (например, Комплектация)" />
-              <input className="field flex-1" value={sp.value} onChange={(e) => setDraft({ ...draft, specs: draft.specs.map((x, xi) => xi === i ? { ...x, value: e.target.value } : x) })} placeholder="Значение" />
-              <button type="button" onClick={() => setDraft({ ...draft, specs: draft.specs.filter((_, xi) => xi !== i) })} className="w-9 h-9 shrink-0 rounded-[8px] bg-line-soft text-ink-mute hover:bg-error hover:text-white cursor-pointer">×</button>
+              <input 
+                className="field flex-1" 
+                value={sp.key} 
+                onChange={(e) => {
+                  const newSpecs = [...draft.specs];
+                  newSpecs[i] = { ...newSpecs[i], key: e.target.value };
+                  setDraft({ ...draft, specs: newSpecs });
+                }} 
+                placeholder="Параметр (например, Комплектация)" 
+              />
+              <input 
+                className="field flex-1" 
+                value={sp.value} 
+                onChange={(e) => {
+                  const newSpecs = [...draft.specs];
+                  newSpecs[i] = { ...newSpecs[i], value: e.target.value };
+                  setDraft({ ...draft, specs: newSpecs });
+                }} 
+                placeholder="Значение" 
+              />
+              <button 
+                type="button" 
+                onClick={() => {
+                  const newSpecs = draft.specs.filter((_, idx) => idx !== i);
+                  setDraft({ ...draft, specs: newSpecs });
+                }} 
+                className="w-9 h-9 shrink-0 rounded-[8px] bg-line-soft text-ink-mute hover:bg-error hover:text-white flex items-center justify-center cursor-pointer"
+              >×</button>
             </div>
           ))}
-          <button type="button" onClick={() => setDraft({ ...draft, specs: [...draft.specs, { key: "", value: "" }] })} className="h-8 px-3 rounded-[8px] bg-line-soft text-[11.5px] font-bold text-ink-soft hover:bg-line cursor-pointer mb-4">+ Добавить параметр</button>
+          <button 
+            type="button" 
+            onClick={() => {
+              const newSpecs = [...draft.specs, { key: "", value: "" }];
+              setDraft({ ...draft, specs: newSpecs });
+            }} 
+            className="h-8 px-3 rounded-[8px] bg-line-soft text-[11.5px] font-bold text-ink-soft hover:bg-line cursor-pointer mb-4"
+          >+ Добавить параметр</button>
         </section>
 
         {/* БЛОК 4: ЛОГИСТИКА */}
