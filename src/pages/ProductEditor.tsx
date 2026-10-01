@@ -69,6 +69,7 @@ export function ProductEditorPage() {
   const autoSaveTimerRef = useRef<number | null>(null);
 
   const [draft, setDraft] = useState<Draft>(empty);
+  const draftRef = useRef<Draft>(empty);
   const [studioOpen, setStudioOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [seoOpen, setSeoOpen] = useState(false);
@@ -76,14 +77,21 @@ export function ProductEditorPage() {
   const [savedDraft, setSavedDraft] = useState(false);
   const [published, setPublished] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const idRef = useRef(id);
+  const draftIdRef = useRef(draftId);
   const [showPreview, setShowPreview] = useState(true);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   const editItem = id ? acc.products.find((pp) => pp.id === id) : undefined;
 
+  // СИНХРОНИЗАЦИЯ REF ПРИ КАЖДОМ РЕНДЕРЕ (гарантированно актуальные данные, включая фото)
+  draftRef.current = draft;
+  idRef.current = id;
+  draftIdRef.current = draftId;
+
   useEffect(() => {
     if (editItem) {
-      setDraft({
+      const loaded = {
         ...empty,
         media: editItem.media || [],
         name: editItem.name,
@@ -100,9 +108,13 @@ export function ProductEditorPage() {
         specs: (editItem.specs || []).map((sp: any) => ({ id: sp.id || "spec-" + Math.random().toString(36).slice(2), key: sp.key || "", value: sp.value || "" })),
         description: editItem.description || "",
         sellerCity: editItem.sellerCity || sellerReg.city || "",
-      });
+      };
+      setDraft(loaded);
+      draftRef.current = loaded;
     } else {
-      setDraft({ ...empty, sellerCity: sellerReg.city || "" });
+      const emptyDraft = { ...empty, sellerCity: sellerReg.city || "" };
+      setDraft(emptyDraft);
+      draftRef.current = emptyDraft;
     }
   }, [editItem, sellerReg.city]);
 
@@ -132,6 +144,9 @@ export function ProductEditorPage() {
     draft.media,
     draft.sellerCity,
     draft.instant,
+    draft.manufacturer,
+    draft.sku,
+    draft.tags,
   ]);
 
   // Сохранение при закрытии вкладки/переходе
@@ -175,6 +190,55 @@ export function ProductEditorPage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [draft, id, draftId]);
+
+  // СОХРАНЕНИЕ ПРИ ВЫХОДЕ СО СТРАНИЦЫ (навигация внутри SPA)
+  useEffect(() => {
+    return () => {
+      const currentDraft = draftRef.current;
+      const currentId = idRef.current;
+      const currentDraftId = draftIdRef.current;
+      
+      if (currentDraft.name.trim() || currentDraft.media.length > 0 || currentDraft.description.trim() || currentDraft.manufacturer || currentDraft.sku || (currentDraft.tags && currentDraft.tags.length > 0)) {
+        const draftIdToUse = currentId || currentDraftId || "d" + Date.now().toString(36);
+        // MERGE: берём существующий черновик из store, чтобы пустые поля НЕ затирали сохранённые
+        const existing: any = useSellerAccount.getState().products.find((pp: any) => pp.id === draftIdToUse);
+        const data = {
+          id: draftIdToUse,
+          name: currentDraft.name.trim() || existing?.name || "Без названия",
+          category: currentDraft.category || existing?.category || "",
+          price: currentDraft.price ? +currentDraft.price : (existing?.price || 0),
+          description: currentDraft.description.trim() || existing?.description || "",
+          materials: (currentDraft.materials && currentDraft.materials.length) ? currentDraft.materials : (existing?.materials || []),
+          manufacturer: currentDraft.manufacturer || existing?.manufacturer || "",
+          sku: currentDraft.sku || existing?.sku || "",
+          tags: (currentDraft.tags && currentDraft.tags.length) ? currentDraft.tags : (existing?.tags || []),
+          style: currentDraft.style || existing?.style || undefined,
+          color: currentDraft.color || existing?.color || undefined,
+          size: currentDraft.size || existing?.size || undefined,
+          weight: currentDraft.weight ? +currentDraft.weight : (existing?.weight || undefined),
+          specs: (currentDraft.specs && currentDraft.specs.some((sp: any) => sp.key.trim() && sp.value.trim())) ? currentDraft.specs.filter((sp: any) => sp.key.trim() && sp.value.trim()).map(({ id: specId, key, value }: any) => ({ id: specId, key, value })) : (existing?.specs || []),
+          media: (currentDraft.media && currentDraft.media.length) ? currentDraft.media : (existing?.media || []),
+          sellerCity: currentDraft.sellerCity || existing?.sellerCity || "",
+          instant: currentDraft.instant ?? existing?.instant,
+          isDraft: true,
+          draftSavedAt: new Date().toISOString(),
+          createdAt: existing?.createdAt || new Date().toISOString(),
+        };
+        console.log('[UNMOUNT SAVE] Сохраняю черновик при выходе (merge):', data.name, data.manufacturer, data.sku);
+        
+        // Используем getState() для доступа к АКТУАЛЬНОМУ store (не через замыкание acc)
+        const store = useSellerAccount.getState();
+        if (currentId) {
+          store.updateProduct(currentId, data);
+        } else if (currentDraftId) {
+          store.updateProduct(currentDraftId, data);
+        } else {
+          store.addProduct(data);
+        }
+        console.log('[UNMOUNT SAVE] ГОТОВО! Товаров в store теперь:', useSellerAccount.getState().products.length);
+      }
+    };
+  }, []);
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
@@ -364,22 +428,23 @@ export function ProductEditorPage() {
   };
 
   const handleSaveDraft = () => {
+    const currentDraft = draftRef.current;
     const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
     const data = {
       id: draftIdToUse,
-      name: draft.name.trim() || "Без названия",
-      category: draft.category,
-      price: draft.price ? +draft.price : 0,
-      description: draft.description.trim(),
-      materials: draft.materials,
-      style: draft.style || undefined,
-      color: draft.color || undefined,
-      size: draft.size || undefined,
-      weight: draft.weight ? +draft.weight : undefined,
-      specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
-      media: draft.media,
-      sellerCity: draft.sellerCity,
-      instant: draft.instant,
+      name: currentDraft.name.trim() || "Без названия",
+      category: currentDraft.category,
+      price: currentDraft.price ? +currentDraft.price : 0,
+      description: currentDraft.description.trim(),
+      materials: currentDraft.materials,
+      style: currentDraft.style || undefined,
+      color: currentDraft.color || undefined,
+      size: currentDraft.size || undefined,
+      weight: currentDraft.weight ? +currentDraft.weight : undefined,
+      specs: currentDraft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
+      media: currentDraft.media,
+      sellerCity: currentDraft.sellerCity,
+      instant: currentDraft.instant,
       isDraft: true,
       draftSavedAt: new Date().toISOString(),
       createdAt: editItem?.createdAt || new Date().toISOString(),
@@ -408,24 +473,25 @@ export function ProductEditorPage() {
       clearTimeout(autoSaveTimerRef.current);
     }
     autoSaveTimerRef.current = window.setTimeout(() => {
-      // Автосохраняем только если есть хоть какие-то данные
-      if (draft.name.trim() || draft.media.length > 0 || draft.description.trim()) {
+      const currentDraft = draftRef.current;
+      console.log("[AUTO-SAVE] Сохраняю:", currentDraft.name, currentDraft.manufacturer, currentDraft.sku);
+      if (currentDraft.name.trim() || currentDraft.media.length > 0 || currentDraft.description.trim()) {
         const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
         const data = {
           id: draftIdToUse,
-          name: draft.name.trim() || "Без названия",
-          category: draft.category,
-          price: draft.price ? +draft.price : 0,
-          description: draft.description.trim(),
-          materials: draft.materials,
-          style: draft.style || undefined,
-          color: draft.color || undefined,
-          size: draft.size || undefined,
-          weight: draft.weight ? +draft.weight : undefined,
-          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
-          media: draft.media,
-          sellerCity: draft.sellerCity,
-          instant: draft.instant,
+          name: currentDraft.name.trim() || "Без названия",
+          category: currentDraft.category,
+          price: currentDraft.price ? +currentDraft.price : 0,
+          description: currentDraft.description.trim(),
+          materials: currentDraft.materials,
+          style: currentDraft.style || undefined,
+          color: currentDraft.color || undefined,
+          size: currentDraft.size || undefined,
+          weight: currentDraft.weight ? +currentDraft.weight : undefined,
+          specs: currentDraft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
+          media: currentDraft.media,
+          sellerCity: currentDraft.sellerCity,
+          instant: currentDraft.instant,
           isDraft: true,
           draftSavedAt: new Date().toISOString(),
           createdAt: editItem?.createdAt || new Date().toISOString(),

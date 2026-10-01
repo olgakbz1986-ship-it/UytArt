@@ -328,7 +328,7 @@ interface SellerAccountState {
   products: SellerProductItem[];
   team: TeamMember[];
   aiCardGens: Record<string, number>; /* месяц -> использовано */
-  addProduct: (p: Omit<SellerProductItem, "id" | "createdAt">) => void;
+  addProduct: (p: Omit<SellerProductItem, "id" | "createdAt"> & Partial<Pick<SellerProductItem, "id" | "createdAt">>) => void;
   removeProduct: (id: string) => void;
   toggleArchive: (id: string) => void;
   bulkSetPrice: (ids: string[], percent: number) => void;
@@ -373,7 +373,7 @@ export const useSellerAccount = create<SellerAccountState>()(
       aiCardGens: {},
       addProduct: (p) =>
         set((s) => ({
-          products: [{ ...p, id: "sp-" + Date.now(), createdAt: new Date().toISOString() }, ...s.products],
+          products: [{ ...p, id: p.id || "sp-" + Date.now(), createdAt: p.createdAt || new Date().toISOString() }, ...s.products],
         })),
       removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
       toggleArchive: (id) =>
