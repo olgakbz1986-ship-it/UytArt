@@ -20,7 +20,7 @@ type Draft = {
   color: string;
   size: string;
   weight: string;
-  specs: { key: string; value: string }[];
+  specs: { id: string; key: string; value: string }[];
   description: string;
   sellerCity: string;
   processingDays: string;
@@ -86,7 +86,7 @@ export function ProductEditorPage() {
         color: editItem.color || "",
         size: editItem.size || "",
         weight: editItem.weight ? String(editItem.weight) : "",
-        specs: editItem.specs || [],
+        specs: (editItem.specs || []).map((sp: any) => ({ id: sp.id || "spec-" + Math.random().toString(36).slice(2), key: sp.key || "", value: sp.value || "" })),
         description: editItem.description || "",
         sellerCity: editItem.sellerCity || sellerReg.city || "",
       });
@@ -95,15 +95,33 @@ export function ProductEditorPage() {
     }
   }, [editItem, sellerReg.city]);
 
-  // Автосохранение при изменениях draft
+  // Автосохранение при изменениях draft (кроме specs чтобы не схлопывались поля)
   useEffect(() => {
+    // Создаём объект без specs для триггера автосохранения
+    const draftWithoutSpecs = {
+      ...draft,
+      specs: undefined,
+    };
     autoSaveDraft();
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [draft]);
+  }, [
+    draft.name,
+    draft.category,
+    draft.price,
+    draft.description,
+    draft.materials,
+    draft.style,
+    draft.color,
+    draft.size,
+    draft.weight,
+    draft.media,
+    draft.sellerCity,
+    draft.instant,
+  ]);
 
   // Сохранение при закрытии вкладки/переходе
   useEffect(() => {
@@ -121,7 +139,7 @@ export function ProductEditorPage() {
           color: draft.color || undefined,
           size: draft.size || undefined,
           weight: draft.weight ? +draft.weight : undefined,
-          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()),
+          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
           media: draft.media,
           sellerCity: draft.sellerCity,
           instant: draft.instant,
@@ -218,7 +236,7 @@ export function ProductEditorPage() {
         color: draft.color || undefined,
         size: draft.size || undefined,
         weight: draft.weight ? +draft.weight : undefined,
-        specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()),
+        specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
         media: draft.media,
         sellerCity: draft.sellerCity,
         instant: draft.instant,
@@ -252,7 +270,7 @@ export function ProductEditorPage() {
       color: draft.color || undefined,
       size: draft.size || undefined,
       weight: draft.weight ? +draft.weight : undefined,
-      specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()),
+      specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
       media: draft.media,
       sellerCity: draft.sellerCity,
       instant: draft.instant,
@@ -298,7 +316,7 @@ export function ProductEditorPage() {
           color: draft.color || undefined,
           size: draft.size || undefined,
           weight: draft.weight ? +draft.weight : undefined,
-          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()),
+          specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
           media: draft.media,
           sellerCity: draft.sellerCity,
           instant: draft.instant,
@@ -447,14 +465,15 @@ export function ProductEditorPage() {
           </div>
 
           <p className="text-[11px] font-bold text-ink-mute mb-2">Дополнительные параметры (ключ — значение)</p>
-          {draft.specs.map((sp, i) => (
-            <div key={i} className="flex gap-2 mb-2">
+          {draft.specs.map((sp) => (
+            <div key={sp.id} className="flex gap-2 mb-2">
               <input 
                 className="field flex-1" 
                 value={sp.key} 
                 onChange={(e) => {
-                  const newSpecs = [...draft.specs];
-                  newSpecs[i] = { ...newSpecs[i], key: e.target.value };
+                  const newSpecs = draft.specs.map((s) => 
+                    s.id === sp.id ? { ...s, key: e.target.value } : s
+                  );
                   setDraft({ ...draft, specs: newSpecs });
                 }} 
                 placeholder="Параметр (например, Комплектация)" 
@@ -463,8 +482,9 @@ export function ProductEditorPage() {
                 className="field flex-1" 
                 value={sp.value} 
                 onChange={(e) => {
-                  const newSpecs = [...draft.specs];
-                  newSpecs[i] = { ...newSpecs[i], value: e.target.value };
+                  const newSpecs = draft.specs.map((s) => 
+                    s.id === sp.id ? { ...s, value: e.target.value } : s
+                  );
                   setDraft({ ...draft, specs: newSpecs });
                 }} 
                 placeholder="Значение" 
@@ -472,7 +492,7 @@ export function ProductEditorPage() {
               <button 
                 type="button" 
                 onClick={() => {
-                  const newSpecs = draft.specs.filter((_, idx) => idx !== i);
+                  const newSpecs = draft.specs.filter((s) => s.id !== sp.id);
                   setDraft({ ...draft, specs: newSpecs });
                 }} 
                 className="w-9 h-9 shrink-0 rounded-[8px] bg-line-soft text-ink-mute hover:bg-error hover:text-white flex items-center justify-center cursor-pointer"
@@ -482,7 +502,7 @@ export function ProductEditorPage() {
           <button 
             type="button" 
             onClick={() => {
-              const newSpecs = [...draft.specs, { key: "", value: "" }];
+              const newSpecs = [...draft.specs, { id: "spec-" + Date.now().toString(36), key: "", value: "" }];
               setDraft({ ...draft, specs: newSpecs });
             }} 
             className="h-8 px-3 rounded-[8px] bg-line-soft text-[11.5px] font-bold text-ink-soft hover:bg-line cursor-pointer mb-4"
