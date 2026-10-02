@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send } from "lucide-react";
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
+import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
+import { QualityScore } from "../components/QualityScore";
 import { CATEGORIES } from "../data/seed";
 import { Btn, Field } from "../components/ui";
 import { StudioCanvas } from "../components/StudioCanvas";
@@ -512,6 +514,7 @@ export function ProductEditorPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f1eb]">
+      <QualityScore draft={draft} />
       {/* Хедер страницы */}
       <div className="bg-white border-b border-line-soft sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
@@ -692,49 +695,7 @@ export function ProductEditorPage() {
             </Field>
           </div>
 
-          <p className="text-[11px] font-bold text-ink-mute mb-2">Дополнительные параметры (ключ — значение)</p>
-          {draft.specs.map((sp) => (
-            <div key={sp.id} className="flex gap-2 mb-2">
-              <input 
-                className="field flex-1" 
-                value={sp.key} 
-                onChange={(e) => {
-                  const newSpecs = draft.specs.map((s) => 
-                    s.id === sp.id ? { ...s, key: e.target.value } : s
-                  );
-                  setDraft({ ...draft, specs: newSpecs });
-                }} 
-                placeholder="Параметр (например, Комплектация)" 
-              />
-              <input 
-                className="field flex-1" 
-                value={sp.value} 
-                onChange={(e) => {
-                  const newSpecs = draft.specs.map((s) => 
-                    s.id === sp.id ? { ...s, value: e.target.value } : s
-                  );
-                  setDraft({ ...draft, specs: newSpecs });
-                }} 
-                placeholder="Значение" 
-              />
-              <button 
-                type="button" 
-                onClick={() => {
-                  const newSpecs = draft.specs.filter((s) => s.id !== sp.id);
-                  setDraft({ ...draft, specs: newSpecs });
-                }} 
-                className="w-9 h-9 shrink-0 rounded-[8px] bg-line-soft text-ink-mute hover:bg-error hover:text-white flex items-center justify-center cursor-pointer"
-              >×</button>
-            </div>
-          ))}
-          <button 
-            type="button" 
-            onClick={() => {
-              const newSpecs = [...draft.specs, { id: "spec-" + Date.now().toString(36), key: "", value: "" }];
-              setDraft({ ...draft, specs: newSpecs });
-            }} 
-            className="h-8 px-3 rounded-[8px] bg-line-soft text-[11.5px] font-bold text-ink-soft hover:bg-line cursor-pointer mb-4"
-          >+ Добавить параметр</button>
+<SpecGroupsEditor key={draft.category} category={draft.category} specs={draft.specs} onChange={(next) => setDraft({ ...draft, specs: next })} />
         </section>
 
         {/* БЛОК 4: ЛОГИСТИКА */}
