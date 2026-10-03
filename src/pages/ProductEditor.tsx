@@ -88,6 +88,50 @@ export function ProductEditorPage() {
 
   const editItem = id ? acc.products.find((pp) => pp.id === id) : undefined;
   const isPublishedMode = !!(editItem && editItem.isDraft === false);
+  // УМНАЯ ФОРМА: категория диктует набор полей
+  const catGroup = CATEGORIES.find((c) => c.name === draft.category)?.group || "";
+  const FIELD_VIS: Record<string, { mat?: boolean; style?: boolean; color?: boolean; size?: boolean; weight?: boolean; matLabel?: string }> = {
+    // 🏺 Декор и дом: вазы, статуэтки, свечи — все физические атрибуты важны
+    decor_home: { mat: true, style: true, color: true, size: false, weight: true },
+    // 👗 Одежда и обувь: материал, цвет — критичны; размер = автоскрытие (sizes в группе); стиль и вес — редко
+    clothing_shoes: { mat: true, style: false, color: true, size: false, weight: false },
+    // 👜 Аксессуары: сумки, украшения, часы — материал, стиль, цвет; размер — опц.; вес не важен
+    accessories: { mat: true, style: true, color: true, size: false, weight: false },
+    // 📱 Техника: цвет + вес; материала/стиля/размера нет (есть габариты в группе)
+    tech: { mat: false, style: false, color: true, size: false, weight: true },
+    // 🔧 Фурнитура: крепёж, ручки — материал, цвет, размер, вес; стиль не нужен
+    hardware: { mat: true, style: false, color: true, size: true, weight: true },
+    // 🪴 Быт и сад: инструменты, горшки — материал, цвет, размер, вес; стиль не нужен
+    home_garden: { mat: true, style: false, color: true, size: true, weight: true },
+    // 🧴 Красота: косметика — СОСТАВ, цвет, вес; стиль/размер не нужны
+    beauty: { mat: true, matLabel: "Состав / ингредиенты", style: false, color: true, size: false, weight: true },
+    // 🎨 Хобби: рукоделие, игры — материал, стиль, цвет, размер; вес не важен
+    hobby: { mat: true, style: true, color: true, size: true, weight: false },
+    // 🧱 Стройматериалы: кирпич, доски — материал, цвет, размер, вес; стиль не нужен
+    construction: { mat: true, style: false, color: true, size: true, weight: true },
+    // 🖌️ Отделка: краски, плитка — материал, цвет, размер, вес; стиль не нужен
+    finishing: { mat: true, style: false, color: true, size: true, weight: true },
+    // 🛋️ Мебель и текстиль: всё показываем, размер = автоскрытие (sleepsize/section в группе)
+    furniture_textile: { mat: true, style: true, color: true, size: false, weight: true },
+    // 🚿 Сантехника: ванны, смесители — материал, цвет, размер, вес; стиль не нужен
+    plumbing_comms: { mat: true, style: false, color: true, size: true, weight: true },
+    // 🤖 Цифровые товары: сайты, промты — физ. полей НЕТ
+    digital: { mat: false, style: false, color: false, size: false, weight: false },
+    // 🛠️ Услуги мастеров: пошив, монтаж — физ. полей НЕТ
+    services: { mat: false, style: false, color: false, size: false, weight: false },
+    // 🍽️ Фудкорт: кухня, фермеры — СОСТАВ и вес (для доставки); стиль/цвет/размер не нужны
+    foodcourt: { mat: true, matLabel: "Состав / ингредиенты", style: false, color: false, size: false, weight: true },
+  };
+  const vis = FIELD_VIS[catGroup] || { mat: true, style: true, color: true, size: true, weight: true };
+  const DIM_IDS = ["height", "diameter", "leaf", "sleepsize", "section", "sizes"];
+  const hasDims = getGroupsForCategory(draft.category).some((g: SpecGroupDef) => g.fields.some((f: SpecFieldDef) => DIM_IDS.includes(f.id)));
+  const showMat = vis.mat !== false;
+  const showStyle = vis.style !== false;
+  const showColor = vis.color !== false;
+  const showSize = vis.size !== false && !hasDims; // скрыт, если есть точные габариты в группах
+  const showWeight = vis.weight !== false;
+  const matLabel = vis.matLabel || "Материал";
+  const showAnyBasic = showMat || showStyle || showColor || showSize || showWeight;
 
   // СИНХРОНИЗАЦИЯ REF ПРИ КАЖДОМ РЕНДЕРЕ (гарантированно актуальные данные, включая фото)
   draftRef.current = draft;
@@ -675,38 +719,7 @@ export function ProductEditorPage() {
             </div>
             <textarea className="field" rows={8} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Уникальная ручная работа. Идеально подойдёт для интерьера в стиле бохо..." />
           </div>
-        </section>
-
-        {/* БЛОК 3: ХАРАКТЕРИСТИКИ */}
-        <section className="bg-white rounded-2xl shadow-card p-6 border border-line-soft">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">3</span>
-              <h2 className="font-display font-bold text-[18px] text-ink">📊 Характеристики товара</h2>
-            </div>
-            <button type="button" onClick={autoFillCharacteristics} className="h-9 px-3 rounded-[8px] bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-1.5">✨ Автозаполнить ИИ</button>
-          </div>
-          <p className="text-[13px] text-ink-soft mb-4">Заполните характеристики для лучшей видимости в поиске.</p>
-
-          <div className="grid sm:grid-cols-2 gap-3 mb-4">
-            <Field label="Материал">
-              <input className="field" value={draft.materials[0] || ""} onChange={(e) => setDraft({ ...draft, materials: [e.target.value] })} placeholder="Керамика, дерево, металл..." />
-            </Field>
-            <Field label="Стиль">
-              <input className="field" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} placeholder="Бохо, лофт, сканди, минимализм..." />
-            </Field>
-            <Field label="Цвет">
-              <input className="field" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} placeholder="Шалфей, терракота, графит..." />
-            </Field>
-            <Field label="Размер / Габариты">
-              <input className="field" value={draft.size} onChange={(e) => setDraft({ ...draft, size: e.target.value })} placeholder="Ø 20 см, 40×60×15 см..." />
-            </Field>
-            <Field label="Вес, кг">
-              <input className="field" inputMode="decimal" value={draft.weight} onChange={(e) => setDraft({ ...draft, weight: e.target.value.replace(/[^\d.]/g, "") })} placeholder="1.2" />
-            </Field>
-          </div>
-
-          {/* ТЕГИ */}
+                  {/* ТЕГИ */}
           <div className="mb-4">
             <Field label="Теги (ключевые слова для поиска)" hint="Максимум 10 тегов. Нажмите Enter или введите через запятую">
               <div className="flex flex-wrap gap-2 mb-2">
@@ -754,6 +767,49 @@ export function ProductEditorPage() {
               </div>
             </Field>
           </div>
+
+</section>
+
+        {/* БЛОК 3: ХАРАКТЕРИСТИКИ */}
+        <section className="bg-white rounded-2xl shadow-card p-6 border border-line-soft">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">3</span>
+              <h2 className="font-display font-bold text-[18px] text-ink">📊 Характеристики товара</h2>
+            </div>
+            <button type="button" onClick={autoFillCharacteristics} className="h-9 px-3 rounded-[8px] bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-1.5">✨ Автозаполнить ИИ</button>
+          </div>
+          <p className="text-[13px] text-ink-soft mb-4">Заполните характеристики для лучшей видимости в поиске.</p>
+
+          {showAnyBasic && (
+          <div className="grid sm:grid-cols-2 gap-3 mb-4">
+            {showMat && (
+            <Field label={matLabel}>
+              <input className="field" value={draft.materials[0] || ""} onChange={(e) => setDraft({ ...draft, materials: [e.target.value] })} placeholder={matLabel !== "Материал" ? "Натуральные ингредиенты, состав..." : "Керамика, дерево, металл..."} />
+            </Field>
+            )}
+            {showStyle && (
+            <Field label="Стиль">
+              <input className="field" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} placeholder="Бохо, лофт, сканди, минимализм..." />
+            </Field>
+            )}
+            {showColor && (
+            <Field label="Цвет">
+              <input className="field" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} placeholder="Шалфей, терракота, графит..." />
+            </Field>
+            )}
+            {showSize && (
+            <Field label="Размер / Габариты">
+              <input className="field" value={draft.size} onChange={(e) => setDraft({ ...draft, size: e.target.value })} placeholder="Ø 20 см, 40×60×15 см..." />
+            </Field>
+            )}
+            {showWeight && (
+            <Field label="Вес изделия, кг">
+              <input className="field" inputMode="decimal" value={draft.weight} onChange={(e) => setDraft({ ...draft, weight: e.target.value.replace(/[^\d.]/g, "") })} placeholder="1.2" />
+            </Field>
+            )}
+          </div>
+          )}
 
 <SpecGroupsEditor key={draft.category} category={draft.category} specs={draft.specs} onChange={(next) => setDraft({ ...draft, specs: next })} />
         </section>

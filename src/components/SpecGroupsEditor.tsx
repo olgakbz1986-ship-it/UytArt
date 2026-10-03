@@ -85,7 +85,7 @@ export function SpecGroupsEditor({ category, specs, onChange }: { category: stri
             </button>
             {opened && (
               <div className="px-4 pb-4 grid sm:grid-cols-2 gap-3">
-                {g.fields.map((f) => (
+                {g.fields.filter((f) => !(f.hideIf && f.hideIf.test(category))).map((f) => (
                   <div key={f.id}>
                     <label className={`text-[11.5px] font-bold block mb-1 ${f.important ? "text-accent-deep" : "text-ink-mute"}`}>{f.important && <span title="Важное поле для категории">⭐ </span>}{f.label}{f.unit ? `, ${f.unit}` : ""}</label>
                     <FieldInput f={f} value={getVal(f)} onChange={(v) => setVal(f, v)} />

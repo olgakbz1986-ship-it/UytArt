@@ -1,8 +1,8 @@
 export type SpecFieldType = "text" | "number" | "select" | "boolean" | "multiselect" | "range";
-export interface SpecFieldDef { id: string; label: string; type: SpecFieldType; unit?: string; options?: string[]; placeholder?: string; hint?: string; important?: boolean }
+export interface SpecFieldDef { id: string; label: string; type: SpecFieldType; unit?: string; options?: string[]; placeholder?: string; hint?: string; important?: boolean; hideIf?: RegExp }
 export interface SpecGroupDef { id: string; label: string; icon: string; defaultOpen?: boolean; fields: SpecFieldDef[] }
 
-const identification: SpecGroupDef = { id: "ident", label: "Идентификация", icon: "🏷", fields: [
+const identification: SpecGroupDef = { id: "ident", label: "Тех. идентификация (необязательно)", icon: "🏷", fields: [
   { id: "model", important: true, label: "Модель", type: "text", placeholder: "Например: Сmart 22" },
   { id: "series", label: "Серия / коллекция", type: "text" },
   { id: "country", label: "Страна производства", type: "text", placeholder: "Россия" },
@@ -47,7 +47,7 @@ const electro: SpecGroupDef = { id: "electro", label: "Технические п
 
 const clothes: SpecGroupDef = { id: "clothes", label: "Одежда и обувь", icon: "👕", defaultOpen: true, fields: [
   { id: "sizes", important: true, label: "Доступные размеры", type: "multiselect", options: ["XS", "S", "M", "L", "XL", "XXL"] },
-  { id: "gender", important: true, label: "Пол", type: "select", options: ["Женский", "Мужской", "Унисекс", "Детский"] },
+  { id: "gender", important: true, label: "Пол", type: "select", options: ["Женский", "Мужской", "Унисекс", "Детский"], hideIf: /мужск|женск/i },
   { id: "season", label: "Сезон", type: "multiselect", options: ["Лето", "Демисезон", "Зима", "Всесезон"] },
   { id: "fabric", label: "Состав ткани", type: "text", placeholder: "Хлопок 95%, эластан 5%" },
   { id: "care", label: "Уход", type: "select", options: ["Машинная стирка", "Ручная стирка", "Только химчистка"] },
@@ -189,25 +189,107 @@ const garden: SpecGroupDef = { id: "garden", label: "Сад и огород", ic
   { id: "soil", label: "Тип почвы", type: "multiselect", options: ["Песчаная", "Глинистая", "Чернозём", "Торфяная"] },
 ]};
 
+
+const decor: SpecGroupDef = { id: "decor", label: "Декор и интерьер", icon: "🏺", defaultOpen: true, fields: [
+  { id: "style", label: "Стиль", type: "select", options: ["Классика", "Модерн", "Лофт", "Скандинавский", "Минимализм", "Бохо", "Прованс", "Ар-деко"] },
+  { id: "room", label: "Комната", type: "multiselect", options: ["Гостиная", "Спальня", "Кухня", "Ванная", "Детская", "Прихожая", "Кабинет"] },
+  { id: "mount", label: "Крепление", type: "select", options: ["Настенное", "Напольное", "Настольное", "Подвесное", "Без крепления"] },
+  { id: "handmade", label: "Ручная работа", type: "boolean" },
+]};
+
+const accessories: SpecGroupDef = { id: "accessories", label: "Аксессуары", icon: "", defaultOpen: true, fields: [
+  { id: "material", label: "Материал", type: "text", placeholder: "Натуральная кожа, текстиль, металл" },
+  { id: "closure", label: "Застёжка", type: "select", options: ["Молния", "Кнопка", "Магнитная", "Шнурок", "Без застёжки"] },
+  { id: "compartments", label: "Отделений", type: "number" },
+  { id: "strap", label: "Длина ремня", type: "text", placeholder: "Регулируемый, 120 см" },
+]};
+
+const hardware: SpecGroupDef = { id: "hardware", label: "Фурнитура и крепёж", icon: "", defaultOpen: true, fields: [
+  { id: "type", label: "Тип", type: "select", options: ["Петли", "Ручки", "Замки", "Крепёж", "Направляющие", "Конфирматы"] },
+  { id: "load", label: "Нагрузка", type: "number", unit: "кг" },
+  { id: "finish", label: "Покрытие", type: "select", options: ["Хром", "Латунь", "Чёрный матовый", "Нержавеющая сталь", "Бронза"] },
+  { id: "mount_type", label: "Монтаж", type: "select", options: ["Накладной", "Врезной", "Скрытый"] },
+]};
+
+const home_goods: SpecGroupDef = { id: "home_goods", label: "Товары для дома", icon: "", defaultOpen: true, fields: [
+  { id: "room", label: "Комната", type: "multiselect", options: ["Кухня", "Ванная", "Спальня", "Гостиная", "Прихожая"] },
+  { id: "material", label: "Материал", type: "text", placeholder: "Пластик, металл, дерево" },
+  { id: "washable", label: "Можно мыть", type: "boolean" },
+  { id: "stackable", label: "Штабелируемый", type: "boolean" },
+]};
+
+const plumbing: SpecGroupDef = { id: "plumbing", label: "Сантехника", icon: "🚿", defaultOpen: true, fields: [
+  { id: "type", label: "Тип", type: "select", options: ["Ванна", "Душевая кабина", "Раковина", "Унитаз", "Смеситель", "Биде"] },
+  { id: "install", label: "Установка", type: "select", options: ["Настенная", "Напольная", "Встраиваемая", "Подвесная"] },
+  { id: "pressure", label: "Рабочее давление", type: "number", unit: "атм" },
+  { id: "connection", label: "Подключение", type: "select", options: ["1/2\"", "3/4\"", "3/8\"", "G1\"", "G1.5\""] },
+]};
+
+const finishing: SpecGroupDef = { id: "finishing", label: "Отделочные материалы", icon: "🖌️", defaultOpen: true, fields: [
+  { id: "type", label: "Тип", type: "select", options: ["Обои", "Краска", "Штукатурка", "Плитка", "Ламинат", "Линолеум"] },
+  { id: "coverage", label: "Расход", type: "text", placeholder: "10 м²/л, 1.5 кг/м²" },
+  { id: "layers", label: "Слоёв", type: "number" },
+  { id: "dry_time", label: "Время высыхания", type: "text", placeholder: "2 часа, 24 часа" },
+]};
+
+const services: SpecGroupDef = { id: "services", label: "Услуги", icon: "🛠️", defaultOpen: true, fields: [
+  { id: "duration", label: "Срок выполнения", type: "text", placeholder: "1 день, 1 неделя, 1 месяц" },
+  { id: "warranty", label: "Гарантия на работы", type: "text", placeholder: "6 месяцев, 1 год" },
+  { id: "includes", label: "Включает", type: "multiselect", options: ["Замер", "Доставка", "Монтаж", "Уборка", "Консультация"] },
+  { id: "payment", label: "Оплата", type: "select", options: ["Предоплата", "По факту", "Поэтапная"] },
+]};
+
 const RULES: { match: RegExp; group: SpecGroupDef }[] = [
+  // Двери и окна
   { match: /двер|окон|ворот/i, group: doors },
+  // Техника и электроника
   { match: /телефон|смартфон|компьютер|ноутбук|планшет|электро|прибор|инструмент|техник|освещ/i, group: electro },
+  // Одежда и обувь
   { match: /одежд|обув|плать|куртк|футбол|пальто|текстил/i, group: clothes },
+  // Керамика и посуда
   { match: /ваз|керам|статуэт|скульптур|горшк|посуд|фарфор|кашпо/i, group: ceramic },
+  // Цифровые товары
   { match: /цифров(?!\s*панел)|файл(?!\s*для\s*печати)|софт|программ(?!\s*обеспеч)|лиценз|курс|урок|шаблон(?!\s*3d)|цифровой\s*товар|электронн(?!\s*книг)|pdf|mp3|mp4|wav|stl|obj|fbx/i, group: digital },
+  // Стройматериалы
   { match: /лес|древ|металл|прокат|строймат|пиломат|фанер|кирпич|крепеж/i, group: materials },
+  // Косметика и красота
   { match: /крем|духи|парфюм|космет|шампунь|мыло|лосьон|маск/i, group: cosmetics },
-  { match: /шоколад|кофе|чай|мёд|конфет|печень|хлеб|молоко|сыр|мяс|рыб|фрукт|овощ/i, group: food },
-  { match: /кольц|серьг|браслет|кулон|цепочк|ювелир/i, group: jewelry },
-  { match: /диван|кресл|стол|стул|шкаф|кровать|тумб|полк|мебел/i, group: furniture },
-  { match: /автозапчаст|запчаст|тормозн|подвеск|двигател|фильтр/i, group: autoparts },
-  { match: /спорт|фитнес|тренажёр|гантел|штанг|мяч|лыж|велосипед/i, group: sports },
-  { match: /кирпич|бетон|цемент|штукатур|краск|клей|плитк|обой/i, group: construction },
+  // Еда и напитки
+  { match: /шоколад|кофе|чай|мёд|конфет|печень|хлеб|молоко|сыр|мяс|рыб|фрукт|овощ|пицц|пирог|закус/i, group: food },
+  // Ювелирные изделия
+  { match: /кольц|серьг|браслет|кулон|цепочк|ювелир|бижутер/i, group: jewelry },
+  // Мебель
+  { match: /диван|кресл|стол|стул|шкаф|кровать|тумб|полк|мебел|матрас|пуф/i, group: furniture },
+  // Автозапчасти
+  { match: /автозапчаст|запчаст|тормозн|подвеск|двигател|фильтр|шина|диск/i, group: autoparts },
+  // Спорт
+  { match: /спорт|фитнес|тренажёр|гантел|штанг|мяч|лыж|велосипед|йога/i, group: sports },
+  // Стройка и отделка
+  { match: /кирпич|бетон|цемент|штукатур|краск|клей|плитк|обой|ламинат|линолеум/i, group: construction },
+  // Музыка
   { match: /гитар|пианин|барабан|скрипк|саксофон|музык/i, group: music },
-  { match: /игрушк|детск|кукл|машинк|конструктор|пазл/i, group: kids },
-  { match: /книг|тетрадь|ручк|карандаш|блокнот|ежедневник/i, group: books },
-  { match: /дрель|шуруповёрт|болгарк|пила|лобзик|фрезер/i, group: tools },
-  { match: /сад|огород|растен|семен|удобрени|газон|цветы/i, group: garden },
+  // Детские товары
+  { match: /игрушк|детск|кукл|машинк|конструктор|пазл|коляск|кроватк/i, group: kids },
+  // Книги и канцелярия
+  { match: /книг|тетрадь|ручк|карандаш|блокнот|ежедневник|канц/i, group: books },
+  // Инструменты
+  { match: /дрель|шуруповёрт|болгарк|пила|лобзик|фрезер|перфоратор/i, group: tools },
+  // Сад и огород
+  { match: /сад|огород|растен|семен|удобрени|газон|цветы|теплиц/i, group: garden },
+  // Декор и интерьер (зеркала, картины, свечи, фоторамки, 3D-панели, ароматы)
+  { match: /зеркал|картин|панно|свеч|подсвечн|фоторамк|альбом|аромат|диффузор|саше|панел|лепнин|розетк/i, group: decor },
+  // Аксессуары (сумки, рюкзаки, часы, ремни, очки)
+  { match: /сумк|рюкзак|клатч|часы|ремн|очк|кошел|портмоне|зонт|шарф/i, group: accessories },
+  // Фурнитура и крепёж
+  { match: /петл|ручк|замк|направляющ|конфирмат|шуруп|болт|гайк|винт|дюбель/i, group: hardware },
+  // Товары для дома (уборка, хранение, для животных)
+  { match: /уборк|хранен|животн|корм|лоток|лежак|миск|переноск|когтеточк/i, group: home_goods },
+  // Сантехника
+  { match: /ванн|душ|раковин|унитаз|смесит|биде|инсталляц|полотенцесуш/i, group: plumbing },
+  // Отделочные материалы
+  { match: /обои|штукатур|краск|плитк|ламинат|линолеум|паркет|плинтус|молдинг/i, group: finishing },
+  // Услуги
+  { match: /услуг|ремонт|монтаж|установк|пошив|дизайн|съёмк|внедрен|консульт/i, group: services },
 ];
 
 export function getGroupsForCategory(category: string): SpecGroupDef[] {
