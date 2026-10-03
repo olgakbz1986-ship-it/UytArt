@@ -13,24 +13,32 @@ interface QualityScoreProps {
     sku: string;
     sellerCity: string;
     instant?: boolean;
+    processingDays?: string;
   };
+  importantLabels?: string[];
 }
 
-export function QualityScore({ draft }: QualityScoreProps) {
+export function QualityScore({ draft, importantLabels = [] }: QualityScoreProps) {
+  const filledImportant = importantLabels.filter((label) => draft.specs.some((s) => s.key === label && s.value.trim())).length;
+  const totalImportant = importantLabels.length;
+  const photoCount = draft.media.filter((m) => m.type === "image").length;
+  const hasVideo = draft.media.some((m) => m.type === "video");
+
   const checks = useMemo(() => [
-    { done: draft.name.trim().length >= 5, weight: 10 },
-    { done: !!draft.category, weight: 5 },
-    { done: !!draft.price && +draft.price > 0, weight: 10 },
-    { done: draft.media.length >= 3, weight: 15 },
-    { done: draft.media.some((m: any) => m.type === "video"), weight: 5 },
-    { done: draft.description.trim().length >= 100, weight: 10 },
-    { done: draft.specs.filter((s) => s.value.trim()).length >= 5, weight: 15 },
-    { done: !!draft.manufacturer?.trim(), weight: 5 },
-    { done: !!draft.sku?.trim(), weight: 5 },
-    { done: draft.tags.length >= 3, weight: 10 },
-    { done: !!draft.sellerCity?.trim(), weight: 5 },
-    { done: !!draft.instant, weight: 5 },
-  ], [draft]);
+    { done: draft.name.trim().length >= 5, weight: 10, hint: "Название короче 5 символов" },
+    { done: !!draft.category, weight: 5, hint: "Выберите категорию" },
+    { done: !!draft.price && +draft.price > 0, weight: 10, hint: "Укажите цену" },
+    { done: photoCount >= 3, weight: 15, hint: `Добавьте ещё ${Math.max(0, 3 - photoCount)} фото` },
+    { done: hasVideo, weight: 5, hint: "Добавьте видео товара" },
+    { done: draft.description.trim().length >= 100, weight: 10, hint: `Описание короткое (сейчас ${draft.description.trim().length} из 100 символов)` },
+    { done: draft.specs.filter((s) => s.value.trim()).length >= 5, weight: 10, hint: "Заполните ещё характеристики" },
+    { done: totalImportant === 0 || filledImportant === totalImportant, weight: 15, hint: totalImportant > 0 ? `⭐ Заполните важные поля: ${filledImportant}/${totalImportant}` : "" },
+    { done: !!draft.manufacturer?.trim(), weight: 5, hint: "Укажите производителя" },
+    { done: !!draft.sku?.trim(), weight: 5, hint: "Укажите артикул" },
+    { done: draft.tags.length >= 3, weight: 10, hint: `Добавьте ${Math.max(0, 3 - draft.tags.length)} тег(ов)` },
+    { done: !!draft.sellerCity?.trim(), weight: 5, hint: "Укажите город" },
+    { done: !!draft.processingDays && +draft.processingDays > 0, weight: 5, hint: "Укажите срок обработки" },
+  ], [draft, filledImportant, totalImportant, photoCount, hasVideo]);
 
   const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
   const earnedWeight = checks.filter((c) => c.done).reduce((s, c) => s + c.weight, 0);
@@ -44,11 +52,16 @@ export function QualityScore({ draft }: QualityScoreProps) {
   };
 
   return (
-    <div className="fixed top-[69px] left-0 right-0 z-[89] h-[3px] bg-line-soft/30">
-      <div
-        className={`h-full ${getColor(percent)} transition-all duration-700 ease-out`}
-        style={{ width: `${percent}%` }}
-      />
+    <div className="sticky top-[69px] z-[89] w-full bg-surface/95 backdrop-blur border-b border-line-soft/50 shadow-sm">
+      <div className="h-[5px] bg-line-soft/30 relative">
+        <div
+          className={`h-full ${getColor(percent)} transition-all duration-700 ease-out`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <div className="flex items-center px-4 py-1 text-[11.5px]">
+        <span className="font-bold text-ink-mute">Качество карточки: <span className={percent >= 90 ? "text-emerald-600" : percent >= 70 ? "text-accent-deep" : percent >= 50 ? "text-amber-600" : "text-rose-600"}>{percent}%</span></span>
+      </div>
     </div>
   );
 }

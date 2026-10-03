@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send } from "lucide-react";
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
+import { getGroupsForCategory, type SpecGroupDef, type SpecFieldDef } from "../lib/specSystem";
 import { QualityScore } from "../components/QualityScore";
 import { ProductViewCore } from "../components/ProductViewCore";
 import { CATEGORIES } from "../data/seed";
@@ -566,7 +567,8 @@ export function ProductEditorPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f1eb]">
-      <QualityScore draft={draft} />
+      <QualityScore draft={draft} importantLabels={getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label))} />
+
       {/* Хедер страницы */}
       <div className="bg-white border-b border-line-soft">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
