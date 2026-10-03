@@ -138,7 +138,12 @@ export function ProductEditorPage() {
   idRef.current = id;
   draftIdRef.current = draftId;
 
+  const isInitialized = useRef(false);
+
+  // Инициализация draft ТОЛЬКО ОДИН РАЗ при маунте или смене editItem
   useEffect(() => {
+    if (isInitialized.current) return; 
+    
     if (editItem) {
       const loaded = {
         ...empty,
@@ -165,7 +170,15 @@ export function ProductEditorPage() {
       setDraft(emptyDraft);
       draftRef.current = emptyDraft;
     }
-  }, [editItem, sellerReg.city]);
+    isInitialized.current = true;
+  }, [editItem]); // Убрали sellerReg.city отсюда!
+
+  // Отдельно обновляем город, если он загрузился позже, но только если поле пустое
+  useEffect(() => {
+    if (sellerReg.city && !draft.sellerCity) {
+      setDraft(prev => ({ ...prev, sellerCity: sellerReg.city }));
+    }
+  }, [sellerReg.city, draft.sellerCity]);
 
   // Автосохранение при изменениях draft (кроме specs чтобы не схлопывались поля)
   useEffect(() => {
