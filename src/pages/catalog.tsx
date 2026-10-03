@@ -15,6 +15,7 @@ import { Badge, Btn, GroupImg, ProductImg, Rating } from "../components/ui";
 import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
 import { productRating } from "../lib/review";
+import { SpecSections } from "../components/SpecSections";
 
 type SortId = "popular" | "price-asc" | "price-desc" | "new" | "rating";
 const SORTS: { id: SortId; label: string }[] = [
@@ -430,6 +431,7 @@ export function ProductPage() {
               ))}
             </div>
           )}
+          {tab === "specs" && <SpecSections category={cat?.name || ""} specs={(sellerItem as any)?.specs || (p as any).specs || []} />}
           {tab === "delivery" && (
             <div className="space-y-3 text-[14px] text-ink-soft leading-relaxed">
               <p className="flex gap-2.5"><ShieldCheck size={17} className="text-success shrink-0 mt-0.5" /> <span><strong className="text-ink">Безопасная сделка:</strong> деньги резервируются на транзитном счёте и уходят мастеру только после отправки.</span></p>

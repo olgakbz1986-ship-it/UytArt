@@ -4,6 +4,7 @@ import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, 
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
 import { QualityScore } from "../components/QualityScore";
+import { ProductViewCore } from "../components/ProductViewCore";
 import { CATEGORIES } from "../data/seed";
 import { Btn, Field } from "../components/ui";
 import { StudioCanvas } from "../components/StudioCanvas";
@@ -85,6 +86,7 @@ export function ProductEditorPage() {
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   const editItem = id ? acc.products.find((pp) => pp.id === id) : undefined;
+  const isPublishedMode = !!(editItem && editItem.isDraft === false);
 
   // СИНХРОНИЗАЦИЯ REF ПРИ КАЖДОМ РЕНДЕРЕ (гарантированно актуальные данные, включая фото)
   draftRef.current = draft;
@@ -171,7 +173,7 @@ export function ProductEditorPage() {
           media: draft.media,
           sellerCity: draft.sellerCity,
           instant: draft.instant,
-          isDraft: true,
+          isDraft: editItem ? editItem.isDraft !== false : true,
           draftSavedAt: new Date().toISOString(),
           createdAt: editItem?.createdAt || new Date().toISOString(),
         };
@@ -204,6 +206,8 @@ export function ProductEditorPage() {
         const draftIdToUse = currentId || currentDraftId || "d" + Date.now().toString(36);
         // MERGE: берём существующий черновик из store, чтобы пустые поля НЕ затирали сохранённые
         const existing: any = useSellerAccount.getState().products.find((pp: any) => pp.id === draftIdToUse);
+        // ОПУБЛИКОВАННЫЙ товар не трогаем при автосохранении выхода (иначе он станет черновиком)
+        if (existing && existing.isDraft === false) return;
         const data = {
           id: draftIdToUse,
           name: currentDraft.name.trim() || existing?.name || "Без названия",
@@ -222,7 +226,7 @@ export function ProductEditorPage() {
           media: (currentDraft.media && currentDraft.media.length) ? currentDraft.media : (existing?.media || []),
           sellerCity: currentDraft.sellerCity || existing?.sellerCity || "",
           instant: currentDraft.instant ?? existing?.instant,
-          isDraft: true,
+          isDraft: existing ? existing.isDraft !== false : true,
           draftSavedAt: new Date().toISOString(),
           createdAt: existing?.createdAt || new Date().toISOString(),
         };
@@ -395,8 +399,10 @@ export function ProductEditorPage() {
     
     setPublishing(true);
     setTimeout(() => {
+      // Единый id: URL -> черновик -> новый
+      const finalId = id || draftId || "p" + Date.now().toString(36);
       const data = {
-        id: id || "p" + Date.now().toString(36),
+        id: finalId,
         name: draft.name.trim(),
         category: draft.category,
         price: +draft.price,
@@ -408,6 +414,9 @@ export function ProductEditorPage() {
         weight: draft.weight ? +draft.weight : undefined,
         specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
         media: draft.media,
+        manufacturer: draft.manufacturer || undefined,
+        sku: draft.sku || undefined,
+        tags: draft.tags || [],
         sellerCity: draft.sellerCity,
         instant: draft.instant,
         isDraft: false,
@@ -415,14 +424,23 @@ export function ProductEditorPage() {
         createdAt: editItem?.createdAt || new Date().toISOString(),
       };
       
-      if (id) {
-        acc.updateProduct(id, data);
+      // Всегда обновляем существующую запись (addProduct только для brand-new)
+      const existing = acc.products.find((x) => x.id === finalId);
+      if (existing) {
+        acc.updateProduct(finalId, data);
       } else {
         acc.addProduct(data);
       }
       
+      // Обновляем URL чтобы не создавать дубликаты при следующем автосохранении
+      if (!id) {
+        navigate(`/seller/product/${finalId}/edit`, { replace: true });
+      }
+      
       setPublishing(false);
       setPublished(true);
+      // Очищаем pending-буфер
+      localStorage.removeItem(`pending-${finalId}`);
       setTimeout(() => navigate("/seller/dashboard"), 1500);
     }, 1000);
   };
@@ -445,7 +463,7 @@ export function ProductEditorPage() {
       media: currentDraft.media,
       sellerCity: currentDraft.sellerCity,
       instant: currentDraft.instant,
-      isDraft: true,
+      isDraft: editItem ? editItem.isDraft !== false : true,
       draftSavedAt: new Date().toISOString(),
       createdAt: editItem?.createdAt || new Date().toISOString(),
     };
@@ -475,6 +493,18 @@ export function ProductEditorPage() {
     autoSaveTimerRef.current = window.setTimeout(() => {
       const currentDraft = draftRef.current;
       if (currentDraft.name.trim() || currentDraft.media.length > 0 || currentDraft.description.trim()) {
+        // РЕЖИМ 1: Редактируем ОПУБЛИКОВАННЫЙ товар — сохраняем в pending-буфер (не трогаем products[])
+        if (isPublishedMode && id) {
+          try {
+            localStorage.setItem(`pending-${id}`, JSON.stringify(currentDraft));
+            console.log(`💾 Pending сохранён для товара ${id}`);
+          } catch (e) { console.warn(e); }
+          setSavedDraft(true);
+          setTimeout(() => setSavedDraft(false), 2000);
+          return;
+        }
+        
+        // РЕЖИМ 2: Новый товар или черновик — сохраняем в products[]
         const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
         const data = {
           id: draftIdToUse,
@@ -491,7 +521,7 @@ export function ProductEditorPage() {
           media: currentDraft.media,
           sellerCity: currentDraft.sellerCity,
           instant: currentDraft.instant,
-          isDraft: true,
+          isDraft: editItem ? editItem.isDraft !== false : true,
           draftSavedAt: new Date().toISOString(),
           createdAt: editItem?.createdAt || new Date().toISOString(),
         };
@@ -523,15 +553,21 @@ export function ProductEditorPage() {
               <ArrowLeft size={18} />
             </button>
             <div>
-              <h1 className="font-display font-bold text-[20px] text-ink">{id ? "Редактирование позиции" : "Создание позиции товара"}</h1>
+              <h1 className="font-display font-bold text-[20px] text-ink">{isPublishedMode ? "Редактирование опубликованной позиции" : (id ? "Редактирование черновика" : "Создание позиции товара")}</h1>
               <p className="text-[12px] text-ink-soft">Заполните все блоки и опубликуйте товар</p>
             </div>
           </div>
           <div className="flex gap-2">
             <button onClick={handleSaveDraft} disabled={savedDraft} className="h-10 px-4 rounded-[10px] bg-line-soft text-ink font-bold hover:bg-line transition-colors disabled:opacity-50 cursor-pointer flex items-center">{savedDraft ? <><Check size={16} className="mr-2" /> Сохранено!</> : <><Save size={16} className="mr-2" /> Сохранить черновик</>}</button>
-            <button onClick={handlePublish} disabled={publishing || published} className="h-10 px-4 rounded-[10px] bg-dark text-cream font-bold hover:bg-accent-deep transition-colors disabled:opacity-50 cursor-pointer flex items-center">
-              {published ? <><Check size={16} className="mr-2" /> Опубликовано!</> : publishing ? "Публикация..." : <><Send size={16} className="mr-2" /> Опубликовать товар</>}
-            </button>
+            {isPublishedMode ? (
+              <button onClick={handlePublish} disabled={publishing} className="h-10 px-4 rounded-[10px] bg-accent text-ink font-bold hover:bg-accent-deep transition-colors disabled:opacity-50 cursor-pointer flex items-center">
+                {publishing ? "Применение..." : <><Check size={16} className="mr-2" /> Применить изменения</>}
+              </button>
+            ) : (
+              <button onClick={handlePublish} disabled={publishing || published} className="h-10 px-4 rounded-[10px] bg-dark text-cream font-bold hover:bg-accent-deep transition-colors disabled:opacity-50 cursor-pointer flex items-center">
+                {published ? <><Check size={16} className="mr-2" /> Опубликовано!</> : publishing ? "Публикация..." : <><Send size={16} className="mr-2" /> Опубликовать товар</>}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -764,75 +800,20 @@ export function ProductEditorPage() {
           </div>
           
           {showPreview && (
-            <div className="bg-cream rounded-xl p-6 border border-line-soft">
-            <div className="grid md:grid-cols-[300px_1fr] gap-6">
-              <div className="aspect-square rounded-xl overflow-hidden bg-line-soft">
-                {draft.media[0] ? (
-                  draft.media[0].type === "video" ? (
-                    <video src={draft.media[0].url} className="w-full h-full object-cover" muted />
-                  ) : (
-                    <img src={draft.media[0].url} alt="" className="w-full h-full object-cover" />
-                  )
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-ink-mute">
-                    <ImageIcon size={48} className="opacity-30" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <h3 className="font-display font-bold text-[20px] text-ink mb-2">{draft.name || "Название товара"}</h3>
-                <p className="text-[24px] font-bold text-accent mb-3">{draft.price ? `${+draft.price.toLocaleString()} ₽` : "Цена"}</p>
-                
-                <div className="space-y-1 mb-4">
-                  <p className="text-[13px] text-ink-soft">{draft.category}</p>
-                  {draft.manufacturer && <p className="text-[12px] text-ink-mute">🏭 Производитель: {draft.manufacturer}</p>}
-                  {draft.sku && <p className="text-[11px] text-ink-mute">🏷️ Артикул: {draft.sku}</p>}
-                </div>
-
-                {draft.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {draft.tags.map((t, i) => (
-                      <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-accent/10 text-accent-deep border border-accent/20 font-medium">{t}</span>
-                    ))}
-                  </div>
-                )}
-
-                {draft.description && (
-                  <div className="mb-4">
-                    <p className="text-[12px] font-bold text-ink-mute mb-1">Описание</p>
-                    <p className="text-[13px] text-ink-soft whitespace-pre-wrap leading-relaxed">{draft.description}</p>
-                  </div>
-                )}
-
-                {(draft.materials.length > 0 || draft.style || draft.color || draft.size || draft.weight) && (
-                  <div className="mb-4">
-                    <p className="text-[12px] font-bold text-ink-mute mb-2">Характеристики</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
-                      {draft.materials.length > 0 && <p><span className="text-ink-soft">Материал:</span> <span className="text-ink">{draft.materials.join(", ")}</span></p>}
-                      {draft.style && <p><span className="text-ink-soft">Стиль:</span> <span className="text-ink">{draft.style}</span></p>}
-                      {draft.color && <p><span className="text-ink-soft">Цвет:</span> <span className="text-ink">{draft.color}</span></p>}
-                      {draft.size && <p><span className="text-ink-soft">Размер:</span> <span className="text-ink">{draft.size}</span></p>}
-                      {draft.weight && <p><span className="text-ink-soft">Вес:</span> <span className="text-ink">{draft.weight} кг</span></p>}
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-line-soft">
-                  <p className="text-[12px] font-bold text-ink-mute mb-2">Доставка и условия</p>
-                  <div className="text-[12px] text-ink-soft space-y-1.5">
-                    <p>📍 {draft.sellerCity || "Город не указан"}</p>
-                    <p>⏱ Обработка заказа: {draft.processingDays || 1} дн.</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {draft.deliveryPickup && <span className="px-2 py-0.5 bg-line-soft rounded text-[11px]">Самовывоз</span>}
-                      {draft.deliveryCourier && <span className="px-2 py-0.5 bg-line-soft rounded text-[11px]">Курьер</span>}
-                      {draft.deliveryRussia && <span className="px-2 py-0.5 bg-line-soft rounded text-[11px]">Доставка по РФ</span>}
-                      {draft.instant && <span className="px-2 py-0.5 bg-accent/10 text-accent-deep rounded text-[11px]">Мгновенная цифровая</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            <ProductViewCore
+              name={draft.name}
+              price={draft.price ? +draft.price : 0}
+              media={draft.media}
+              description={draft.description}
+              categoryName={draft.category}
+              manufacturer={draft.manufacturer}
+              sku={draft.sku}
+              tags={draft.tags}
+              specs={draft.specs}
+              sellerCity={draft.sellerCity}
+              sellerName={(sellerReg as any)?.fullName || (sellerReg as any)?.name || (sellerReg as any)?.city || "Продавец"}
+              processingDays={draft.processingDays}
+            />
           )}
         </section>
 
