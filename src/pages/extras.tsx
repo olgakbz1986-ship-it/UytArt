@@ -1068,55 +1068,33 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {tab === "products" && (
         <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <div className="flex items-center justify-between mb-4"><h2 className="font-display font-bold text-[17px] text-ink">Создать карточку</h2><button onClick={() => window.location.hash = "/seller/product/new"} className="group flex items-center gap-2.5 rounded-xl bg-gradient-to-br from-[#d98e32] to-[#b96f1f] px-4 py-2.5 text-cream shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 cursor-pointer">
-              <span className="w-8 h-8 rounded-lg bg-cream/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300"><Sparkles size={15} /></span>
-              <span className="leading-tight text-left whitespace-nowrap">
-                <span className="block text-[13px] font-bold">Мастер карточки</span>
-                <span className="block text-[10.5px] text-cream/80">AI-создание за 5 минут</span>
-              </span>
-            </button></div>
-            {overProducts && <p className="text-[12px] font-semibold text-error mb-3">Достигнут лимит товаров ({fmtLimit(plan.maxProducts)}). Улучшите тариф.</p>}
-            <div className="space-y-3.5">
-              <Field label="Название" required><input className="field" value={prod.name} onChange={(e) => setProd({ ...prod, name: e.target.value })} placeholder="Ваза «Утро»" /></Field>
-              <Field label="Категория">
-                <select className="field" value={prod.category} onChange={(e) => setProd({ ...prod, category: e.target.value })}>
-                  {CATEGORIES.map((c) => <option key={c.slug}>{c.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Цена, ₽" required><input className="field" inputMode="numeric" value={prod.price} onChange={(e) => setProd({ ...prod, price: e.target.value.replace(/\D/g, "") })} placeholder="4900" /></Field>
-
-              {/* медиа: до 10, 1 может быть видео */}
-              <div>
-                <p className="text-[12.5px] font-semibold text-ink mb-2">Фото и видео <span className="text-[11px] text-ink-mute font-medium">до 10, 1 может быть видео</span></p>
-                <div className="flex gap-2 flex-wrap">
-                  {media.map((m, i) => (
-                    <div key={i} className="relative w-[64px] h-[54px] rounded-[8px] overflow-hidden border border-line-soft group">
-                      {m.type === "video"
-                        ? <video src={m.url} className="w-full h-full object-cover" muted />
-                        : <img src={m.url} alt={m.name} className="w-full h-full object-cover" />}
-                      {m.type === "video" && <span className="absolute inset-0 flex items-center justify-center bg-dark/30"><Play size={14} className="text-cream" /></span>}
-                      <button onClick={() => setMedia(media.filter((_, x) => x !== i))} aria-label="Удалить"
-                        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-error text-white items-center justify-center hidden group-hover:flex cursor-pointer">
-                        <X size={9} />
-                      </button>
-                    </div>
-                  ))}
-                  {media.length < 10 && (
-                    <label className="w-[64px] h-[54px] rounded-[8px] border-2 border-dashed border-line flex items-center justify-center cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
-                      <Upload size={15} className="text-ink-mute" />
-                      <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addMedia(f); }} />
-                    </label>
-                  )}
-                </div>
-                <p className="text-[11px] text-ink-mute mt-1.5">{media.length}/10 · видео: {media.some((m) => m.type === "video") ? "1" : "0"}/1</p>
+          <div className="relative rounded-2xl bg-gradient-to-br from-surface via-surface to-surface/60 p-8 flex flex-col items-center justify-center text-center overflow-hidden border border-line-soft/30">
+            {/* Декоративный glow */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-accent/5 rounded-full blur-3xl"></div>
+            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-accent-deep/5 rounded-full blur-3xl"></div>
+            
+            {/* Иконка с анимацией */}
+            <div className="relative mb-5">
+              <div className="absolute inset-0 bg-accent/20 rounded-2xl blur-xl animate-pulse"></div>
+              <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-accent/20 to-accent-deep/20 border border-accent/30 flex items-center justify-center">
+                <Sparkles size={28} className="text-accent animate-[spin_8s_linear_infinite]" style={{animationDuration: '20s'}} />
               </div>
-
-              <Btn variant="outline" className="w-full" disabled={aiLimitReached} onClick={() => { if (!aiLimitReached) acc.consumeAiCardGen(month); }}>
-                <Sparkles size={15} /> {aiLimitReached ? "AI-лимит исчерпан" : "Сгенерировать описание с AI"}
-              </Btn>
-              <Btn className="w-full" disabled={prod.name.trim().length < 3 || !+prod.price || overProducts} onClick={publishProduct}>Опубликовать</Btn>
             </div>
+            
+            <h2 className="font-display font-bold text-[22px] text-ink mb-2 tracking-tight">Создать карточку товара</h2>
+            <p className="text-[13px] text-ink-mute mb-7 max-w-[260px] leading-relaxed">Умный редактор с AI-помощником<br/>и контролем качества</p>
+            
+            {overProducts ? (
+              <p className="text-[12px] font-semibold text-error">Достигнут лимит товаров ({fmtLimit(plan.maxProducts)}). Улучшите тариф.</p>
+            ) : (
+              <button onClick={() => window.location.hash = "/seller/product/new"} className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-accent to-accent-deep px-7 py-3 text-cream font-semibold shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border border-accent/40">
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></span>
+                <span className="relative flex items-center gap-2.5">
+                  <Sparkles size={16} className="group-hover:rotate-12 transition-transform duration-300" />
+                  <span className="text-[14px] tracking-wide">Открыть редактор</span>
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -1616,7 +1594,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}. Нажмите на модуль, чтобы открыть его.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {([
-              ["✨", "Мастер карточки 5 минут", "Полноценное создание товара: медиа, характеристики, SEO, доставка. ИИ-помощники на каждом шаге.", "done", "", ["5 шагов до публикации", "Автозаполнение характеристик ИИ", "SEO-оптимизация под WB/Ozon", "Инфографика преимуществ"]],
+              ["✨", "Новый умный редактор", "Создавайте идеальные карточки: умные формы, AI-описания и честный рейтинг качества.", "done", "", ["Умная форма: скрывает лишние поля", "AI-генерация описаний и SEO", "Индикатор качества карточки 100%", "Группы характеристик по 15 категориям"]],
               ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "done", "", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
               ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
               ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "done", "", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],

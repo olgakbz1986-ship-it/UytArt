@@ -14,6 +14,11 @@ interface QualityScoreProps {
     sellerCity: string;
     instant?: boolean;
     processingDays?: string;
+    materials?: string[];
+    style?: string;
+    color?: string;
+    size?: string;
+    weight?: string;
   };
   importantLabels?: string[];
 }
