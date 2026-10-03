@@ -29,15 +29,25 @@ export function QualityScore({ draft, importantLabels = [] }: QualityScoreProps)
     { done: !!draft.category, weight: 5, hint: "Выберите категорию" },
     { done: !!draft.price && +draft.price > 0, weight: 10, hint: "Укажите цену" },
     { done: photoCount >= 3, weight: 15, hint: `Добавьте ещё ${Math.max(0, 3 - photoCount)} фото` },
-    { done: hasVideo, weight: 5, hint: "Добавьте видео товара" },
+    { done: hasVideo, weight: 0, hint: "Видео повышает конверсию на 30%" },
     { done: draft.description.trim().length >= 100, weight: 10, hint: `Описание короткое (сейчас ${draft.description.trim().length} из 100 символов)` },
-    { done: draft.specs.filter((s) => s.value.trim()).length >= 5, weight: 10, hint: "Заполните ещё характеристики" },
+    { done: (() => {
+      const groupSpecs = draft.specs.filter((sp) => sp.value.trim()).length;
+      const commonFields = [
+        draft.materials?.[0]?.trim(),
+        draft.style?.trim(),
+        draft.color?.trim(),
+        draft.size?.trim(),
+        draft.weight?.trim(),
+      ].filter(Boolean).length;
+      return (groupSpecs + commonFields) >= 5;
+    })(), weight: 10, hint: "Заполните ещё характеристик (общих или из групп)" },
     { done: totalImportant === 0 || filledImportant === totalImportant, weight: 15, hint: totalImportant > 0 ? `⭐ Заполните важные поля: ${filledImportant}/${totalImportant}` : "" },
     { done: !!draft.manufacturer?.trim(), weight: 5, hint: "Укажите производителя" },
     { done: !!draft.sku?.trim(), weight: 5, hint: "Укажите артикул" },
     { done: draft.tags.length >= 3, weight: 10, hint: `Добавьте ${Math.max(0, 3 - draft.tags.length)} тег(ов)` },
     { done: !!draft.sellerCity?.trim(), weight: 5, hint: "Укажите город" },
-    { done: !!draft.processingDays && +draft.processingDays > 0, weight: 5, hint: "Укажите срок обработки" },
+    { done: !!draft.processingDays && +draft.processingDays > 0, weight: 0, hint: "Укажите срок обработки" },
   ], [draft, filledImportant, totalImportant, photoCount, hasVideo]);
 
   const totalWeight = checks.reduce((s, c) => s + c.weight, 0);

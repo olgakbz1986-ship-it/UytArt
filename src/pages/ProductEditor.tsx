@@ -624,7 +624,7 @@ export function ProductEditorPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f1eb]">
-      <QualityScore draft={draft} importantLabels={getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label))} />
+      <QualityScore draft={draft} importantLabels={getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important && !(f.hideIf && f.hideIf.test(draft.category))).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label))} />
 
       {/* Хедер страницы */}
       <div className="bg-white border-b border-line-soft">
