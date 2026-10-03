@@ -1,9 +1,9 @@
 export type SpecFieldType = "text" | "number" | "select" | "boolean" | "multiselect" | "range";
-export interface SpecFieldDef { id: string; label: string; type: SpecFieldType; unit?: string; options?: string[]; placeholder?: string; hint?: string }
+export interface SpecFieldDef { id: string; label: string; type: SpecFieldType; unit?: string; options?: string[]; placeholder?: string; hint?: string; important?: boolean }
 export interface SpecGroupDef { id: string; label: string; icon: string; defaultOpen?: boolean; fields: SpecFieldDef[] }
 
 const identification: SpecGroupDef = { id: "ident", label: "Идентификация", icon: "🏷", fields: [
-  { id: "model", label: "Модель", type: "text", placeholder: "Например: Сmart 22" },
+  { id: "model", important: true, label: "Модель", type: "text", placeholder: "Например: Сmart 22" },
   { id: "series", label: "Серия / коллекция", type: "text" },
   { id: "country", label: "Страна производства", type: "text", placeholder: "Россия" },
   { id: "gtin", label: "Штрих-код (EAN/GTIN)", type: "text", placeholder: "4600000000000" },
@@ -15,28 +15,28 @@ const packing: SpecGroupDef = { id: "pack", label: "Упаковка и комп
   { id: "setitems", label: "Предметов в комплекте", type: "number" },
 ]};
 const compliance: SpecGroupDef = { id: "comp", label: "Гарантия и сертификация", icon: "🛡", fields: [
-  { id: "warranty", label: "Гарантия", type: "select", options: ["Без гарантии", "6 месяцев", "1 год", "2 года", "5 лет", "Пожизненная"] },
+  { id: "warranty", important: true, label: "Гарантия", type: "select", options: ["Без гарантии", "6 месяцев", "1 год", "2 года", "5 лет", "Пожизненная"] },
   { id: "cert", label: "Сертификация", type: "select", options: ["Не требуется", "EAC", "CE", "ГОСТ Р", "Пожарный сертификат", "Декларация соответствия"] },
   { id: "lifetime", label: "Срок службы", type: "text", placeholder: "10 лет" },
   { id: "docs", label: "Документы в комплекте", type: "text", placeholder: "Паспорт изделия, инструкция" },
 ]};
 
 const doors: SpecGroupDef = { id: "doors", label: "Дверная конструкция", icon: "🚪", defaultOpen: true, fields: [
-  { id: "leaf", label: "Толщина полотна", type: "number", unit: "мм", hint: "Обычно 40–100 мм" },
-  { id: "metal", label: "Толщина металла", type: "number", unit: "мм", hint: "1.2–2.0 мм для входных" },
+  { id: "leaf", important: true, label: "Толщина полотна", type: "number", unit: "мм", hint: "Обычно 40–100 мм" },
+  { id: "metal", important: true, label: "Толщина металла", type: "number", unit: "мм", hint: "1.2–2.0 мм для входных" },
   { id: "boxdepth", label: "Глубина коробки", type: "number", unit: "мм" },
   { id: "nalich", label: "Наличник: ширина / толщина", type: "text", placeholder: "70 / 10 мм" },
   { id: "contours", label: "Контуров уплотнения", type: "select", options: ["1", "2", "3"] },
   { id: "insul", label: "Утеплитель", type: "select", options: ["Минеральная вата", "Пенополистирол", "ППУ", "Без утепления"] },
   { id: "termo", label: "Терморазрыв", type: "boolean" },
-  { id: "locks", label: "Типы замков", type: "multiselect", options: ["Сувальдный", "Цилиндровый", "Электронный", "Умный замок"] },
-  { id: "side", label: "Сторона открывания", type: "select", options: ["Левая", "Правая", "Универсальная"] },
+  { id: "locks", important: true, label: "Типы замков", type: "multiselect", options: ["Сувальдный", "Цилиндровый", "Электронный", "Умный замок"] },
+  { id: "side", important: true, label: "Сторона открывания", type: "select", options: ["Левая", "Правая", "Универсальная"] },
   { id: "finish", label: "Покрытие", type: "select", options: ["Порошковое", "МДФ-панель", "Массив", "Ламинат", "Эмаль"] },
 ]};
 
 const electro: SpecGroupDef = { id: "electro", label: "Технические параметры", icon: "️", defaultOpen: true, fields: [
-  { id: "power", label: "Мощность", type: "number", unit: "Вт" },
-  { id: "volt", label: "Напряжение", type: "number", unit: "В" },
+  { id: "power", important: true, label: "Мощность", type: "number", unit: "Вт" },
+  { id: "volt", important: true, label: "Напряжение", type: "number", unit: "В" },
   { id: "battery", label: "Ёмкость батареи", type: "number", unit: "мА·ч" },
   { id: "screen", label: "Диагональ дисплея", type: "number", unit: "дюйм" },
   { id: "ports", label: "Разъёмы", type: "multiselect", options: ["USB-C", "USB-A", "HDMI", "3.5 мм", "RJ-45"] },
@@ -46,8 +46,8 @@ const electro: SpecGroupDef = { id: "electro", label: "Технические п
 ]};
 
 const clothes: SpecGroupDef = { id: "clothes", label: "Одежда и обувь", icon: "👕", defaultOpen: true, fields: [
-  { id: "sizes", label: "Доступные размеры", type: "multiselect", options: ["XS", "S", "M", "L", "XL", "XXL"] },
-  { id: "gender", label: "Пол", type: "select", options: ["Женский", "Мужской", "Унисекс", "Детский"] },
+  { id: "sizes", important: true, label: "Доступные размеры", type: "multiselect", options: ["XS", "S", "M", "L", "XL", "XXL"] },
+  { id: "gender", important: true, label: "Пол", type: "select", options: ["Женский", "Мужской", "Унисекс", "Детский"] },
   { id: "season", label: "Сезон", type: "multiselect", options: ["Лето", "Демисезон", "Зима", "Всесезон"] },
   { id: "fabric", label: "Состав ткани", type: "text", placeholder: "Хлопок 95%, эластан 5%" },
   { id: "care", label: "Уход", type: "select", options: ["Машинная стирка", "Ручная стирка", "Только химчистка"] },
@@ -67,13 +67,13 @@ const digital: SpecGroupDef = { id: "digital", label: "Цифровой това
   { id: "formats", label: "Форматы файлов", type: "multiselect", options: ["PDF", "PNG", "SVG", "ZIP", "MP4", "STL"] },
   { id: "license", label: "Лицензия", type: "select", options: ["Личное использование", "Коммерческая", "Расширенная"] },
   { id: "resolution", label: "Разрешение", type: "text", placeholder: "300 dpi / 4K" },
-  { id: "size", label: "Объём файла", type: "number", unit: "МБ" },
+  { id: "size", important: true, label: "Объём файла", type: "number", unit: "МБ" },
   { id: "access", label: "Срок доступа", type: "select", options: ["Бессрочно", "1 год", "Подписка"] },
 ]};
 
 const materials: SpecGroupDef = { id: "materials", label: "Материалы и прокат", icon: "🪵", defaultOpen: true, fields: [
   { id: "grade", label: "Сорт / марка", type: "text", placeholder: "Сорт 1, Ст3сп" },
-  { id: "section", label: "Сечение", type: "text", placeholder: "50×100 мм" },
+  { id: "section", important: true, label: "Сечение", type: "text", placeholder: "50×100 мм" },
   { id: "length", label: "Длина", type: "number", unit: "м" },
   { id: "moist", label: "Влажность", type: "number", unit: "%" },
   { id: "treat", label: "Обработка", type: "multiselect", options: ["Сушка", "Строгание", "Покраска", "Цинкование", "Антисептик"] },
@@ -107,7 +107,7 @@ const jewelry: SpecGroupDef = { id: "jewelry", label: "Ювелирные изд
   { id: "purity", label: "Проба", type: "select", options: ["375", "500", "585", "750", "925", "950"] },
   { id: "stone", label: "Тип камня", type: "select", options: ["Бриллиант", "Рубин", "Сапфир", "Изумруд", "Жемчуг", "Без камня"] },
   { id: "carats", label: "Караты", type: "number", unit: "кт" },
-  { id: "ringsize", label: "Размер кольца", type: "number", unit: "мм" },
+  { id: "ringsize", important: true, label: "Размер кольца", type: "number", unit: "мм" },
   { id: "clasp", label: "Тип застёжки", type: "select", options: ["Карабин", "Застёжка-петля", "Английская", "Без застёжки"] },
 ]};
 
@@ -117,7 +117,7 @@ const furniture: SpecGroupDef = { id: "furniture", label: "Мебель", icon: 
   { id: "frame", label: "Материал каркаса", type: "select", options: ["Массив", "МДФ", "ДСП", "Металл"] },
   { id: "filler", label: "Наполнитель", type: "select", options: ["Пенополиуретан", "Пружинный блок", "Холлофайбер", "Латекс"] },
   { id: "load", label: "Максимальная нагрузка", type: "number", unit: "кг" },
-  { id: "sleepsize", label: "Размер спального места", type: "text", placeholder: "160×200 см" },
+  { id: "sleepsize", important: true, label: "Размер спального места", type: "text", placeholder: "160×200 см" },
 ]};
 
 const autoparts: SpecGroupDef = { id: "autoparts", label: "Автозапчасти", icon: "🚗", defaultOpen: true, fields: [
