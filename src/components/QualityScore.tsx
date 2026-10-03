@@ -44,7 +44,7 @@ export function QualityScore({ draft }: QualityScoreProps) {
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] h-[3px] bg-line-soft/30">
+    <div className="fixed top-[69px] left-0 right-0 z-[89] h-[3px] bg-line-soft/30">
       <div
         className={`h-full ${getColor(percent)} transition-all duration-700 ease-out`}
         style={{ width: `${percent}%` }}
