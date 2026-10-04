@@ -74,7 +74,7 @@ app.post("/api/auth/register", async (req, res) => {
     if (await db.byEmail(email)) return res.status(409).json({ error: "exists" });
     const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
-    await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: "buyer", legal_type: "self_employed", tier: "free", avatar_url: null, email_confirmed: false, confirm_token: token, confirm_expires: exp });
+    await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: legal_type === "self_employed" || legal_type === "ip" ? "seller" : "buyer", legal_type: "self_employed", tier: "free", avatar_url: null, email_confirmed: false, confirm_token: token, confirm_expires: exp });
     const dev = await sendConfirm(email, name, token);
     res.json({ ok: true, needConfirm: true, devConfirmUrl: dev || undefined });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }

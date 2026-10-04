@@ -1594,21 +1594,16 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}. Нажмите на модуль, чтобы открыть его.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {([
-              ["✨", "Новый умный редактор", "Создавайте идеальные карточки: умные формы, AI-описания и честный рейтинг качества.", "done", "", ["Умная форма: скрывает лишние поля", "AI-генерация описаний и SEO", "Индикатор качества карточки 100%", "Группы характеристик по 15 категориям"]],
-              ["🎨", "Конструктор карточек", "Спеки Quantiform/WB/Ozon, слои, брендовые цвета, A/B-варианты обложек.", "done", "", ["Живой предпросмотр в спеке площадки", "Слои: фото, выгоды, иконки, логотип", "A/B-варианты обложек для тестов"]],
               ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
-              ["✍️", "SEO-копирайтер", "Заголовок, описание и ключевые слова под поисковые запросы маркетплейсов.", "done", "", ["Ключи из поисковых подсказок", "Заголовок и описание с ключами", "Проверка плотности ключей"]],
-              ["🔌", "Модели", "YandexGPT и Kandinsky нативно, GigaChat и внешние ключи (OpenAI/Claude) по желанию.", "done", "", ["YandexGPT и Kandinsky из коробки", "Свой API-ключ внешних моделей", "Выбор модели под каждую задачу"]],
               ["", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "done", "", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
-              ["🎬", "Видеостудия", "Видеообложка из фото, шаблонный видеообзор, субтитры и крупные планы.", "done", "", ["Видеообложка 5 сек из фото", "Шаблонный видеообзор товара", "Субтитры и крупные планы"]],
               ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "done", "", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
             ] as [string, string, string, string, string, string[]][]).map(([em, name, desc, st, eta, bullets]) => (
               <button type="button" key={name}
                 onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : name === "SEO-копирайтер" ? (setSeoOpen(true), setStudioInfo(null)) : name === "ИИ-фотосессия" ? (setPhotoOpen(true), setStudioInfo(null)) : name === "Видеостудия" ? (setVideoOpen(true), setStudioInfo(null)) : name === "Конструктор агентов" ? (setAgentOpen(true), setStudioInfo(null)) : name === "Модели" ? (setTab("settings"), setTimeout(() => { document.getElementById("settings-models")?.scrollIntoView({ behavior: "smooth" }); }, 100)) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
-                className={`text-left bg-surface rounded-2xl shadow-card p-5 border transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift ${st === "done" ? "border-success" : "border-line-soft"}`}>
+                className="text-left bg-surface rounded-2xl shadow-card p-5 border border-line-soft transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift">
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-[26px]">{em}</span>
-                  <span className={`text-[10.5px] font-bold px-2 py-1 rounded-full ${st === "done" ? "bg-success text-cream" : "bg-line-soft text-ink-mute"}`}>{st === "done" ? "✅ ДОСТУПНО" : "🔜 " + eta}</span>
+                  {st !== "done" && <span className="text-[10.5px] font-bold px-2 py-1 rounded-full bg-line-soft text-ink-mute">🔜 {eta}</span>}
                 </div>
                 <p className="font-display font-bold text-[15px] text-ink mb-1">{name}</p>
                 <p className="text-[12px] text-ink-soft">{desc}</p>
