@@ -4,7 +4,7 @@ import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, 
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
 import { getGroupsForCategory, type SpecGroupDef, type SpecFieldDef } from "../lib/specSystem";
-import { QualityScore } from "../components/QualityScore";
+import { QualityScore, calculateQualityScore } from "../components/QualityScore";
 import { ProductViewCore } from "../components/ProductViewCore";
 import { CATEGORIES } from "../data/seed";
 import { Btn, Field } from "../components/ui";
@@ -622,9 +622,12 @@ export function ProductEditorPage() {
     }, 3000); // Сохраняем через 3 секунды после последнего изменения
   };
 
+  const importantLabelsForScore = getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important && !(f.hideIf && f.hideIf.test(draft.category))).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label));
+  const qualityPercent = calculateQualityScore(draft, importantLabelsForScore);
+
   return (
     <div className="min-h-screen bg-[#f5f1eb]">
-      <QualityScore draft={draft} importantLabels={getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important && !(f.hideIf && f.hideIf.test(draft.category))).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label))} />
+      <QualityScore draft={draft} importantLabels={importantLabelsForScore} />
 
       {/* Хедер страницы */}
       <div className="bg-white border-b border-line-soft">
@@ -892,6 +895,23 @@ export function ProductEditorPage() {
             </button>
           </div>
           
+          <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-accent/5 to-transparent border border-accent/20">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-[14px] text-ink">✨ AI-Студия профессиональной карточки</p>
+                <p className="text-[12px] text-ink-soft">Сгенерирует 10 инфо-слайдов и 15-секундное видео на основе ваших данных</p>
+              </div>
+              <button
+                type="button"
+                disabled={qualityPercent < 80}
+                onClick={() => alert("AI-студия приняла заказ! (Логика генерации будет добавлена на следующем этапе)")}
+                className={`h-10 px-4 rounded-[10px] font-bold text-[13px] transition-all cursor-pointer flex items-center gap-2 ${qualityPercent >= 80 ? "bg-dark text-cream hover:bg-accent-deep shadow-lg hover:shadow-xl hover:-translate-y-0.5" : "bg-line-soft text-ink-mute cursor-not-allowed"}`}
+              >
+                {qualityPercent >= 80 ? "✨ Сгенерировать карточку" : `Заполните ещё ${80 - qualityPercent}%`}
+              </button>
+            </div>
+          </div>
+
           {showPreview && (
             <ProductViewCore
               name={draft.name}
