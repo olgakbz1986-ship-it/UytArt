@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send } from "lucide-react";
+import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send , Download, Star, RefreshCw} from "lucide-react";
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
 import { getGroupsForCategory, type SpecGroupDef, type SpecFieldDef } from "../lib/specSystem";
@@ -904,13 +904,128 @@ export function ProductEditorPage() {
               <button
                 type="button"
                 disabled={qualityPercent < 80}
-                onClick={() => alert("AI-студия приняла заказ! (Логика генерации будет добавлена на следующем этапе)")}
+                onClick={() => {
+                  const currentId = id || draftId || "p" + Date.now().toString(36);
+                  // Если товара еще нет в сторе, сначала сохраним его как черновик
+                  if (!acc.products.find((p: any) => p.id === currentId)) {
+                    acc.addProduct({ ...draft, price: typeof draft.price === "string" ? Number(draft.price) : draft.price, id: currentId, isDraft: true, draftSavedAt: new Date().toISOString(), createdAt: new Date().toISOString() } as any);
+                  }
+                  acc.triggerAIGeneration(currentId);
+                  alert("🚀 AI-студия начала работу в фоновом режиме!\n\nВы можете закрыть эту вкладку. Когда будет готово, в списке товаров появится зеленая точка.");
+                }}
                 className={`h-10 px-4 rounded-[10px] font-bold text-[13px] transition-all cursor-pointer flex items-center gap-2 ${qualityPercent >= 80 ? "bg-dark text-cream hover:bg-accent-deep shadow-lg hover:shadow-xl hover:-translate-y-0.5" : "bg-line-soft text-ink-mute cursor-not-allowed"}`}
               >
                 {qualityPercent >= 80 ? "✨ Сгенерировать карточку" : `Заполните ещё ${80 - qualityPercent}%`}
               </button>
             </div>
           </div>
+
+          {/* === ОТОБРАЖЕНИЕ AI-ГЕНЕРАЦИИ === */}
+          {acc.products.find((p: any) => p.id === (id || draftId))?.ai_status === "ready" && (
+            <div className="mb-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-accent/5 border-2 border-emerald-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-[18px] text-emerald-800">✨ AI-карточка готова!</h3>
+                  <p className="text-[13px] text-emerald-700">Сгенерировано 10 профессиональных слайдов + 15-секундное видео</p>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-emerald-500 text-cream text-[12px] font-bold">Готово</span>
+              </div>
+              
+              {/* Видео 15 секунд */}
+              <div className="mb-4">
+                <p className="text-[13px] font-bold text-ink mb-2"> Видеообложка (15 сек)</p>
+                <div className="relative rounded-xl overflow-hidden border-2 border-line-soft">
+                  <video 
+                    src={acc.products.find((p: any) => p.id === (id || draftId))?.ai_assets?.video_15s} 
+                    className="w-full"
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                  />
+                </div>
+              </div>
+
+              {/* Галерея из 10 слайдов */}
+              <div>
+                <p className="text-[13px] font-bold text-ink mb-3">📸 Сгенерированные слайды ({acc.products.find((p: any) => p.id === (id || draftId))?.ai_assets?.info_slides?.length || 0})</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {acc.products.find((p: any) => p.id === (id || draftId))?.ai_assets?.info_slides?.map((slide: string, idx: number) => (
+                    <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-line-soft/50 group cursor-pointer hover:border-accent/60 transition-all duration-300 hover:shadow-xl">
+                      <img src={slide} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                        <div className="flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                          <button 
+                            type="button"
+                            onClick={() => alert(`Скачать слайд ${idx + 1}`)}
+                            className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur text-dark shadow-lg flex items-center justify-center hover:bg-accent hover:text-cream hover:scale-105 transition-all cursor-pointer group/btn"
+                            title="Скачать слайд"
+                          >
+                            <Download size={18} className="group-hover/btn:animate-bounce" />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => alert(`Сделать слайд ${idx + 1} главным фото`)}
+                            className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur text-dark shadow-lg flex items-center justify-center hover:bg-amber-500 hover:text-cream hover:scale-105 transition-all cursor-pointer group/btn"
+                            title="Сделать главным фото"
+                          >
+                            <Star size={18} className="group-hover/btn:fill-current" />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => alert(`Перегенерировать слайд ${idx + 1}`)}
+                            className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur text-dark shadow-lg flex items-center justify-center hover:bg-accent-deep hover:text-cream hover:scale-105 transition-all cursor-pointer group/btn"
+                            title="Перегенерировать"
+                          >
+                            <RefreshCw size={18} className="group-hover/btn:animate-spin" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="absolute top-2 left-2">
+                        <span className="px-2 py-1 rounded-lg bg-dark/90 backdrop-blur text-cream text-[11px] font-bold shadow-lg">
+                          {idx + 1}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Кнопки действий */}
+              <div className="flex gap-3 mt-6">
+                <button 
+                  type="button"
+                  onClick={() => alert("Скачать все ассеты архивом")}
+                  className="h-10 px-4 rounded-[10px] bg-line-soft text-ink font-bold hover:bg-line transition-colors cursor-pointer"
+                >
+                  📥 Скачать все
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    const currentId = id || draftId;
+                    if (currentId) {
+                      acc.triggerAIGeneration(currentId);
+                      alert("🔄 Перезапуск генерации...");
+                    }
+                  }}
+                  className="h-10 px-4 rounded-[10px] bg-accent text-ink font-bold hover:bg-accent-deep transition-colors cursor-pointer"
+                >
+                  🔄 Перегенерировать всё
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    alert("Все сгенерированные фото и видео добавлены в карточку товара!");
+                    // Здесь будет логика применения ассетов к draft.media
+                  }}
+                  className="flex-1 h-10 px-4 rounded-[10px] bg-dark text-cream font-bold hover:bg-accent-deep transition-colors cursor-pointer"
+                >
+                  ✅ Применить к карточке
+                </button>
+              </div>
+            </div>
+          )}
 
           {showPreview && (
             <ProductViewCore

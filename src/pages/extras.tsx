@@ -1133,7 +1133,16 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                   <p className="font-bold text-[14.5px] text-ink flex items-center gap-2">
                     {p.name}
                     {p.isDraft && <Badge tone="warning">Черновик</Badge>}
-                    {p.aiGenerated && <Badge tone="ai"><Sparkles size={10} /> AI</Badge>}
+                    {p.aiGenerated && p.ai_status === "ready" && p.isDraft && (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-emerald-700">AI-карточка готова</span>
+                      </span>
+                    )}
+                    {p.aiGenerated && p.ai_status === "ready" && !p.isDraft && (
+                      <Badge tone="success">Опубликовано</Badge>
+                    )}
+                    {p.aiGenerated && p.ai_status !== "ready" && <Badge tone="ai"><Sparkles size={10} /> AI</Badge>}
                     {p.archived && <Badge tone="neutral">Архив</Badge>}
                   </p>
                   <p className="text-[12px] text-ink-mute mt-0.5">{p.category} · {fmt(p.price)} · {fmtDate(p.createdAt)}</p>

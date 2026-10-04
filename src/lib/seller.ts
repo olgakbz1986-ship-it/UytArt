@@ -270,6 +270,12 @@ export interface SellerProductItem {
   archived?: boolean;
   views?: number;
   aiGenerated?: boolean;
+  ai_status?: "idle" | "pending" | "processing" | "ready" | "error";
+  ai_assets?: {
+    hero_image?: string;
+    info_slides?: string[];
+    video_15s?: string;
+  };
   media?: ProductMedia[];
   // Новые поля для AI-студии
   description?: string;
@@ -328,6 +334,7 @@ interface SellerAccountState {
   products: SellerProductItem[];
   team: TeamMember[];
   aiCardGens: Record<string, number>; /* месяц -> использовано */
+  triggerAIGeneration: (id: string) => void;
   addProduct: (p: Omit<SellerProductItem, "id" | "createdAt"> & Partial<Pick<SellerProductItem, "id" | "createdAt">>) => void;
   removeProduct: (id: string) => void;
   toggleArchive: (id: string) => void;
@@ -379,6 +386,42 @@ export const useSellerAccount = create<SellerAccountState>()(
       toggleArchive: (id) =>
         set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, archived: !p.archived } : p)) })),
       updateProduct: (id, patch) => set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
+      triggerAIGeneration: (id: string) => {
+        // 1. Сразу ставим статус "processing"
+        set((s) => ({
+          products: s.products.map((p) => (p.id === id ? { ...p, ai_status: "processing" as const, aiGenerated: true } : p))
+        }));
+        // 2. Имитируем фоновую работу AI (5 секунд)
+        setTimeout(() => {
+          set((s) => ({
+            products: s.products.map((p) => {
+              if (p.id === id) {
+                return {
+                  ...p,
+                  ai_status: "ready" as const,
+                  ai_assets: {
+                    hero_image: "https://placehold.co/800x800/1a1a1a/FFF?text=Hero+Shot",
+                    info_slides: [
+                      "https://placehold.co/800x800/2d3748/FFF?text=Slide+1+Hero",
+                      "https://placehold.co/800x800/4a5568/FFF?text=Slide+2+Size",
+                      "https://placehold.co/800x800/718096/FFF?text=Slide+3+Specs",
+                      "https://placehold.co/800x800/a0aec0/FFF?text=Slide+4+Macro",
+                      "https://placehold.co/800x800/cbd5e0/333?text=Slide+5+Lifestyle",
+                      "https://placehold.co/800x800/e2e8f0/333?text=Slide+6+Package",
+                      "https://placehold.co/800x800/ed8936/FFF?text=Slide+7+Detail",
+                      "https://placehold.co/800x800/38a169/FFF?text=Slide+8+Guide",
+                      "https://placehold.co/800x800/3182ce/FFF?text=Slide+9+Benefits",
+                      "https://placehold.co/800x800/805ad5/FFF?text=Slide+10+Summary"
+                    ],
+                    video_15s: "https://www.w3schools.com/html/mov_bbb.mp4"
+                  }
+                };
+              }
+              return p;
+            })
+          }));
+        }, 5000);
+      },
       incrementViews: (id) => set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, views: (p.views || 0) + 1 } : p)) })),
       bulkSetPrice: (ids, percent) =>
         set((s) => ({
