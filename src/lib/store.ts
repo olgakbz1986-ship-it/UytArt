@@ -153,6 +153,8 @@ export const useAppStore = create<AppState>()(
         return { ok: true };
       },
       restoreSession: async () => {
+        // Если мок-сессия уже активна — не стучимся на бэкенд (убирает 401 в консоли)
+        if (useAppStore.getState().session) return;
         try {
           const r = await api.me();
           if (r.ok && r.profile) {
