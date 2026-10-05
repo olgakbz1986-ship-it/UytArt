@@ -400,18 +400,18 @@ export const useSellerAccount = create<SellerAccountState>()(
                   ...p,
                   ai_status: "ready" as const,
                   ai_assets: {
-                    hero_image: "https://placehold.co/800x800/1a1a1a/FFF?text=Hero+Shot",
+                    hero_image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%231a1a1a' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3EHERO%3C/text%3E%3C/svg%3E",
                     info_slides: [
-                      "https://placehold.co/800x800/2d3748/FFF?text=Slide+1+Hero",
-                      "https://placehold.co/800x800/4a5568/FFF?text=Slide+2+Size",
-                      "https://placehold.co/800x800/718096/FFF?text=Slide+3+Specs",
-                      "https://placehold.co/800x800/a0aec0/FFF?text=Slide+4+Macro",
-                      "https://placehold.co/800x800/cbd5e0/333?text=Slide+5+Lifestyle",
-                      "https://placehold.co/800x800/e2e8f0/333?text=Slide+6+Package",
-                      "https://placehold.co/800x800/ed8936/FFF?text=Slide+7+Detail",
-                      "https://placehold.co/800x800/38a169/FFF?text=Slide+8+Guide",
-                      "https://placehold.co/800x800/3182ce/FFF?text=Slide+9+Benefits",
-                      "https://placehold.co/800x800/805ad5/FFF?text=Slide+10+Summary"
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%232d3748' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E1%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%234a5568' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E2%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23718096' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E3%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23a0aec0' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E4%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23cbd5e0' width='800' height='800'/%3E%3Ctext fill='%23333' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E5%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23e2e8f0' width='800' height='800'/%3E%3Ctext fill='%23333' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E6%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23ed8936' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E7%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%2338a169' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E8%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%233182ce' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E9%3C/text%3E%3C/svg%3E",
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23805ad5' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E10%3C/text%3E%3C/svg%3E"
                     ],
                     video_15s: "https://www.w3schools.com/html/mov_bbb.mp4"
                   }
