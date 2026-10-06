@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send , Download, Star, RefreshCw} from "lucide-react";
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
+import { CategoryPicker } from "../components/CategoryPicker";
 import { getGroupsForCategory, type SpecGroupDef, type SpecFieldDef } from "../lib/specSystem";
 import { QualityScore, calculateQualityScore } from "../components/QualityScore";
 import { ProductViewCore } from "../components/ProductViewCore";
@@ -18,6 +19,7 @@ type Draft = {
   media: Media[];
   name: string;
   category: string;
+  subcategory: string;
   price: string;
   materials: string[];
   style: string;
@@ -43,6 +45,7 @@ const empty: Draft = {
   media: [],
   name: "",
   category: CATEGORIES[0]?.name || "",
+  subcategory: "",
   price: "",
   materials: [],
   style: "",
@@ -152,6 +155,7 @@ export function ProductEditorPage() {
         media: editItem.media || [],
         name: editItem.name,
         category: editItem.category,
+        subcategory: (editItem as any).subcategory || "",
         price: String(editItem.price),
         materials: editItem.materials || [],
         style: editItem.style || "",
@@ -221,7 +225,7 @@ export function ProductEditorPage() {
         const data = {
           id: draftIdToUse,
           name: draft.name.trim() || "Без названия",
-          category: draft.category,
+          category: draft.category, subcategory: draft.subcategory,
           price: draft.price ? +draft.price : 0,
           description: draft.description.trim(),
           materials: draft.materials,
@@ -271,7 +275,7 @@ export function ProductEditorPage() {
         const data = {
           id: draftIdToUse,
           name: currentDraft.name.trim() || existing?.name || "Без названия",
-          category: currentDraft.category || existing?.category || "",
+          category: currentDraft.category || existing?.category || "", subcategory: currentDraft.subcategory || (existing as any)?.subcategory || "",
           price: currentDraft.price ? +currentDraft.price : (existing?.price || 0),
           description: currentDraft.description.trim() || existing?.description || "",
           materials: (currentDraft.materials && currentDraft.materials.length) ? currentDraft.materials : (existing?.materials || []),
@@ -486,7 +490,7 @@ export function ProductEditorPage() {
       const data = {
         id: finalId,
         name: draft.name.trim(),
-        category: draft.category,
+        category: draft.category, subcategory: draft.subcategory,
         price: +draft.price,
         description: draft.description.trim(),
         materials: draft.materials,
@@ -533,7 +537,7 @@ export function ProductEditorPage() {
     const data = {
       id: draftIdToUse,
       name: currentDraft.name.trim() || "Без названия",
-      category: currentDraft.category,
+      category: currentDraft.category, subcategory: currentDraft.subcategory,
       price: currentDraft.price ? +currentDraft.price : 0,
       description: currentDraft.description.trim(),
       materials: currentDraft.materials,
@@ -591,7 +595,7 @@ export function ProductEditorPage() {
         const data = {
           id: draftIdToUse,
           name: currentDraft.name.trim() || "Без названия",
-          category: currentDraft.category,
+          category: currentDraft.category, subcategory: currentDraft.subcategory,
           price: currentDraft.price ? +currentDraft.price : 0,
           description: currentDraft.description.trim(),
           materials: currentDraft.materials,
@@ -708,11 +712,7 @@ export function ProductEditorPage() {
 
             <div className="grid sm:grid-cols-2 gap-3">
               <Field label="Категория *">
-                <select className="field" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
-                  {CATEGORIES.map((c) => (
-                    <option key={c.slug} value={c.name}>{c.emoji} {c.name}</option>
-                  ))}
-                </select>
+                <CategoryPicker value={draft.category} sub={draft.subcategory} onChange={(cat, sb) => setDraft({ ...draft, category: cat, subcategory: sb })} />
               </Field>
               <Field label="Цена, ₽ *">
                 <input className="field" inputMode="numeric" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/\D/g, "") })} placeholder="4900" />
@@ -799,37 +799,9 @@ export function ProductEditorPage() {
           </div>
           <p className="text-[13px] text-ink-soft mb-4">Заполните характеристики для лучшей видимости в поиске.</p>
 
-          {showAnyBasic && (
-          <div className="grid sm:grid-cols-2 gap-3 mb-4">
-            {showMat && (
-            <Field label={matLabel}>
-              <input className="field" value={draft.materials[0] || ""} onChange={(e) => setDraft({ ...draft, materials: [e.target.value] })} placeholder={matLabel !== "Материал" ? "Натуральные ингредиенты, состав..." : "Керамика, дерево, металл..."} />
-            </Field>
-            )}
-            {showStyle && (
-            <Field label="Стиль">
-              <input className="field" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} placeholder="Бохо, лофт, сканди, минимализм..." />
-            </Field>
-            )}
-            {showColor && (
-            <Field label="Цвет">
-              <input className="field" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} placeholder="Шалфей, терракота, графит..." />
-            </Field>
-            )}
-            {showSize && (
-            <Field label="Размер / Габариты">
-              <input className="field" value={draft.size} onChange={(e) => setDraft({ ...draft, size: e.target.value })} placeholder="Ø 20 см, 40×60×15 см..." />
-            </Field>
-            )}
-            {showWeight && (
-            <Field label="Вес изделия, кг">
-              <input className="field" inputMode="decimal" value={draft.weight} onChange={(e) => setDraft({ ...draft, weight: e.target.value.replace(/[^\d.]/g, "") })} placeholder="1.2" />
-            </Field>
-            )}
-          </div>
-          )}
 
-<SpecGroupsEditor key={draft.category} category={draft.category} specs={draft.specs} onChange={(next) => setDraft({ ...draft, specs: next })} />
+
+<SpecGroupsEditor key={draft.category} category={draft.category} sub={draft.subcategory} material={draft.materials[0] || ""} specs={draft.specs} onChange={(next) => setDraft({ ...draft, specs: next })} basic={{ material: draft.materials[0] || "", color: draft.color, style: draft.style, size: draft.size, weight: draft.weight, matLabel, show: { mat: showMat, style: showStyle, color: showColor, size: showSize, weight: showWeight }, onChange: (patch) => setDraft({ ...draft, ...(patch.material !== undefined ? { materials: [patch.material] } : {}), ...(patch.color !== undefined ? { color: patch.color } : {}), ...(patch.style !== undefined ? { style: patch.style } : {}), ...(patch.size !== undefined ? { size: patch.size } : {}), ...(patch.weight !== undefined ? { weight: patch.weight } : {}) }) }} />
         </section>
 
         {/* БЛОК 4: ЛОГИСТИКА */}
