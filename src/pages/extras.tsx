@@ -2491,8 +2491,38 @@ export function MasterProfileBlock() {
                   )}
                 </div>
                 <div className="mt-4">
-                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">Видео-экскурсия по мастерской (прямая ссылка на mp4/webm)</p>
-                  <input className="field" value={s.videoTourUrl} onChange={(e) => s.setInfo({ videoTourUrl: e.target.value })} placeholder="https://…/masterstvo.mp4" />
+                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">
+                    {s.isMaster ? "🎬 Видео-экскурсия по мастерской" : "🎬 Видео о себе — презентация компании или услуг"}
+                    <span className="text-[11px] text-ink-mute font-normal"> (mp4/webm, до 8 МБ)</span>
+                  </p>
+                  {s.videoTourUrl && (
+                    <div className="mb-2">
+                      <div className="relative rounded-xl overflow-hidden bg-black border border-line-soft">
+                        <video src={s.videoTourUrl} className="w-full max-h-56" controls playsInline />
+                      </div>
+                      <button type="button" onClick={() => s.setInfo({ videoTourUrl: "" })}
+                        className="mt-2 text-[11.5px] font-bold text-error hover:underline cursor-pointer">✕ Удалить видео</button>
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    <label className="h-10 rounded-[8px] border-2 border-dashed border-line bg-surface text-ink-mute text-[12px] font-bold flex items-center justify-center gap-1.5 hover:border-accent hover:text-accent-deep cursor-pointer transition-colors">
+                      📁 Загрузить файл
+                      <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (f.size > 8000000) {
+                          useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: f.name + ": максимум 8 МБ" });
+                          e.target.value = "";
+                          return;
+                        }
+                        const r = new FileReader();
+                        r.onload = () => s.setInfo({ videoTourUrl: r.result as string });
+                        r.readAsDataURL(f);
+                      }} />
+                    </label>
+                    <input className="field" value={s.videoTourUrl} onChange={(e) => s.setInfo({ videoTourUrl: e.target.value })} placeholder="или ссылка https://…/video.mp4" />
+                  </div>
+                  <p className="text-[10.5px] text-ink-mute mt-1.5">💡 Мастерам — тур по мастерской, продавцам и услугам — презентация или примеры работ. Видео появится <strong>первым блоком</strong> в панели «О продавце».</p>
                 </div>
               </div>
   );

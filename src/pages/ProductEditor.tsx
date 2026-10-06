@@ -78,6 +78,8 @@ export function ProductEditorPage() {
   const [draft, setDraft] = useState<Draft>(empty);
   const [forceRender, setForceRender] = useState<number>(0);
   const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [descTouched, setDescTouched] = useState(false);
+  const [descChecked, setDescChecked] = useState(false);
   const draftRef = useRef<Draft>(empty);
   const [studioOpen, setStudioOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -631,6 +633,59 @@ export function ProductEditorPage() {
   const importantLabelsForScore = getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important && !(f.hideIf && f.hideIf.test(draft.category))).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label));
   const qualityPercent = calculateQualityScore(draft, importantLabelsForScore);
 
+
+  /* ===== AI-КОМПОЗИТОР ОПИСАНИЯ ===== */
+  const buildDescription = (d: any): string => {
+    const name = (d.name || "").trim();
+    const cat = (d.category || "").trim();
+    if (name.length < 3 || !cat) return "";
+    const mat = (d.materials && d.materials[0] || "").trim();
+    const parts: string[] = [];
+    parts.push(`${name} — ${cat.toLowerCase()}${d.subcategory ? ` (${d.subcategory.toLowerCase()})` : ""}${d.manufacturer ? ` от ${d.manufacturer}` : ""}.`);
+    const facts: string[] = [];
+    if (mat) facts.push(`материал — ${mat.toLowerCase()}`);
+    if ((d.color || "").trim()) facts.push(`цвет — ${d.color.trim().toLowerCase()}`);
+    if ((d.style || "").trim()) facts.push(`стиль — ${d.style.trim().toLowerCase()}`);
+    if ((d.size || "").trim()) facts.push(`размер — ${d.size.trim()}`);
+    if ((d.weight || "").trim()) facts.push(`вес — ${d.weight.trim()} кг`);
+    if (facts.length) parts.push(`Ключевые параметры: ${facts.join(", ")}.`);
+    const specs = (d.specs || []).filter((sp: any) => sp.key && sp.value && sp.value !== "—").slice(0, 6);
+    if (specs.length) parts.push("Особенности:\n" + specs.map((sp: any) => `• ${sp.key}: ${sp.value}`).join("\n"));
+    parts.push("Каждое изделие создаётся с любовью и вниманием к деталям. 🚚 Отправка по всей России.");
+    return parts.join("\n\n");
+  };
+  const descFacts = [
+    { ok: (draft.name || "").trim().length >= 3, label: "название" },
+    { ok: !!draft.category, label: "категория" },
+    { ok: !!(draft.materials && draft.materials[0]), label: "материал" },
+    { ok: (draft.specs || []).filter((s2: any) => s2.value && s2.value !== "—").length >= 2, label: "характеристики" },
+  ];
+  const descFactsLine = descFacts.map((f) => (f.ok ? `✅ ${f.label}` : `⚠️ ${f.label}`)).join(" · ");
+  useEffect(() => {
+    if (descTouched) return;
+    const t = setTimeout(() => {
+      const gen = buildDescription(draft);
+      if (gen && gen !== draft.description) setDraft({ ...draft, description: gen });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [draft.name, draft.category, draft.subcategory, draft.materials, draft.color, draft.style, draft.size, draft.weight, draft.specs, descTouched]);
+  const autoCorrectDescription = () => {
+    const before = draft.description || "";
+    let t = before;
+    t = t.replace(/[ \t]+/g, " ");
+    t = t.replace(/ +([.,;:!?)])/g, "$1");
+    t = t.replace(/([.,;!?])\s*([а-яa-zё])/g, (_m, p1, p2) => p1 + " " + p2.toUpperCase());
+    t = t.replace(/(^|\n)\s*([а-яa-zё])/g, (_m, a, c) => a + c.toUpperCase());
+    t = t.trim();
+    if (t && !/[.!?…]$/.test(t)) t += ".";
+    setDescChecked(true);
+    if (t !== before) setDraft({ ...draft, description: t });
+  };
+  const regenDescription = () => {
+    const gen = buildDescription(draft);
+    if (gen) { setDescTouched(false); setDescChecked(true); setDraft({ ...draft, description: gen }); }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f1eb]">
       <QualityScore draft={draft} importantLabels={importantLabelsForScore} />
@@ -731,59 +786,6 @@ export function ProductEditorPage() {
               </Field>
             </div>
 
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-              <label className="text-[11.5px] font-bold text-ink-mute">Описание товара</label>
-              <button type="button" onClick={generateAIDescription} className="h-8 px-3 rounded-[8px] bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-1.5">✨ Сгенерировать описание с AI</button>
-            </div>
-            <textarea className="field" rows={8} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Уникальная ручная работа. Идеально подойдёт для интерьера в стиле бохо..." />
-          </div>
-                  {/* ТЕГИ */}
-          <div className="mb-4">
-            <Field label="Теги (ключевые слова для поиска)" hint="Максимум 10 тегов. Нажмите Enter или введите через запятую">
-              <div className="flex flex-wrap gap-2 mb-2">
-                {draft.tags.map((tag, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent/10 text-accent-deep text-[12px] font-medium border border-accent/20">
-                    {tag}
-                    <button type="button" onClick={() => setDraft({ ...draft, tags: draft.tags.filter((_, idx) => idx !== i) })} className="hover:text-error cursor-pointer">×</button>
-                  </span>
-                ))}
-                {draft.tags.length < 10 && (
-                  <input 
-                    className="field flex-1 min-w-[120px] text-[13px] py-1" 
-                    placeholder={draft.tags.length === 0 ? "Введите тег и нажмите Enter..." : "Ещё тег..."}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ',') {
-                        e.preventDefault();
-                        const val = (e.target as HTMLInputElement).value.trim().replace(',', '');
-                        if (val && !draft.tags.includes(val)) {
-                          setDraft({ ...draft, tags: [...draft.tags, val] });
-                          (e.target as HTMLInputElement).value = "";
-                        }
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const val = e.target.value.trim().replace(',', '');
-                      if (val && !draft.tags.includes(val) && draft.tags.length < 10) {
-                        setDraft({ ...draft, tags: [...draft.tags, val] });
-                        e.target.value = "";
-                      }
-                    }}
-                  />
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="text-[11px] text-ink-mute mr-1">🏷️ Популярные:</span>
-                {["ручная работа", "декор", "интерьер", "подарок", "эко", "дизайн"].map(t => (
-                  <button key={t} type="button" onClick={() => {
-                    if (!draft.tags.includes(t) && draft.tags.length < 10) {
-                      setDraft({ ...draft, tags: [...draft.tags, t] });
-                    }
-                  }} className="text-[11px] px-2 py-0.5 rounded-full bg-line-soft text-ink-soft hover:bg-accent/10 hover:text-accent-deep transition-colors cursor-pointer">
-                    + {t}
-                  </button>
-                ))}
-              </div>
-            </Field>
           </div>
 
 </section>
@@ -854,10 +856,79 @@ export function ProductEditorPage() {
         </section>
 
         {/* БЛОК 5: ПРЕДПРОСМОТР */}
+        {/* БЛОК 5: ОПИСАНИЕ (AI-КОМПОЗИТОР) */}
+        <section className="bg-white rounded-2xl shadow-card p-6 border border-line-soft">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">5</span>
+              <h2 className="font-display font-bold text-[18px] text-ink">📝 Описание товара</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {descChecked && <span className="h-8 px-3 rounded-full bg-success/10 text-success text-[11px] font-bold flex items-center gap-1.5">✓ Проверено ИИ</span>}
+              <button type="button" onClick={regenDescription} className="h-9 px-3 rounded-[8px] bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-1.5" title="Пересобрать описание из данных карточки">🔄 Пересобрать</button>
+            </div>
+          </div>
+          <p className="text-[13px] text-ink-soft mb-3">Описание собирается автоматически из фактов карточки — без абстракций. Отредактируйте вручную, и автогенерация уступит место вашему тексту.</p>
+          <textarea className="field min-h-[220px] leading-relaxed" value={draft.description} onChange={(e) => { setDescTouched(true); setDraft({ ...draft, description: e.target.value }); }} onBlur={() => autoCorrectDescription()} placeholder="Описание появится само, когда вы укажете название и категорию…" />
+          <div className="flex items-center justify-between gap-2 flex-wrap mt-2 mb-5">
+            <p className="text-[10.5px] text-ink-mute">AI использует: {descFactsLine}</p>
+            <p className="text-[10.5px] text-ink-mute">{draft.description.length} символов · {descTouched ? "✍️ ручной режим" : "🤖 авто-режим"}</p>
+          </div>
+
+                  {/* ТЕГИ */}
+          <div className="mb-4">
+            <Field label="Теги (ключевые слова для поиска)" hint="Максимум 10 тегов. Нажмите Enter или введите через запятую">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {draft.tags.map((tag, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent/10 text-accent-deep text-[12px] font-medium border border-accent/20">
+                    {tag}
+                    <button type="button" onClick={() => setDraft({ ...draft, tags: draft.tags.filter((_, idx) => idx !== i) })} className="hover:text-error cursor-pointer">×</button>
+                  </span>
+                ))}
+                {draft.tags.length < 10 && (
+                  <input 
+                    className="field flex-1 min-w-[120px] text-[13px] py-1" 
+                    placeholder={draft.tags.length === 0 ? "Введите тег и нажмите Enter..." : "Ещё тег..."}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const val = (e.target as HTMLInputElement).value.trim().replace(',', '');
+                        if (val && !draft.tags.includes(val)) {
+                          setDraft({ ...draft, tags: [...draft.tags, val] });
+                          (e.target as HTMLInputElement).value = "";
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim().replace(',', '');
+                      if (val && !draft.tags.includes(val) && draft.tags.length < 10) {
+                        setDraft({ ...draft, tags: [...draft.tags, val] });
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[11px] text-ink-mute mr-1">🏷️ Популярные:</span>
+                {["ручная работа", "декор", "интерьер", "подарок", "эко", "дизайн"].map(t => (
+                  <button key={t} type="button" onClick={() => {
+                    if (!draft.tags.includes(t) && draft.tags.length < 10) {
+                      setDraft({ ...draft, tags: [...draft.tags, t] });
+                    }
+                  }} className="text-[11px] px-2 py-0.5 rounded-full bg-line-soft text-ink-soft hover:bg-accent/10 hover:text-accent-deep transition-colors cursor-pointer">
+                    + {t}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </div>
+        </section>
+
         <section className="bg-white rounded-2xl shadow-card p-6 border border-line-soft">
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">5</span>
+              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold text-[14px]">6</span>
               <h2 className="font-display font-bold text-[18px] text-ink">👁 Предпросмотр карточки</h2>
             </div>
             <button 

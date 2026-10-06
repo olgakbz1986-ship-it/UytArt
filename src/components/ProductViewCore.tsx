@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ShoppingBag, Heart, MessageSquare, Star, MapPin } from "lucide-react";
+import { ShoppingBag, Heart, MessageSquare, Star, MapPin , Building2 } from "lucide-react";
+import { SellerAboutModal } from "./SellerAboutModal";
 import { SpecSections } from "./SpecSections";
 
 export interface ProductViewCoreProps {
@@ -20,6 +21,7 @@ export interface ProductViewCoreProps {
 
 export function ProductViewCore(p: ProductViewCoreProps) {
   const [tab, setTab] = useState<"desc" | "specs" | "delivery" | "reviews">("desc");
+  const [sellerAboutOpen, setSellerAboutOpen] = useState(false);
   const [mainIdx, setMainIdx] = useState(0);
   const media = p.media && p.media.length ? p.media : [];
   const main = media[mainIdx] || media[0];
@@ -78,14 +80,19 @@ export function ProductViewCore(p: ProductViewCoreProps) {
             <MessageSquare size={16} /> Написать продавцу
           </button>
 
-          <div className="rounded-xl border border-line-soft p-4">
-            <div className="flex items-center gap-3">
+          <div className="rounded-xl border border-line-soft overflow-hidden">
+            <div className="flex items-center gap-3 p-4">
               <div className="w-10 h-10 rounded-lg bg-dark text-cream flex items-center justify-center font-bold">{(p.sellerName || "П").slice(0, 1).toUpperCase()}</div>
-              <div>
-                <div className="text-[13px] font-bold text-ink">{p.sellerName || "Продавец"}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold text-ink truncate">{p.sellerName || "Продавец"}</div>
                 <div className="flex items-center gap-1 text-[11px] text-ink-mute"><MapPin size={11} /> {p.sellerCity || "Россия"}</div>
               </div>
             </div>
+            <button type="button" onClick={() => setSellerAboutOpen(true)}
+              className="w-full border-t border-line-soft px-4 py-3 text-[12px] font-bold text-accent-deep hover:bg-accent/5 transition-colors flex items-center justify-between gap-2 cursor-pointer">
+              <span className="flex items-center gap-1.5"><Building2 size={13} /> Подробнее о продавце</span>
+              <span className="text-[16px]">›</span>
+            </button>
           </div>
         </div>
       </div>
@@ -126,6 +133,7 @@ export function ProductViewCore(p: ProductViewCoreProps) {
           {tab === "reviews" && <p className="text-[14px] text-ink-mute">Отзывов пока нет — станьте первым!</p>}
         </div>
       </div>
+      <SellerAboutModal open={sellerAboutOpen} onClose={() => setSellerAboutOpen(false)} />
     </div>
   );
 }

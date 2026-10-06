@@ -2,7 +2,8 @@ import { marketProducts } from "../lib/market";
 import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play } from "lucide-react";
+import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2 } from "lucide-react";
+import { SellerAboutModal } from "../components/SellerAboutModal";
 import {
   GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
   vendorById, productBySlug,
@@ -249,6 +250,7 @@ export function ProductPage() {
   const [qty, setQty] = useState(1);
   const [variant, setVariant] = useState(0);
   const [tab, setTab] = useState<"desc" | "specs" | "delivery" | "reviews">("desc");
+  const [sellerAboutOpen, setSellerAboutOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
   const cat = p ? catBySlug(p.categoryId) : undefined;
@@ -401,11 +403,21 @@ export function ProductPage() {
                 ? <Badge tone="success"><ShieldCheck size={12} /> Продавец сервиса</Badge>
                 : (vendor?.verified ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge> : <Badge tone="honey">На проверке</Badge>)}
             </div>
-            <div className="mt-4 pt-4 border-t border-line-soft grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
-              <p><span className="text-ink-mute">Продавец:</span> <span className="font-semibold text-ink">{sellerItem ? (sellerReg.contactName || sellerReg.masterName) : vendor?.legal_name}</span></p>
-              <p><span className="text-ink-mute">ИНН:</span> <span className="font-semibold text-ink">{sellerItem ? (sellerReg.inn || "—") : vendor?.inn}</span></p>
-              <p className="col-span-2"><span className="text-ink-mute">ОГРН:</span> <span className="font-semibold text-ink">{sellerItem ? (sellerReg.ogrn || "—") : vendor?.ogrn}</span></p>
-            </div>
+            <button type="button" onClick={() => setSellerAboutOpen(true)}
+              className="mt-4 pt-4 border-t border-line-soft w-full group">
+              <div className="flex items-center justify-between gap-2 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent-deep flex items-center justify-center">
+                    <Building2 size={14} />
+                  </span>
+                  <div>
+                    <div className="text-[13px] font-bold text-ink group-hover:text-accent-deep transition-colors">🏛 Подробнее о продавце</div>
+                    <div className="text-[11px] text-ink-mute">История · видео · мастерская · реквизиты</div>
+                  </div>
+                </div>
+                <span className="text-ink-mute group-hover:translate-x-1 transition-transform text-[18px]">›</span>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -452,6 +464,7 @@ export function ProductPage() {
       )}
 
       <ChatModal open={chatOpen} onClose={() => setChatOpen(false)} kind="product" product={p} />
+      <SellerAboutModal open={sellerAboutOpen} onClose={() => setSellerAboutOpen(false)} />
     </div>
   );
 }
