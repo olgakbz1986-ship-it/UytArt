@@ -74,6 +74,7 @@ export function ProductEditorPage() {
 
   const [draft, setDraft] = useState<Draft>(empty);
   const [forceRender, setForceRender] = useState<number>(0);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
   const draftRef = useRef<Draft>(empty);
   const [studioOpen, setStudioOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -900,7 +901,7 @@ export function ProductEditorPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className="font-bold text-[14px] text-ink">✨ AI-Студия профессиональной карточки</p>
-                <p className="text-[12px] text-ink-soft">Сгенерирует 10 инфо-слайдов и 15-секундное видео на основе ваших данных</p>
+                <p className="text-[12px] text-ink-soft">Сгенерирует 10 инфо-слайдов и видео до 15 секунд на основе ваших данных</p>
               </div>
               <button
                 type="button"
@@ -942,15 +943,45 @@ export function ProductEditorPage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="font-bold text-[18px] text-emerald-800">✨ AI-карточка готова!</h3>
-                      <p className="text-[13px] text-emerald-700">Сгенерировано 10 профессиональных слайдов + 15-секундное видео</p>
+                      <p className="text-[13px] text-emerald-700">Сгенерировано 10 профессиональных слайдов + видео {videoDuration ? `(${Math.round(videoDuration)} сек)` : "(до 15 сек)"}</p>
                     </div>
                     <span className="px-3 py-1 rounded-full bg-emerald-500 text-cream text-[12px] font-bold">Готово</span>
                   </div>
                   
                   <div className="mb-4">
-                    <p className="text-[13px] font-bold text-ink mb-2">🎬 Видеообложка (15 сек)</p>
+                    <p className="text-[13px] font-bold text-ink mb-2">🎬 Видеообложка {videoDuration ? `(${Math.round(videoDuration)} сек)` : "(до 15 сек)"}</p>
                     <div className="relative rounded-xl overflow-hidden border-2 border-line-soft">
-                      <video src={aiAssets.video_15s} className="w-full" controls autoPlay loop muted />
+                      <video src={aiAssets.video_15s} className="w-full" controls autoPlay loop muted onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration)} />
+                    </div>
+                    <div className="flex justify-end gap-1.5 mt-2 pr-1">
+                      <button type="button" onClick={(e) => {
+                        e.stopPropagation();
+                        const currentId = id || draftId;
+                        if (currentId) {
+                          const slides = aiAssets.info_slides || [];
+                          const newMedia: any[] = [{ type: "video" as "video", url: aiAssets.video_15s, name: "ai-video.mp4" }];
+                          slides.forEach((sl: string, i: number) => newMedia.push({ type: "image" as "image", url: sl, name: `slide-${i + 1}.jpg` }));
+                          setDraft({ ...draft, media: newMedia });
+                          acc.updateProduct(currentId, { media: newMedia });
+                          setTimeout(() => setForceRender((prev: number) => prev + 1), 100);
+                        }
+                      }} className="h-8 px-3 rounded-[10px] bg-surface border border-line-soft text-ink-mute shadow-sm font-bold flex items-center justify-center gap-1.5 hover:text-cream hover:bg-amber-500 hover:border-amber-500 hover:scale-105 transition-all cursor-pointer" title="Сделать видео обложкой товара">
+                        <Star size={14} /> Поставить главным
+                      </button>
+                      <button type="button" onClick={(e) => {
+                        e.stopPropagation();
+                        const currentId = id || draftId;
+                        if (currentId) {
+                          const pool = ["https://www.w3schools.com/html/mov_bbb.mp4", "https://www.w3schools.com/html/movie.mp4", "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"];
+                          const next = pool.find((u) => u !== aiAssets.video_15s) || pool[0];
+                          const newMedia = (draft.media || []).map((m: any) => m.type === "video" ? { ...m, url: next } : m);
+                          setDraft({ ...draft, media: newMedia });
+                          acc.updateProduct(currentId, { ai_assets: { ...aiAssets, video_15s: next }, media: newMedia });
+                          setTimeout(() => setForceRender((prev: number) => prev + 1), 100);
+                        }
+                      }} className="h-8 px-3 rounded-[10px] bg-surface border border-line-soft text-ink-mute shadow-sm font-bold flex items-center justify-center gap-1.5 hover:text-cream hover:bg-accent-deep hover:border-accent-deep hover:scale-105 transition-all cursor-pointer" title="Заменить видео на новое">
+                        <RefreshCw size={14} /> Перегенерировать
+                      </button>
                     </div>
                   </div>
 
@@ -958,67 +989,62 @@ export function ProductEditorPage() {
                     <p className="text-[13px] font-bold text-ink mb-3">📸 Сгенерированные слайды ({aiAssets.info_slides?.length || 0})</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                       {aiAssets.info_slides?.map((slide: string, idx: number) => (
-                        <div key={slide} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-line-soft/50 group cursor-pointer hover:border-accent/60 transition-all duration-300 hover:shadow-xl">
-                          <img src={slide} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
-                            <div className="flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                              <button type="button" onClick={async (e) => {
-                                e.stopPropagation();
-                                // Для Data URI или обычных URL
-                                if (slide.startsWith('data:')) {
-                                  // Конвертируем Data URI в blob
-                                  const response = await fetch(slide);
-                                  const blob = await response.blob();
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement("a");
-                                  a.href = url; a.download = `slide-${idx + 1}.jpg`;
-                                  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                  window.URL.revokeObjectURL(url);
-                                } else {
-                                  // Обычный URL
-                                  const a = document.createElement("a");
-                                  a.href = slide; a.download = `slide-${idx + 1}.jpg`;
-                                  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                }
-                              }} className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur text-dark shadow-lg flex items-center justify-center hover:bg-accent hover:text-cream hover:scale-105 transition-all cursor-pointer group/btn" title="Скачать слайд">
-                                <Download size={18} className="group-hover/btn:animate-bounce" />
-                              </button>
-                              <button type="button" onClick={(e) => {
-                                e.stopPropagation();
-                                const slides = [...(aiAssets.info_slides || [])];
-                                const [removed] = slides.splice(idx, 1);
-                                slides.unshift(removed);
-                                const currentId = id || draftId;
-                                if (currentId) {
-                                  // Звезда = "сделать этот слайд обложкой карточки":
-                                  // пересобираем медиа: слайды в новом порядке первыми, видео в конце
-                                  const newMedia: any[] = slides.map((sl: string, i: number) => ({ type: "image" as "image", url: sl, name: `slide-${i + 1}.jpg` }));
-                                  if (aiAssets.video_15s) newMedia.push({ type: "video" as "video", url: aiAssets.video_15s, name: "ai-video.mp4" });
-                                  setDraft({ ...draft, media: newMedia });
-                                  acc.updateProduct(currentId, {
-                                    ai_assets: { ...aiAssets, info_slides: slides },
-                                    media: newMedia
-                                  });
-                                  setTimeout(() => {
-                                    setForceRender((prev: number) => prev + 1);
-                                  }, 100);
-                                }
-                              }} className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur text-dark shadow-lg flex items-center justify-center hover:bg-amber-500 hover:text-cream hover:scale-105 transition-all cursor-pointer group/btn" title="Сделать главным фото">
-                                <Star size={18} className="group-hover/btn:fill-current" />
-                              </button>
-                              <button type="button" onClick={(e) => {
-                                e.stopPropagation();
-                                const newSlides = [...(aiAssets.info_slides || [])];
-                                const hex = Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-                                newSlides[idx] = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23${hex}' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E${idx + 1}%3C/text%3E%3C/svg%3E`;
-                                acc.updateProduct(id || draftId || "", { ai_assets: { ...aiAssets, info_slides: newSlides } });
-                                setForceRender((prev: number) => prev + 1);
-                              }} className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur text-dark shadow-lg flex items-center justify-center hover:bg-accent-deep hover:text-cream hover:scale-105 transition-all cursor-pointer group/btn" title="Перегенерировать">
-                                <RefreshCw size={18} className="group-hover/btn:animate-spin" />
-                              </button>
-                            </div>
+                        <div key={slide} className="flex flex-col">
+                          <div className="relative aspect-square rounded-2xl overflow-hidden border-2 border-line-soft/50 cursor-pointer hover:border-accent/60 transition-all duration-300 hover:shadow-xl">
+                            <img src={slide} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute top-2 left-2"><span className="px-2 py-1 rounded-md bg-black/60 text-cream text-[11px] font-bold">{idx + 1}</span></div>
                           </div>
-                          <div className="absolute top-2 left-2"><span className="px-2 py-1 rounded-md bg-black/60 text-cream text-[11px] font-bold">{idx + 1}</span></div>
+                          <div className="flex justify-end gap-1.5 mt-2 pr-1">
+                            <button type="button" onClick={async (e) => {
+                              e.stopPropagation();
+                              if (slide.startsWith('data:')) {
+                                const response = await fetch(slide);
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url; a.download = `slide-${idx + 1}.jpg`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                              } else {
+                                const a = document.createElement("a");
+                                a.href = slide; a.download = `slide-${idx + 1}.jpg`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                              }
+                            }} className="w-8 h-8 rounded-[10px] bg-surface border border-line-soft text-ink-mute shadow-sm flex items-center justify-center hover:text-cream hover:bg-dark hover:border-dark hover:scale-105 transition-all cursor-pointer" title="Скачать слайд">
+                              <Download size={14} />
+                            </button>
+                            <button type="button" onClick={(e) => {
+                              e.stopPropagation();
+                              const slides = [...(aiAssets.info_slides || [])];
+                              const [removed] = slides.splice(idx, 1);
+                              slides.unshift(removed);
+                              const currentId = id || draftId;
+                              if (currentId) {
+                                const newMedia: any[] = slides.map((sl: string, i: number) => ({ type: "image" as "image", url: sl, name: `slide-${i + 1}.jpg` }));
+                                if (aiAssets.video_15s) newMedia.push({ type: "video" as "video", url: aiAssets.video_15s, name: "ai-video.mp4" });
+                                setDraft({ ...draft, media: newMedia });
+                                acc.updateProduct(currentId, {
+                                  ai_assets: { ...aiAssets, info_slides: slides },
+                                  media: newMedia
+                                });
+                                setTimeout(() => {
+                                  setForceRender((prev: number) => prev + 1);
+                                }, 100);
+                              }
+                            }} className="w-8 h-8 rounded-[10px] bg-surface border border-line-soft text-ink-mute shadow-sm flex items-center justify-center hover:text-cream hover:bg-amber-500 hover:border-amber-500 hover:scale-105 transition-all cursor-pointer" title="Сделать главным фото">
+                              <Star size={14} />
+                            </button>
+                            <button type="button" onClick={(e) => {
+                              e.stopPropagation();
+                              const newSlides = [...(aiAssets.info_slides || [])];
+                              const hex = Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                              newSlides[idx] = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Crect fill='%23${hex}' width='800' height='800'/%3E%3Ctext fill='white' font-size='48' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E${idx + 1}%3C/text%3E%3C/svg%3E`;
+                              acc.updateProduct(id || draftId || "", { ai_assets: { ...aiAssets, info_slides: newSlides } });
+                              setForceRender((prev: number) => prev + 1);
+                            }} className="w-8 h-8 rounded-[10px] bg-surface border border-line-soft text-ink-mute shadow-sm flex items-center justify-center hover:text-cream hover:bg-accent-deep hover:border-accent-deep hover:scale-105 transition-all cursor-pointer" title="Перегенерировать">
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
