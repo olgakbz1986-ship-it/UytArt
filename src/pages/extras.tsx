@@ -10,6 +10,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
 import { useEffect, useMemo, useState } from "react";
+import { PasswordInput } from "../components/PasswordInput";
 import { CategoryMultiPicker } from "../components/CategoryPicker";
 import { useSearchParams,  Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { create } from "zustand";
@@ -512,12 +513,23 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
       setErr("Заполните магазин, ФИО, email и имя мастера."); return;
     }
     if (!agree) { setErr("Примите агентский договор-оферту."); return; }
+    if (pwd.length < 8) { setErr("Пароль для входа должен быть не короче 8 символов"); return; }
+    if (pwd !== pwd2) { setErr("Пароли не совпадают"); return; }
     setErr("");
     s.toDocs();
   };
 
-  const finish = (method: string) => {
+  const [pwd, setPwd] = useState("");
+  const [pwd2, setPwd2] = useState("");
+
+  const finish = async (method: string) => {
     s.payFee(method);
+    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd });
+    if (regRes.ok && regRes.needConfirm) {
+      useNotifyStore.getState().push({ kind: "report", title: "Подтвердите email", text: "Письмо отправлено на " + s.email + (regRes.devConfirmUrl ? ". Dev-ссылка: " + regRes.devConfirmUrl : "") });
+    } else if (!regRes.ok && regRes.error !== "exists") {
+      useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт входа не создан на сервере", text: "Локальный кабинет работает, но вход с другого устройства будет недоступен: " + (regRes.error || "сеть") });
+    }
     const existingSeller = Object.values(useAppStore.getState().accounts)
       .flat()
       .find((acc) => acc.email === s.email && acc.role === "seller");
@@ -579,6 +591,8 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
             <Field label="Email" required><input className="field" type="email" value={s.email} onChange={(e) => s.setInfo({ email: e.target.value })} placeholder="maria@studio.ru" /></Field>
             <Field label="Город"><input className="field" value={s.city} onChange={(e) => s.setInfo({ city: e.target.value })} placeholder="Псков" /></Field>
             <Field label="ИНН"><input className="field" value={s.inn} onChange={(e) => s.setInfo({ inn: e.target.value.replace(/\D/g, "") })} placeholder="602709876543" /></Field>
+            <Field label="Пароль для входа" required hint="Минимум 8 символов"><PasswordInput value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="••••••••" /></Field>
+            <Field label="Повторите пароль" required hint="Должен совпасть"><PasswordInput value={pwd2} onChange={(e) => setPwd2(e.target.value)} placeholder="••••••••" /></Field>
           </div>
 
           {/* блок «О мастере» */}
