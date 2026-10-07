@@ -10,6 +10,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
 import { useEffect, useMemo, useState } from "react";
+import { CategoryMultiPicker } from "../components/CategoryPicker";
 import { useSearchParams,  Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -542,7 +543,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
       )}
       <p className="text-[13.5px] text-ink-soft mb-6">
         Регистрация платная и зависит от юридического статуса. Доступ к витрине откроется после верификации документов и оплаты.
-      <span className="block mb-4 flex gap-2 flex-wrap"><Btn size="sm" variant="outline" onClick={() => { const accs = Object.values(useAppStore.getState().accounts).flat().filter((a) => a.role === "seller"); const match = accs.find((a) => a.email === s.email) || accs[0]; if (match) { login(match); nav("/seller/dashboard"); } }}>Уже зарегистрированы? Войти в кабинет</Btn><Btn size="sm" variant="ghost" onClick={() => s.resetFlow()}>Начать регистрацию заново</Btn></span>
+      <span className="block mb-4 flex gap-2 flex-wrap"><Btn size="sm" variant="outline" onClick={() => { const accs = Object.values(useAppStore.getState().accounts).flat().filter((a) => a.role === "seller"); const match = accs.find((a) => a.email === s.email) || accs[0]; if (match) { login(match); nav("/seller/dashboard"); } else { useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт не найден в этом браузере", text: "Регистрация продавца хранится в браузере, где она была завершена. Завершите регистрацию здесь или вернитесь к тому устройству." }); } }}>Уже зарегистрированы? Войти в кабинет</Btn><Btn size="sm" variant="ghost" onClick={() => s.resetFlow()}>Начать регистрацию заново</Btn></span>
       </p>
 
       {/* ШАГ 1: юрлицо */}
@@ -590,14 +591,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div className="mt-4">
               <Field label="Категории (минимум 1)">
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {CATEGORIES.slice(0, 12).map((c) => (
-                    <button key={c.slug} onClick={() => s.toggleCategory(c.slug)}
-                      className={`px-3 min-h-[38px] rounded-full text-[12px] font-semibold transition-all cursor-pointer ${s.categories.includes(c.slug) ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
-                      {c.emoji} {c.name}
-                    </button>
-                  ))}
-                </div>
+                <CategoryMultiPicker value={s.categories} onChange={(next) => { s.categories.filter((x) => !next.includes(x)).forEach((x) => s.toggleCategory(x)); next.filter((x) => !s.categories.includes(x)).forEach((x) => s.toggleCategory(x)); }} />
               </Field>
             </div>
             <div className="mt-4">

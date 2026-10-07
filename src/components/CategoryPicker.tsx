@@ -127,3 +127,81 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
     </div>
   );
 }
+
+export function CategoryMultiPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const current = CATEGORIES.filter((c) => value.includes(c.slug));
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return CATEGORIES;
+    const words = query.split(/\s+/).filter(Boolean);
+    return CATEGORIES.filter((c) => {
+      const hay = [c.name, GROUP_LABELS[c.group] || c.group, c.desc || "", ...c.subs.map((s) => s.name)];
+      return words.every((w) => hay.some((h) => fuzzyMatch(h, w)));
+    });
+  }, [q]);
+  const grouped = useMemo(() => {
+    const order: string[] = [];
+    const map: Record<string, typeof CATEGORIES> = {};
+    filtered.forEach((c) => { if (!map[c.group]) { map[c.group] = []; order.push(c.group); } map[c.group].push(c); });
+    return order.map((g) => [g, map[g]] as [string, typeof CATEGORIES]);
+  }, [filtered]);
+  const popular = useMemo(() => CATEGORIES.filter((c) => POPULAR_SLUGS.includes(c.slug)), []);
+  const toggle = (slug: string) => onChange(value.includes(slug) ? value.filter((v) => v !== slug) : [...value, slug]);
+  const chip = (c: (typeof CATEGORIES)[number]) => {
+    const on = value.includes(c.slug);
+    return (
+      <button key={c.slug} type="button" onClick={() => toggle(c.slug)}
+        className={"h-7 px-2.5 rounded-full text-[11px] font-bold cursor-pointer transition-colors border " + (on ? "bg-dark text-cream border-dark" : "bg-cream text-ink border-line-soft hover:border-accent hover:text-accent-deep")}>
+        {on ? "✓ " : ""}{c.emoji} {c.name}
+      </button>
+    );
+  };
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="field w-full flex items-center justify-between gap-2 text-left cursor-pointer">
+        <span className={current.length ? "text-ink font-bold" : "text-ink-mute"}>
+          {current.length ? `Выбрано категорий: ${current.length}` : "Выберите категории (можно несколько)…"}
+        </span>
+        <span className="text-ink-mute text-[12px]">{open ? "▴" : "▾"}</span>
+      </button>
+      {current.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {current.map((c) => (
+            <span key={c.slug} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-dark text-cream text-[11px] font-bold">
+              {c.emoji} {c.name}
+              <button type="button" onClick={() => toggle(c.slug)} className="ml-0.5 w-4 h-4 rounded-full bg-cream/20 hover:bg-error cursor-pointer text-[10px] leading-none">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute z-50 mt-2 w-full min-w-[320px] rounded-[14px] border border-line bg-white shadow-card overflow-hidden">
+            <div className="p-2 border-b border-line-soft">
+              <input autoFocus className="field" placeholder="🔍 Поиск: кухня, диван, ваза…" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <div className="max-h-72 overflow-auto p-2 space-y-3">
+              {!q && (
+                <div>
+                  <p className="text-[11px] font-bold text-ink-mute mb-1.5">🏆 Популярные</p>
+                  <div className="flex flex-wrap gap-1.5">{popular.map(chip)}</div>
+                </div>
+              )}
+              {grouped.map(([g, list]) => (
+                <div key={g}>
+                  <p className="text-[11px] font-bold text-ink-mute mb-1.5">{GROUP_LABELS[g] || g}</p>
+                  <div className="flex flex-wrap gap-1.5">{list.map(chip)}</div>
+                </div>
+              ))}
+              {grouped.length === 0 && <p className="text-[12px] text-ink-mute p-2">Ничего не найдено по запросу «{q}»</p>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
