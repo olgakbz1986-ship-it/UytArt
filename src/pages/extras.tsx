@@ -525,6 +525,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   const finish = async (method: string) => {
     s.payFee(method);
     const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd });
+    { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[s.email.trim().toLowerCase()] = pwd; localStorage.setItem(vk, JSON.stringify(vv)); }
     if (regRes.ok && regRes.needConfirm) {
       useNotifyStore.getState().push({ kind: "report", title: "Подтвердите email", text: "Письмо отправлено на " + s.email + (regRes.devConfirmUrl ? ". Dev-ссылка: " + regRes.devConfirmUrl : "") });
     } else if (!regRes.ok && regRes.error !== "exists") {
@@ -1702,6 +1703,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               <MasterProfileBlock />
             </div>
 
+              <PasswordChangeCard />
             <Btn size="sm" className="mt-4" onClick={saveSProf}>
               {sProfSaved ? <><Check size={15} /> Сохранено</> : "Сохранить изменения"}
             </Btn>
@@ -2533,5 +2535,38 @@ export function MasterProfileBlock() {
                   <p className="text-[10.5px] text-ink-mute mt-1.5">💡 Мастерам — тур по мастерской, продавцам и услугам — презентация или примеры работ. Видео появится <strong>первым блоком</strong> в панели «О продавце».</p>
                 </div>
               </div>
+  );
+}
+
+
+function PasswordChangeCard() {
+  const email = useAppStore((s) => s.session?.email || "");
+  const [cur, setCur] = useState("");
+  const [np, setNp] = useState("");
+  const [np2, setNp2] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const save = () => {
+    const key = email.trim().toLowerCase();
+    const vault = JSON.parse(localStorage.getItem("qf-demo-pass") || "{}");
+    if (vault[key] !== cur) { setMsg({ ok: false, text: "Текущий пароль неверный" }); return; }
+    if (np.length < 8) { setMsg({ ok: false, text: "Новый пароль должен быть не короче 8 символов" }); return; }
+    if (np !== np2) { setMsg({ ok: false, text: "Новые пароли не совпадают" }); return; }
+    vault[key] = np;
+    localStorage.setItem("qf-demo-pass", JSON.stringify(vault));
+    setCur(""); setNp(""); setNp2("");
+    setMsg({ ok: true, text: "✓ Пароль изменён! Используйте новый при следующем входе." });
+  };
+  return (
+    <div className="mt-6 p-5 rounded-2xl border border-line-soft bg-surface">
+      <h3 className="font-display font-bold text-[16px] text-ink mb-1">🔑 Смена пароля</h3>
+      <p className="text-[11.5px] text-ink-mute mb-3">Новый пароль будет использоваться для входа в аккаунт.</p>
+      <div className="grid sm:grid-cols-3 gap-2">
+        <PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} placeholder="Текущий пароль" />
+        <PasswordInput value={np} onChange={(e) => setNp(e.target.value)} placeholder="Новый (мин. 8 символов)" />
+        <PasswordInput value={np2} onChange={(e) => setNp2(e.target.value)} placeholder="Повторите новый" />
+      </div>
+      {msg && <p className={"text-[12px] font-bold mt-2 " + (msg.ok ? "text-success" : "text-error")}>{msg.text}</p>}
+      <Btn size="sm" className="mt-3" onClick={save}>Сменить пароль</Btn>
+    </div>
   );
 }
