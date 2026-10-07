@@ -1,6 +1,15 @@
 import { useMemo, useRef, useState } from "react";
 import { CATEGORIES } from "../data/seed";
 
+const fuzzyMatch = (text: string, query: string): boolean => {
+  const t = text.toLowerCase();
+  const q = query.toLowerCase();
+  if (t.includes(q)) return true;
+  let j = 0;
+  for (let i = 0; i < t.length && j < q.length; i++) if (t[i] === q[j]) j++;
+  return j === q.length;
+};
+
 const GROUP_LABELS: Record<string, string> = {
   decor_home: "🏠 Декор и дом",
   clothing_shoes: "👗 Одежда и обувь",
@@ -30,7 +39,11 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return CATEGORIES;
-    return CATEGORIES.filter((c) => c.name.toLowerCase().includes(query) || c.subs.some((s) => s.name.toLowerCase().includes(query)));
+    const words = query.split(/\s+/).filter(Boolean);
+    return CATEGORIES.filter((c) => {
+      const hay = [c.name, GROUP_LABELS[c.group] || c.group, c.desc || "", ...c.subs.map((s) => s.name)];
+      return words.every((w) => hay.some((h) => fuzzyMatch(h, w)));
+    });
   }, [q]);
 
   const grouped = useMemo(() => {
