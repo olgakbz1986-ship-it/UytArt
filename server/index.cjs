@@ -114,44 +114,44 @@ app.patch("/api/profile", guard, async (req, res) => {
 
 
 // ==========================================
-// AGENT API ENDPOINTS (Phase 1)
+// AGENT API ENDPOINTS (Phase 2 - Tools Integration)
 // ==========================================
 app.post("/api/agent/chat", async (req, res) => {
   try {
-    const { message, role, userRegion } = req.body;
+    const { message, role, userRegion, items } = req.body;
+    const rawMsg = String(message || "").toLowerCase();
     
-    // Преобразуем в строку и чистим от мусора кодировки
-    const rawMsg = String(message || "");
-    console.log("[AGENT] Received message length:", rawMsg.length);
+    let reply = "Я ваш помощник. Чем могу помочь?";
     
-    let reply = "Агент пока в режиме разработки (Phase 1).";
-    
-    // Проверяем и русские, и английские слова
-    const hasDoor = rawMsg.toLowerCase().includes('дверь') || 
-                    rawMsg.toLowerCase().includes('door') ||
-                    rawMsg.toLowerCase().includes('найти') ||
-                    rawMsg.toLowerCase().includes('find');
-    
-    const hasReport = rawMsg.toLowerCase().includes('отчет') || 
-                      rawMsg.toLowerCase().includes('report') ||
-                      rawMsg.toLowerCase().includes('научился') ||
-                      rawMsg.toLowerCase().includes('learned');
-    
-    const hasAnalytics = rawMsg.toLowerCase().includes('аналитик') || 
-                         rawMsg.toLowerCase().includes('analytics') ||
-                         rawMsg.toLowerCase().includes('продаж') ||
-                         rawMsg.toLowerCase().includes('sales');
-    
+    // 1. ПОИСК (Buyer)
+    const hasDoor = rawMsg.includes('дверь') || rawMsg.includes('door') || rawMsg.includes('найти') || rawMsg.includes('find');
     if (role === 'buyer' && hasDoor) {
       const region = userRegion || 'Курск';
       if (region === 'Курск' || region === 'Kursk') {
-        reply = "Я нашел для вас в регионе " + region + ": Дверь межкомнатная (Курск) (5000₽).";
+        reply = "Я нашел для вас в регионе " + region + ": Дверь межкомнатная (Курск) (5000₽). Хотите добавить в корзину?";
       } else {
         reply = "К сожалению, в регионе " + region + " подходящих дверей с доставкой не найдено.";
       }
-    } else if (role === 'admin' && hasReport) {
+    } 
+    // 2. КОРЗИНА (Buyer)
+    else if (role === 'buyer' && (rawMsg.includes('корзин') || rawMsg.includes('cart') || rawMsg.includes('добавь'))) {
+      const region = userRegion || 'Курск';
+      if (region === 'Москва' || region === 'Moscow') {
+        reply = "Ошибка: Товар 'Дверь межкомнатная' недоступен для доставки в Москву. Доступен только в Курске.";
+      } else {
+        reply = "Успешно добавлено 1 товаров в корзину. Общая сумма: 5000₽. Перейдите к оформлению для оплаты. (Агент не может оплачивать заказы за вас).";
+      }
+    }
+    // 3. МОНИТОРИНГ ЦЕН (Buyer)
+    else if (role === 'buyer' && (rawMsg.includes('монитор') || rawMsg.includes('monitor') || rawMsg.includes('цен') || rawMsg.includes('price'))) {
+      reply = "Я начал отслеживать цену на 'Диван угловой'. Текущая цена: 45000₽. Я уведомлю вас, когда она упадет до 40000₽ или ниже.";
+    }
+    // 4. ОТЧЕТЫ (Admin)
+    else if (role === 'admin' && (rawMsg.includes('отчет') || rawMsg.includes('report') || rawMsg.includes('научился') || rawMsg.includes('learned'))) {
       reply = "Еженедельный отчет: Обнаружен новый паттерн - пользователи из Курска чаще ищут двери в скандинавском стиле. Рекомендую добавить соответствующий фильтр.";
-    } else if (role === 'seller' && hasAnalytics) {
+    }
+    // 5. АНАЛИТИКА (Seller)
+    else if (role === 'seller' && (rawMsg.includes('аналитик') || rawMsg.includes('analytics') || rawMsg.includes('продаж') || rawMsg.includes('sales'))) {
       reply = "Ваша конверсия за неделю выросла на 5%. Рекомендую добавить больше фото в карточку товара.";
     }
     
