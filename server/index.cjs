@@ -112,4 +112,54 @@ app.patch("/api/profile", guard, async (req, res) => {
   res.json({ ok: true, profile: profileOf(u) });
 });
 
+
+// ==========================================
+// AGENT API ENDPOINTS (Phase 1)
+// ==========================================
+app.post("/api/agent/chat", async (req, res) => {
+  try {
+    const { message, role, userRegion } = req.body;
+    
+    // Преобразуем в строку и чистим от мусора кодировки
+    const rawMsg = String(message || "");
+    console.log("[AGENT] Received message length:", rawMsg.length);
+    
+    let reply = "Агент пока в режиме разработки (Phase 1).";
+    
+    // Проверяем и русские, и английские слова
+    const hasDoor = rawMsg.toLowerCase().includes('дверь') || 
+                    rawMsg.toLowerCase().includes('door') ||
+                    rawMsg.toLowerCase().includes('найти') ||
+                    rawMsg.toLowerCase().includes('find');
+    
+    const hasReport = rawMsg.toLowerCase().includes('отчет') || 
+                      rawMsg.toLowerCase().includes('report') ||
+                      rawMsg.toLowerCase().includes('научился') ||
+                      rawMsg.toLowerCase().includes('learned');
+    
+    const hasAnalytics = rawMsg.toLowerCase().includes('аналитик') || 
+                         rawMsg.toLowerCase().includes('analytics') ||
+                         rawMsg.toLowerCase().includes('продаж') ||
+                         rawMsg.toLowerCase().includes('sales');
+    
+    if (role === 'buyer' && hasDoor) {
+      const region = userRegion || 'Курск';
+      if (region === 'Курск' || region === 'Kursk') {
+        reply = "Я нашел для вас в регионе " + region + ": Дверь межкомнатная (Курск) (5000₽).";
+      } else {
+        reply = "К сожалению, в регионе " + region + " подходящих дверей с доставкой не найдено.";
+      }
+    } else if (role === 'admin' && hasReport) {
+      reply = "Еженедельный отчет: Обнаружен новый паттерн - пользователи из Курска чаще ищут двери в скандинавском стиле. Рекомендую добавить соответствующий фильтр.";
+    } else if (role === 'seller' && hasAnalytics) {
+      reply = "Ваша конверсия за неделю выросла на 5%. Рекомендую добавить больше фото в карточку товара.";
+    }
+    
+    res.json({ ok: true, reply, role });
+  } catch (e) {
+    console.error("[AGENT ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
