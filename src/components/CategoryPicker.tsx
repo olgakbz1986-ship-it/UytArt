@@ -62,7 +62,7 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
   return (
     <div className="relative" ref={boxRef}>
       <button type="button" onClick={() => setOpen((o) => !o)}
-        className="field w-full flex items-center justify-between gap-2 text-left cursor-pointer">
+        className="field relative z-50 w-full flex items-center justify-between gap-2 text-left cursor-pointer">
         <span className={current ? "text-ink font-bold" : "text-ink-mute"}>
           {current ? `${current.emoji} ${current.name}` : "Выберите категорию…"}
           {current && sub ? <span className="ml-1 text-[11px] text-accent-deep font-bold">› {sub}</span> : null}
@@ -106,12 +106,16 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
               ))}
               {grouped.length === 0 && <p className="text-[12px] text-ink-mute p-2">Ничего не найдено по запросу «{q}»</p>}
             </div>
+            <button type="button" onClick={() => setOpen(false)}
+              className="w-full h-10 border-t border-line-soft bg-cream text-[12.5px] font-bold text-accent-deep hover:bg-accent hover:text-cream transition-colors cursor-pointer">
+              ✓ Готово · выбрано: {value.length}
+            </button>
           </div>
         </>
       )}
 
       {current && current.subs.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="relative z-50 flex flex-wrap gap-1.5 mt-2">
           <button type="button" onClick={() => onChange(current.name, "")}
             className={"h-7 px-2.5 rounded-full text-[11px] font-bold cursor-pointer transition-colors border " + (!sub ? "bg-accent text-ink border-accent" : "bg-cream text-ink-mute border-line-soft hover:border-accent")}>
             Без подкатегории
@@ -161,14 +165,14 @@ export function CategoryMultiPicker({ value, onChange }: { value: string[]; onCh
   return (
     <div className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}
-        className="field w-full flex items-center justify-between gap-2 text-left cursor-pointer">
+        className="field relative z-50 w-full flex items-center justify-between gap-2 text-left cursor-pointer">
         <span className={current.length ? "text-ink font-bold" : "text-ink-mute"}>
           {current.length ? `Выбрано категорий: ${current.length}` : "Выберите категории (можно несколько)…"}
         </span>
         <span className="text-ink-mute text-[12px]">{open ? "▴" : "▾"}</span>
       </button>
       {current.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="relative z-50 flex flex-wrap gap-1.5 mt-2">
           {current.map((c) => (
             <span key={c.slug} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-dark text-cream text-[11px] font-bold">
               {c.emoji} {c.name}
@@ -199,6 +203,10 @@ export function CategoryMultiPicker({ value, onChange }: { value: string[]; onCh
               ))}
               {grouped.length === 0 && <p className="text-[12px] text-ink-mute p-2">Ничего не найдено по запросу «{q}»</p>}
             </div>
+            <button type="button" onClick={() => setOpen(false)}
+              className="w-full h-10 border-t border-line-soft bg-cream text-[12.5px] font-bold text-accent-deep hover:bg-accent hover:text-cream transition-colors cursor-pointer">
+              ✓ Готово · выбрано: {value.length}
+            </button>
           </div>
         </>
       )}

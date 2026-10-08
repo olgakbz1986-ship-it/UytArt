@@ -484,6 +484,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   const [modScenario, setModScenario] = useState<"approve" | "reject">("approve");
   const [agree, setAgree] = useState(false);
   const [err, setErr] = useState("");
+  const sellerAcc = useSellerAccount();
 
   const info = sellerTypeInfo(s.legalType);
 
@@ -524,7 +525,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
 
   const finish = async (method: string) => {
     s.payFee(method);
-    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd });
+    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd, role: "seller", legalType: s.legalType || "self_employed" });
     { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[s.email.trim().toLowerCase()] = pwd; localStorage.setItem(vk, JSON.stringify(vv)); }
     if (regRes.ok && regRes.needConfirm) {
       useNotifyStore.getState().push({ kind: "report", title: "Подтвердите email", text: "Письмо отправлено на " + s.email + (regRes.devConfirmUrl ? ". Dev-ссылка: " + regRes.devConfirmUrl : "") });
@@ -546,7 +547,8 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
     if (uid && guestPlans && !sac.planIdsByAccount[uid] && guestPlans[lt2] && guestPlans[lt2] !== "free") {
       sac.setPlan(uid, lt2, guestPlans[lt2]);
     }
-    nav("/seller/dashboard");
+    useNotifyStore.getState().push({ kind: "confirm", title: "Регистрация завершена!", text: "Добро пожаловать в Quantiform! Кабинет продавца доступен в меню профиля." });
+    nav("/");
   };
 
   return (
@@ -774,7 +776,6 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
         // Если сессия продавца активна — показываем экран с комиссией из тарифа
         const legalType = s.legalType;
         // Получаем текущий план из активного аккаунта
-        const sellerAcc = useSellerAccount();
         const accountIds = Object.keys(sellerAcc.planIdsByAccount);
         const accountId = useAppStore.getState().session?.userId || accountIds[0];
         const currentPlanId = accountId ? (sellerAcc.planIdsByAccount[accountId]?.[legalType!] || 'free') : 'free';
@@ -2476,12 +2477,12 @@ export function MasterProfileBlock() {
                 </label>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина</p>
+                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина <span className="text-[10.5px] text-ink-mute font-normal">— лицо бренда: карточки товаров, чеки, шапка кабинета</span></p>
                     <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: "Максимум 1.5 МБ" }); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />
                     {s.shopLogo && <img src={s.shopLogo} alt="Логотип" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
                   </div>
                   <div>
-                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Аватар мастера</p>
+                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Аватар мастера <span className="text-[10.5px] text-ink-mute font-normal">— лицо человека: страница «Мастера» и панель «О продавце»</span></p>
                     <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { alert("Файл до 1.5 МБ"); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ masterAvatar: r.result as string }); r.readAsDataURL(f); }} />
                     {s.masterAvatar && <img src={s.masterAvatar} alt="Аватар" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
                   </div>
