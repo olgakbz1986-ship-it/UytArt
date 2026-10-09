@@ -34,6 +34,7 @@ export default function AgentPanelSeller() {
   const tasks = useAgentStore((s) => s.tasks);
   const myProducts = (useSellerAccount((st: any) => st.products) || []) as any[];
   const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -154,6 +155,15 @@ export default function AgentPanelSeller() {
                 )}
               </div>
             ))}
+            {isTyping && (
+              <div className="flex justify-start items-start gap-1.5">
+                <div className="px-4 py-3 rounded-2xl bg-surface border border-line-soft rounded-bl-sm flex items-center gap-1">
+                  <span className="w-2 h-2 bg-ink-mute rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+                  <span className="w-2 h-2 bg-ink-mute rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+                  <span className="w-2 h-2 bg-ink-mute rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
