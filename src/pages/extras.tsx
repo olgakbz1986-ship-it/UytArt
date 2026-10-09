@@ -44,8 +44,19 @@ import { usePrefsStore } from "../lib/prefs";
 export interface MarketOrder {
   id: string; title: string; type: string; desc: string; material: string;
   budget: number; term: string; region: string; refName?: string; refType?: "image" | "video";
-  date: string; status: "draft" | "moderation" | "published"; responses: number; myOwn?: boolean;
+  date: string; status: "draft" | "moderation" | "published" | "in_progress" | "completed" | "cancelled";
+  responses: number; myOwn?: boolean;
   agentPhoto?: string; agentItems?: string[]; agentDraft?: boolean;
+  // Поля из API
+  user_id?: string;
+  category?: string;
+  budget_min?: number;
+  budget_max?: number;
+  budget_type?: 'fixed' | 'range' | 'negotiable';
+  deadline?: string;
+  attachments?: string[];
+  created_at?: string;
+  updated_at?: string;
 }
 interface MarketState {
   orders: MarketOrder[];
@@ -58,8 +69,34 @@ export const useMarketStore = create<MarketState>()(
     (set) => ({
       orders: [],
       responded: [],
-      addOrder: (o) =>
-        set((s) => ({ orders: [{ ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: "moderation", responses: 0, myOwn: true }, ...s.orders] })),
+      addOrder: async (o) => {
+        const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: "moderation" as const, responses: 0, myOwn: true };
+        set((s) => ({ orders: [newOrder, ...s.orders] }));
+        
+        // Отправляем на сервер
+        try {
+          const response = await fetch('http://localhost:8787/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: o.title,
+              description: o.desc,
+              category: o.type,
+              budget_min: o.budget,
+              budget_type: 'fixed',
+              region: o.region,
+              attachments: []
+            })
+          });
+          const data = await response.json();
+          if (data.ok) {
+            // Обновляем ID заказа на серверный
+            set((s) => ({ orders: s.orders.map(ord => ord.id === newOrder.id ? { ...ord, id: data.order.id } : ord) }));
+          }
+        } catch (e) {
+          console.error('[MarketStore] Ошибка отправки заказа на сервер:', e);
+        }
+      },
       respond: (id) =>
         set((s) => ({
           responded: [...s.responded, id],
@@ -72,6 +109,42 @@ export const useMarketStore = create<MarketState>()(
 
 export function MarketPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Загрузка заказов с сервера при монтировании
+  useEffect(() => {
+    const loadOrders = async () => {
+      try {
+        const response = await fetch('http://localhost:8787/api/orders');
+        const data = await response.json();
+        if (data.ok && data.orders.length > 0) {
+          const existingIds = new Set(useMarketStore.getState().orders.map(o => o.id));
+          const newOrders = data.orders
+            .filter((o: any) => !existingIds.has(o.id))
+            .map((o: any) => ({
+              id: o.id,
+              title: o.title,
+              type: o.category || 'Другое',
+              desc: o.description,
+              material: '',
+              budget: o.budget_min || 0,
+              term: '',
+              region: o.region || '',
+              date: o.created_at,
+              status: o.status,
+              responses: 0,
+              myOwn: o.user_id === 'dev-user-1',
+              attachments: o.attachments || []
+            }));
+          if (newOrders.length > 0) {
+            useMarketStore.setState((s) => ({ orders: [...newOrders, ...s.orders] }));
+          }
+        }
+      } catch (e) {
+        console.error('[MarketPage] Ошибка загрузки заказов:', e);
+      }
+    };
+    loadOrders();
+  }, []);
   const focusId = searchParams.get("focus") || "";
   const [editingDraft, setEditingDraft] = useState<string | null>(null);
   useEffect(() => {
