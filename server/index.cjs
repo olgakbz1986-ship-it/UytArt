@@ -162,4 +162,46 @@ app.post("/api/agent/chat", async (req, res) => {
   }
 });
 
+
+// ==========================================
+// AGENT REPORTS API (Phase 4)
+// ==========================================
+app.get("/api/agent/reports", async (req, res) => {
+  try {
+    // Эмуляция данных, которые генерирует src/agent/reports/generator.ts
+    const report = {
+      period: new Date().toISOString().split('T')[0],
+      newPatternsDiscovered: 3,
+      userBehaviorChanges: [
+        "Пользователи из Курска на 40% чаще ищут двери в скандинавском стиле.",
+        "Рост конверсии на 25% после рекомендаций агента."
+      ],
+      marketTrendsIdentified: ["Рост спроса на эко-материалы в ЦФО"],
+      recommendationAccuracyChange: 12.5,
+      criticalInsights: [
+        "Добавить фильтр 'Скандинавский стиль' в каталог дверей.",
+        "Проверить UI оплаты на мобильных устройствах."
+      ],
+      suggestedServiceImprovements: [
+        "Интегрировать AR-просмотр мебели.",
+        "Автоматизировать ответы о доставке СДЭК."
+      ],
+      criticalAlerts: [
+        {
+          type: 'market_opportunity',
+          severity: 'medium',
+          description: 'Рост запросов "утеплитель" в Курске (+200% за 2 дня).',
+          recommendedAction: 'Уведомить локальных продавцов о пополнении стока.',
+          timestamp: new Date().toISOString()
+        }
+      ]
+    };
+    
+    res.json({ ok: true, report });
+  } catch (e) {
+    console.error("[AGENT REPORTS ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
