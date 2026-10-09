@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Plus, Search, Trash2, Download, MessageSquare, X } from "lucide-react";
+import { Bot, Send, Plus, Search, Trash2, Download, MessageSquare, X, Paperclip } from "lucide-react";
 import { useAgentStore } from "../lib/agent";
 import { useNotifyStore, notifyActions } from "../lib/notify";
 import { useSellerAccount } from "../lib/seller";
@@ -35,7 +35,26 @@ export default function AgentPanelSeller() {
   const myProducts = (useSellerAccount((st: any) => st.products) || []) as any[];
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttachedFile(file);
+      // Автоматически прикрепляем файл к сообщению
+      const text = `📎 Файл: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      userSaid(text);
+      setInput("");
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        say(`Получил файл "${file.name}". Что с ним сделать? Могу проанализировать изображение или сохранить в архив.`);
+        setAttachedFile(null);
+      }, 450);
+    }
+  };
 
   useEffect(() => {
     if (sessions.length === 0) { newSession(); return; }
@@ -174,8 +193,14 @@ export default function AgentPanelSeller() {
           ))}
         </div>
         <div className="flex gap-2">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Спросите агента о нише, цене, спросе…" className="flex-1 h-11 px-4 rounded-[10px] bg-cream border border-line-soft text-[13.5px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent" />
-          <button onClick={send} className="w-11 h-11 rounded-[10px] bg-dark text-cream flex items-center justify-center hover:bg-dark-deep cursor-pointer"><Send size={17} /></button>
+          <div className="flex gap-2 flex-1">
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,.pdf,.doc,.docx" />
+            <button onClick={() => fileInputRef.current?.click()} className="w-11 h-11 rounded-[10px] bg-line-soft text-ink-soft flex items-center justify-center hover:bg-line cursor-pointer transition-colors" title="Прикрепить файл">
+              <Paperclip size={18} />
+            </button>
+            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Спросите агента о нише, цене, спросе…" className="flex-1 h-11 px-4 rounded-[10px] bg-cream border border-line-soft text-[13.5px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent" />
+            <button onClick={send} className="w-11 h-11 rounded-[10px] bg-dark text-cream flex items-center justify-center hover:bg-dark-deep cursor-pointer"><Send size={17} /></button>
+          </div>
         </div>
       </div>
     </section>
