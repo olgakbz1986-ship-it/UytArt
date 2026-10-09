@@ -244,4 +244,58 @@ app.post("/api/agent/negotiate", async (req, res) => {
   }
 });
 
+
+// ==========================================
+// API БИРЖИ ЗАКАЗОВ (Phase 1)
+// ==========================================
+// ==========================================
+// API БИРЖИ ЗАКАЗОВ (Phase 1)
+// ==========================================
+app.post("/api/orders", async (req, res) => {
+  try {
+    const { title, description, category, budget_min, budget_max, budget_type, deadline, region, attachments } = req.body;
+    const userId = "dev-user-1"; 
+    
+    const newOrder = {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      title, description, category, budget_min, budget_max, budget_type, deadline, region,
+      status: "published",
+      attachments: attachments || [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [] };
+      if (!d.custom_orders) d.custom_orders = [];
+      d.custom_orders.push(newOrder);
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    }
+
+    res.json({ ok: true, order: newOrder });
+  } catch (e) {
+    console.error("[ORDERS API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.get("/api/orders", async (req, res) => {
+  try {
+    let orders = [];
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [] };
+      orders = d.custom_orders || [];
+    }
+    res.json({ ok: true, orders });
+  } catch (e) {
+    console.error("[ORDERS API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
