@@ -187,7 +187,7 @@ export function MarketPage() {
   };
   const deleteDraft = (id: string) => { if (confirm("Удалить черновик безвозвратно?")) { removeOrder(id); useNotifyStore.getState().push({ kind: "report", title: "Черновик удалён", text: "Запись убрана с биржи." }); } };
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [fType, setFType] = useState("Мебель");
+  const [fType, setFType] = useState("Мебель и интерьер");
   const [fBudget, setFBudget] = useState("30000");
   const [fTerm, setFTerm] = useState("1–2 месяца");
   const [fRegion, setFRegion] = useState("ЦФО");
@@ -201,7 +201,23 @@ export function MarketPage() {
   const myActive = orders.filter((o) => o.myOwn && o.status === "published").length;
   const overLimit = myActive >= lim.marketOrders;
 
-  const TYPES = ["Мебель", "Зеркала", "Декор", "Освещение", "Текстиль"];
+  const TYPES = [
+  "Мебель и интерьер",
+  "Декор и аксессуары",
+  "Освещение",
+  "Текстиль и одежда",
+  "3D-печать и прототипирование",
+  "Ковка и металл",
+  "Керамика и стекло",
+  "Кожа и дерево",
+  "Ювелирные изделия",
+  "Строительство и ремонт",
+  "Садоводство и благоустройство",
+  "Искусство и живопись",
+  "Полиграфия и печать",
+  "Электроника и гаджеты",
+  "Другое"
+];
   const visible = orders.filter((o) => o.status === "published" || o.myOwn).filter((o) => filterType === "all" || o.type === filterType);
 
   const publish = () => {
