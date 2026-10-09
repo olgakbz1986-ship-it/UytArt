@@ -204,4 +204,44 @@ app.get("/api/agent/reports", async (req, res) => {
   }
 });
 
+
+// ==========================================
+// AGENT NEGOTIATION API (Phase 6)
+// ==========================================
+app.post("/api/agent/negotiate", async (req, res) => {
+  try {
+    const { productId, productName, currentPrice, requestedDiscountPercent, sellerMaxDiscountPercent } = req.body;
+    const CONSTITUTION_MAX = 15; // 15%
+    
+    let reply = "";
+    let success = false;
+    let finalPrice = currentPrice;
+    let finalDiscount = 0;
+
+    // Логика переговоров:
+    if (requestedDiscountPercent > CONSTITUTION_MAX) {
+      // Сценарий 3: Нарушение Конституции
+      reply = `К сожалению, запрошенная скидка (${requestedDiscountPercent}%) превышает максимально допустимую Конституцией агента (${CONSTITUTION_MAX}%).`;
+    } else if (requestedDiscountPercent > sellerMaxDiscountPercent) {
+      // Сценарий 2: Контр-предложение продавца (в рамках Конституции)
+      finalDiscount = sellerMaxDiscountPercent;
+      finalPrice = Math.round(currentPrice * (1 - finalDiscount / 100));
+      success = true;
+      reply = `Продавец не может дать ${requestedDiscountPercent}%, но сделал для вас исключение: скидка ${finalDiscount}% (цена ${finalPrice}₽) при оплате в течение часа!`;
+    } else {
+      // Сценарий 1: Полное одобрение
+      finalDiscount = requestedDiscountPercent;
+      finalPrice = Math.round(currentPrice * (1 - finalDiscount / 100));
+      success = true;
+      reply = `Отличные новости! Продавец одобрил вашу скидку ${finalDiscount}%. Итоговая цена: ${finalPrice}₽. Добавьте товар в корзину для оформления.`;
+    }
+
+    console.log(`[AGENT NEGOTIATION] Result: success=${success}, discount=${finalDiscount}%, price=${finalPrice}₽`);
+    res.json({ ok: true, success, finalDiscount, finalPrice, reply });
+  } catch (e) {
+    console.error("[AGENT NEGOTIATION ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
