@@ -12,6 +12,7 @@ import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } f
 import { usePrefsStore } from "../lib/prefs";
 import { useNotifyStore } from "../lib/notify";
 import { ChatModal } from "../components/chat";
+import MarketOrderDetail from "../components/MarketOrderDetail";
 import { ReviewModal, TicketModal } from "../components/review";
 
 type Tab = "orders" | "agent" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
@@ -109,6 +110,7 @@ export default function ProfilePage() {
   const [responsesMap, setResponsesMap] = useState<Record<string, any[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<Record<string, boolean>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [selectedMarketOrder, setSelectedMarketOrder] = useState<any>(null);
 
   const loadResponses = async (orderId: string) => {
     setLoadingResponses(prev => ({ ...prev, [orderId]: true }));
@@ -432,7 +434,7 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-3">
                 {marketOrders.map((mo) => (
-                  <div key={mo.id} className="bg-surface rounded-xl shadow-card p-4 border border-line-soft">
+                  <div key={mo.id} onClick={() => setSelectedMarketOrder(mo)} className="bg-surface rounded-xl shadow-card p-4 border border-line-soft cursor-pointer hover:border-accent hover:shadow-lg transition-all group">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-[15px] text-ink truncate">{mo.title}</p>
@@ -863,6 +865,12 @@ export default function ProfilePage() {
 
       {/* модалки */}
       {chatOrder && <ChatModal open onClose={() => setChatOrder(null)} kind="order" order={chatOrder} />}
+      {selectedMarketOrder && (
+        <MarketOrderDetail 
+          order={selectedMarketOrder} 
+          onClose={() => setSelectedMarketOrder(null)} 
+        />
+      )}
       {ticketFor && <TicketModal open onClose={() => setTicketFor(null)} orderId={ticketFor.order.id} orderNumber={ticketFor.order.number} kind={ticketFor.kind} />}
       {reviewFor && reviewFor.items[0] && (() => {
         const p = productById(reviewFor.items[0].productId);
