@@ -106,6 +106,61 @@ export default function ProfilePage() {
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [ticketFor, setTicketFor] = useState<{ order: Order; kind: "problem" | "return" } | null>(null);
   const [reviewFor, setReviewFor] = useState<Order | null>(null);
+  const [responsesMap, setResponsesMap] = useState<Record<string, any[]>>({});
+  const [loadingResponses, setLoadingResponses] = useState<Record<string, boolean>>({});
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const loadResponses = async (orderId: string) => {
+    setLoadingResponses(prev => ({ ...prev, [orderId]: true }));
+    try {
+      const res = await fetch(`http://localhost:8787/api/orders/${orderId}/responses`);
+      const data = await res.json();
+      if (data.ok) {
+        setResponsesMap(prev => ({ ...prev, [orderId]: data.responses }));
+        setExpandedOrderId(orderId);
+      }
+    } catch (e) {
+      console.error("Failed to load responses", e);
+    } finally {
+      setLoadingResponses(prev => ({ ...prev, [orderId]: false }));
+    }
+  };
+
+  const handleAcceptResponse = async (orderId: string, responseId: string) => {
+    try {
+      const res = await fetch(`http://localhost:8787/api/orders/${orderId}/responses/${responseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'accepted' })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        useMarketStore.setState((s: any) => ({
+          orders: s.orders.map((o: any) => o.id === orderId ? { ...o, status: 'in_progress' } : o)
+        }));
+        loadResponses(orderId);
+        alert("Исполнитель принят! Заказ переведен в статус 'В работе'.");
+      }
+    } catch (e) {
+      console.error("Failed to accept response", e);
+    }
+  };
+
+  const handleRejectResponse = async (orderId: string, responseId: string) => {
+    try {
+      const res = await fetch(`http://localhost:8787/api/orders/${orderId}/responses/${responseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected' })
+      });
+      if (res.ok) {
+        loadResponses(orderId);
+      }
+    } catch (e) {
+      console.error("Failed to reject response", e);
+    }
+  };
+
 
   /* единая точка загрузки аватара: скрытый input + программный клик.
      Программный .click() на file input работает во всех браузерах,
@@ -401,6 +456,67 @@ export default function ProfilePage() {
                       <span className="font-display font-bold text-[16px] text-ink">{mo.budget.toLocaleString('ru-RU')} ₽</span>
                       <span className="text-[11px] text-ink-mute">{new Date(mo.date).toLocaleDateString('ru-RU')}</span>
                     </div>
+                    
+                    {/* Кнопка откликов */}
+                    {(mo as any).responses > 0 && (
+                      <button 
+                        onClick={() => loadResponses(mo.id)}
+                        className="mt-3 text-[12px] font-bold text-accent-deep hover:text-accent underline flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <MessageSquare size={12} /> Отклики ({(mo as any).responses})
+                      </button>
+                    )}
+
+                    {/* Список откликов */}
+                    {expandedOrderId === mo.id && (
+                      <div className="mt-4 pt-4 border-t border-line-soft space-y-3">
+                        <h4 className="font-bold text-[14px] text-ink flex items-center gap-2">
+                          <MessageSquare size={14} className="text-accent-deep" /> Предложения мастеров
+                        </h4>
+                        {loadingResponses[mo.id] ? (
+                          <p className="text-[12px] text-ink-mute">Загрузка предложений...</p>
+                        ) : (responsesMap[mo.id] || []).length === 0 ? (
+                          <p className="text-[12px] text-ink-mute">Нет активных откликов</p>
+                        ) : (
+                          (responsesMap[mo.id] || []).map((resp: any) => (
+                            <div key={resp.id} className="bg-cream/50 rounded-lg p-3 border border-line-soft">
+                              <div className="flex justify-between items-start gap-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-6 h-6 rounded-full bg-dark text-cream flex items-center justify-center text-[10px] font-bold">М</span>
+                                    <p className="font-bold text-[13px] text-ink">Мастер</p>
+                                  </div>
+                                  <p className="text-[15px] font-display font-bold text-ink mt-1">{resp.price.toLocaleString('ru-RU')} ₽ · {resp.deadline_days} дн.</p>
+                                  <p className="text-[12px] text-ink-soft mt-1 leading-relaxed">{resp.comment}</p>
+                                </div>
+                                {resp.status === 'pending' && mo.status !== 'in_progress' && (
+                                  <div className="flex flex-col gap-2 shrink-0">
+                                    <button 
+                                      onClick={() => handleAcceptResponse(mo.id, resp.id)}
+                                      className="px-3 py-1.5 rounded-md bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer"
+                                    >
+                                      Принять
+                                    </button>
+                                    <button 
+                                      onClick={() => handleRejectResponse(mo.id, resp.id)}
+                                      className="px-3 py-1.5 rounded-md bg-line-soft text-ink-soft text-[11px] font-bold hover:bg-error-soft hover:text-error transition-colors cursor-pointer"
+                                    >
+                                      Отклонить
+                                    </button>
+                                  </div>
+                                )}
+                                {resp.status === 'accepted' && (
+                                  <span className="px-2 py-1 rounded-md bg-success-soft text-success text-[11px] font-bold shrink-0">Принят</span>
+                                )}
+                                {resp.status === 'rejected' && (
+                                  <span className="px-2 py-1 rounded-md bg-line-soft text-ink-mute text-[11px] font-bold shrink-0">Отклонен</span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
