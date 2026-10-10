@@ -353,6 +353,7 @@ app.post("/api/orders/:id/responses", async (req, res) => {
       fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
     }
 
+    createNotification("dev-user-1", "response", "Новый отклик на заказ", `Мастер предложил цену ${newResponse.price} ₽`, `/market?focus=${id}`);
     res.json({ ok: true, response: newResponse });
   } catch (e) {
     console.error("[RESPONSES API ERROR]", e);
@@ -385,7 +386,11 @@ app.put("/api/orders/:id/responses/:rid", async (req, res) => {
         fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
       }
     }
-    res.json({ ok: true });
+    if (status === "accepted") {
+        const resp = (d.order_responses || []).find(r => r.id === rid);
+        if (resp) createNotification(resp.master_id, "accepted", "Ваш отклик принят!", "Заказчик выбрал вас исполнителем.", `/market?focus=${id}`);
+      }
+      res.json({ ok: true });
   } catch (e) {
     console.error("[RESPONSES UPDATE API ERROR]", e);
     res.status(500).json({ error: "server" });
@@ -450,6 +455,7 @@ app.post("/api/orders/:id/messages", async (req, res) => {
       d.order_messages.push(newMsg);
       fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
     }
+    createNotification("dev-user-1", "message", "Новое сообщение в чате", "Получено новое сообщение по заказу", `/profile`);
     res.json({ ok: true, message: newMsg });
   } catch (e) {
     console.error("[SEND MESSAGE API ERROR]", e);
@@ -526,4 +532,95 @@ app.put("/api/orders/:id/milestones/:mid", async (req, res) => {
   }
 });
 
+
+// ==========================================
+// API ЭТАПА 9: УВЕДОМЛЕНИЯ
+// ==========================================
+app.get("/api/notifications", async (req, res) => {
+  try {
+    // В демо-режиме возвращаем все уведомления, в продакшене фильтровали бы по user_id
+    let notifications = [];
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
+      // Сортируем от новых к старым
+      notifications = (d.notifications || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    res.json({ ok: true, notifications });
+  } catch (e) {
+    console.error("[NOTIFICATIONS API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.put("/api/notifications/:id/read", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
+      const n = (d.notifications || []).find(x => x.id === id);
+      if (n) {
+        n.read = true;
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[READ NOTIFICATION API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.put("/api/notifications/read-all", async (req, res) => {
+  try {
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
+      if (d.notifications) {
+        d.notifications.forEach(n => n.read = true);
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[READ ALL NOTIFICATIONS API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+// Хелпер для создания уведомления (используется внутри других роутов)
+function createNotification(userId, type, title, text, link) {
+  if (db.mode === "json-dev (бесплатно)") {
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
+    if (!d.notifications) d.notifications = [];
+    
+    const newNotif = {
+      id: require("crypto").randomUUID(),
+      user_id: userId || "dev-user-1",
+      type, // 'response', 'accepted', 'message', 'system'
+      title,
+      text,
+      link: link || "/profile",
+      read: false,
+      created_at: new Date().toISOString()
+    };
+    
+    d.notifications.push(newNotif);
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    
+    // Эмуляция отправки email для критических событий
+    if (type === 'response' || type === 'accepted') {
+      console.log(`[SMTP ЭМУЛЯЦИЯ] Письмо отправлено на email пользователя: Тема "[Quantiform] ${title}"`);
+    }
+    
+    return newNotif;
+  }
+  return null;
+}
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
