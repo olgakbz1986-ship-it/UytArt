@@ -916,7 +916,8 @@ export function SellerDashboardPage() {
   const s = useSellerReg();
   const acc = useSellerAccount();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
+  const nav = useNavigate();
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -1055,6 +1056,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "products" as const, label: "Товары", icon: Boxes },
     { id: "agent" as const, label: "Агент", icon: Bot },
     { id: "orders" as const, label: "Заказы", icon: FileText },
+    { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag, external: true },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
     { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
@@ -1150,7 +1152,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         {/* Вертикальная навигация кабинета продавца */}
         <nav className="flex flex-col gap-2 fade-up">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => (t as any).external ? nav("/market") : setTab(t.id)}
               className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
               <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
             </button>
