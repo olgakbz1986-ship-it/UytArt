@@ -197,6 +197,11 @@ export function MarketPage() {
   const [ref, setRef] = useState<{ name: string; type: "image" | "video" } | null>(null);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
+  const [filterRegion, setFilterRegion] = useState("all");
+  const [maxBudget, setMaxBudget] = useState("");
+  const [sortBy, setSortBy] = useState("newest"); // newest, expensive, cheap
+  
+  const REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
 
   const myActive = orders.filter((o) => o.myOwn && o.status === "published").length;
   const overLimit = myActive >= lim.marketOrders;
@@ -218,7 +223,18 @@ export function MarketPage() {
   "Электроника и гаджеты",
   "Другое"
 ];
-  const visible = orders.filter((o) => o.status === "published" || o.myOwn).filter((o) => filterType === "all" || o.type === filterType);
+  const visible = orders
+    .filter((o) => o.status === "published" || o.myOwn)
+    .filter((o) => filterType === "all" || o.type === filterType)
+    .filter((o) => filterRegion === "all" || o.region === filterRegion || (filterRegion === "Любой регион" && (!o.region || o.region === "Любой регион")))
+    .filter((o) => !maxBudget || o.budget <= Number(maxBudget))
+    .sort((a, b) => {
+      if (sortBy === "expensive") return b.budget - a.budget;
+      if (sortBy === "cheap") return a.budget - b.budget;
+      const dateB = b.date || b.created_at || new Date().toISOString();
+      const dateA = a.date || a.created_at || new Date().toISOString();
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
 
   const publish = () => {
     if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
