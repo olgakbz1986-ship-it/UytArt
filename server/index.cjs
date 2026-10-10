@@ -392,4 +392,138 @@ app.put("/api/orders/:id/responses/:rid", async (req, res) => {
   }
 });
 
+
+// ==========================================
+// API ЭТАПА 7: ДЕТАЛЬНАЯ КАРТОЧКА, ЧАТ И ЭТАПЫ
+// ==========================================
+app.get("/api/orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let order = null;
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [] };
+      order = (d.custom_orders || []).find(o => o.id === id) || null;
+    }
+    res.json({ ok: true, order });
+  } catch (e) {
+    console.error("[ORDER DETAIL API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.get("/api/orders/:id/messages", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let messages = [];
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_messages: [] };
+      messages = (d.order_messages || []).filter(m => m.order_id === id).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    }
+    res.json({ ok: true, messages });
+  } catch (e) {
+    console.error("[MESSAGES API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.post("/api/orders/:id/messages", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sender_id, message, attachment_url } = req.body;
+    const newMsg = {
+      id: require("crypto").randomUUID(),
+      order_id: id,
+      sender_id: sender_id || "dev-user-1",
+      message,
+      attachment_url: attachment_url || null,
+      created_at: new Date().toISOString()
+    };
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_messages: [] };
+      if (!d.order_messages) d.order_messages = [];
+      d.order_messages.push(newMsg);
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    }
+    res.json({ ok: true, message: newMsg });
+  } catch (e) {
+    console.error("[SEND MESSAGE API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.get("/api/orders/:id/milestones", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let milestones = [];
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
+      milestones = (d.order_milestones || []).filter(m => m.order_id === id);
+    }
+    res.json({ ok: true, milestones });
+  } catch (e) {
+    console.error("[MILESTONES API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.post("/api/orders/:id/milestones", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, status, photo_urls } = req.body;
+    const newMilestone = {
+      id: require("crypto").randomUUID(),
+      order_id: id,
+      title,
+      description: description || "",
+      status: status || "pending",
+      photo_urls: photo_urls || [],
+      created_at: new Date().toISOString(),
+      completed_at: status === "completed" ? new Date().toISOString() : null
+    };
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
+      if (!d.order_milestones) d.order_milestones = [];
+      d.order_milestones.push(newMilestone);
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    }
+    res.json({ ok: true, milestone: newMilestone });
+  } catch (e) {
+    console.error("[CREATE MILESTONE API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.put("/api/orders/:id/milestones/:mid", async (req, res) => {
+  try {
+    const { id, mid } = req.params;
+    const { status, photo_urls } = req.body;
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
+      const m = (d.order_milestones || []).find(x => x.id === mid);
+      if (m) {
+        m.status = status;
+        if (photo_urls) m.photo_urls = photo_urls;
+        if (status === "completed") m.completed_at = new Date().toISOString();
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[UPDATE MILESTONE API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
