@@ -298,4 +298,98 @@ app.get("/api/orders", async (req, res) => {
   }
 });
 
+
+// ==========================================
+// API ОТКЛИКОВ НА ЗАКАЗЫ (Phase 6)
+// ==========================================
+app.get("/api/orders/:id/responses", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let responses = [];
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [] };
+      responses = (d.order_responses || []).filter(r => r.order_id === id);
+    }
+    res.json({ ok: true, responses });
+  } catch (e) {
+    console.error("[RESPONSES API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.post("/api/orders/:id/responses", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { master_id, price, deadline_days, comment } = req.body;
+    
+    const newResponse = {
+      id: require("crypto").randomUUID(),
+      order_id: id,
+      master_id: master_id || "dev-master-1",
+      price: Number(price),
+      deadline_days: Number(deadline_days),
+      comment: comment || "",
+      status: "pending",
+      created_at: new Date().toISOString()
+    };
+
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [], custom_orders: [] };
+      if (!d.order_responses) d.order_responses = [];
+      d.order_responses.push(newResponse);
+      
+      // Обновляем счетчик откликов в заказе
+      if (d.custom_orders) {
+        const order = d.custom_orders.find(o => o.id === id);
+        if (order) {
+          order.responses = (order.responses || 0) + 1;
+          order.updated_at = new Date().toISOString();
+        }
+      }
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    }
+
+    res.json({ ok: true, response: newResponse });
+  } catch (e) {
+    console.error("[RESPONSES API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.put("/api/orders/:id/responses/:rid", async (req, res) => {
+  try {
+    const { id, rid } = req.params;
+    const { status } = req.body; // 'accepted' or 'rejected'
+    
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [], custom_orders: [] };
+      
+      const resp = (d.order_responses || []).find(r => r.id === rid);
+      if (resp) {
+        resp.status = status;
+        
+        // Если принят, меняем статус заказа на in_progress
+        if (status === "accepted" && d.custom_orders) {
+          const order = d.custom_orders.find(o => o.id === id);
+          if (order) {
+            order.status = "in_progress";
+            order.updated_at = new Date().toISOString();
+          }
+        }
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[RESPONSES UPDATE API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
