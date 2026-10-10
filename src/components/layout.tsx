@@ -269,6 +269,31 @@ function SmartSearch() {
 export function Header() {
   const cart = useAppStore((s) => s.cart);
   const session = useAppStore((s) => s.session);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const unreadCount = notifications.filter((n: any) => !n.read).length;
+
+  useEffect(() => {
+    if (session && notifOpen) {
+      fetch('http://localhost:8787/api/notifications')
+        .then(res => res.json())
+        .then(data => {
+          if (data.ok) {
+            setNotifications(data.notifications.slice(0, 10));
+          }
+        });
+    }
+  }, [session, notifOpen]);
+
+  const markAsRead = async (id: string) => {
+    await fetch(`http://localhost:8787/api/notifications/${id}/read`, { method: 'PUT' });
+    setNotifications(prev => prev.map((n: any) => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const markAllAsRead = async () => {
+    await fetch('http://localhost:8787/api/notifications/read-all', { method: 'PUT' });
+    setNotifications(prev => prev.map((n: any) => ({ ...n, read: true })));
+  };
   const logout = useAppStore((s) => s.logout);
   useEffect(() => { startAgentWorker(); }, []);
   const sellerReg = useSellerReg();
@@ -328,6 +353,58 @@ export function Header() {
                 const displayName = isSeller ? sellerReg.shopName : session.name.split(" ")[0];
                 return (
                   <div className="flex items-center gap-2">
+                    {/* Колокольчик уведомлений */}
+                    <div className="relative">
+                      <button 
+                        onClick={() => setNotifOpen(!notifOpen)}
+                        className="relative w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-ink hover:bg-surface transition-colors cursor-pointer"
+                        aria-label="Уведомления"
+                      >
+                        <Bell size={20} />
+                        {unreadCount > 0 && (
+                          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-error rounded-full border-2 border-cream"></span>
+                        )}
+                      </button>
+
+                      {/* Выпадающий список уведомлений */}
+                      {notifOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-80 bg-surface border border-line-soft rounded-xl shadow-2xl z-50 overflow-hidden fade-up">
+                          <div className="p-3 border-b border-line-soft flex items-center justify-between bg-cream/30">
+                            <span className="font-bold text-[14px] text-ink">Уведомления</span>
+                            {unreadCount > 0 && (
+                              <button onClick={markAllAsRead} className="text-[11px] font-bold text-accent-deep hover:text-accent cursor-pointer">
+                                Прочитать все
+                              </button>
+                            )}
+                          </div>
+                          <div className="max-h-80 overflow-y-auto">
+                            {notifications.length === 0 ? (
+                              <div className="p-6 text-center">
+                                <p className="text-[13px] text-ink-mute">Нет новых уведомлений</p>
+                              </div>
+                            ) : (
+                              notifications.map((n: any) => (
+                                <div 
+                                  key={n.id} 
+                                  onClick={() => { markAsRead(n.id); setNotifOpen(false); nav(n.link); }}
+                                  className={`p-3 border-b border-line-soft last:border-0 hover:bg-cream/50 transition-colors cursor-pointer ${!n.read ? 'bg-accent-soft/30' : ''}`}
+                                >
+                                  <div className="flex gap-3">
+                                    <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${!n.read ? 'bg-accent' : 'bg-transparent'}`}></div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[13px] font-bold text-ink leading-tight">{n.title}</p>
+                                      <p className="text-[12px] text-ink-soft mt-1 line-clamp-2">{n.text}</p>
+                                      <p className="text-[10px] text-ink-mute mt-1.5">{new Date(n.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <Link
                       to={cabinetTo}
                       title={isSeller ? "Кабинет продавца" : "Личный кабинет"}
