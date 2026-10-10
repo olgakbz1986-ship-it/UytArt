@@ -366,6 +366,46 @@ export default function ProfilePage() {
               )}
             </div>
           ))}
+          
+          {/* Индивидуальные заказы с биржи */}
+          <div className="pt-6 border-t border-line">
+            <h3 className="font-display font-bold text-[18px] text-ink mb-4">Индивидуальные заказы</h3>
+            {marketOrders.length === 0 ? (
+              <div className="bg-surface/50 rounded-xl p-6 text-center">
+                <p className="text-[13px] text-ink-soft">У вас пока нет индивидуальных заказов. <Link to="/market" className="font-bold text-accent-deep hover:text-accent underline">Создать на бирже →</Link></p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {marketOrders.map((mo) => (
+                  <div key={mo.id} className="bg-surface rounded-xl shadow-card p-4 border border-line-soft">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[15px] text-ink truncate">{mo.title}</p>
+                        <p className="text-[12px] text-ink-mute mt-0.5">{mo.type} · {mo.region}</p>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                        mo.status === 'published' ? 'bg-accent-soft text-accent-deep' :
+                        mo.status === 'moderation' ? 'bg-honey-soft text-honey' :
+                        mo.status === 'in_progress' ? 'bg-ai-soft text-ai' :
+                        mo.status === 'completed' ? 'bg-success-soft text-success' :
+                        'bg-line-soft text-ink-soft'
+                      }`}>
+                        {mo.status === 'published' ? 'Опубликован' :
+                         mo.status === 'moderation' ? 'На модерации' :
+                         mo.status === 'in_progress' ? 'В работе' :
+                         mo.status === 'completed' ? 'Завершен' : mo.status}
+                      </span>
+                    </div>
+                    <p className="text-[13px] text-ink-soft mt-2 line-clamp-2">{mo.desc}</p>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-line-soft">
+                      <span className="font-display font-bold text-[16px] text-ink">{mo.budget.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[11px] text-ink-mute">{new Date(mo.date).toLocaleDateString('ru-RU')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
