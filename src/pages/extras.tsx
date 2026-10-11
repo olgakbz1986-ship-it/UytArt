@@ -19,7 +19,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3} from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
@@ -43,7 +43,7 @@ import { usePrefsStore } from "../lib/prefs";
    ============================================================ */
 export interface MarketOrder {
   id: string; title: string; type: string; desc: string; material: string;
-  budget: number; term: string; region: string; refName?: string; refType?: "image" | "video";
+  budget: number; term: string; region: string; refName?: string; refType?: "image" | "video"; coverImage?: string; images?: string[];
   date: string; status: "draft" | "moderation" | "published" | "in_progress" | "completed" | "cancelled";
   responses: number; myOwn?: boolean;
   agentPhoto?: string; agentItems?: string[]; agentDraft?: boolean;
@@ -170,7 +170,7 @@ export function MarketPage() {
 
   const patchOrder = (id: string, patch: any) => useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
   const removeOrder = (id: string) => useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
-  const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); setRefs([]); setFErr(""); setWizardOpen(true); };
+  const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); const photos: Array<{ name: string; type: "image" | "video"; url: string }> = []; if (o.images && o.images.length > 0) { o.images.forEach((url: string, idx: number) => photos.push({ name: o.refName || "Фото " + (idx+1), type: "image", url })); } else if (o.coverImage) { photos.push({ name: "Обложка", type: "image", url: o.coverImage }); } else if (o.agentPhoto) { photos.push({ name: "Фото агента", type: "image", url: o.agentPhoto }); } setRefs(photos); setSelectedCoverImage(o.coverImage || photos[0]?.url || null); setFErr(""); setWizardOpen(true); };
   const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
   const cancelEdit = () => { setEditingDraft(null); };
   const sendDraft = (id: string) => { patchOrder(id, { status: "moderation", agentDraft: false }); useNotifyStore.getState().push({ kind: "report", title: "Черновик отправлен мастерам", text: "Ваш заказ поступил на модерацию биржи." }); };
@@ -195,6 +195,8 @@ export function MarketPage() {
   const [fTitle, setFTitle] = useState("");
   const [fDesc, setFDesc] = useState("");
   const [refs, setRefs] = useState<Array<{ name: string; type: "image" | "video"; url: string; file?: File }>>([]);
+  const [selectedCoverImage, setSelectedCoverImage] = useState<string | null>(null);
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
   
@@ -220,6 +222,7 @@ export function MarketPage() {
   const visible = orders
     .filter((o) => o.status === "published" || o.myOwn)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const detailOrder = visible.find((o: any) => o.id === detailOrderId);
 
   const publish = () => {
     if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
@@ -262,44 +265,51 @@ export function MarketPage() {
           </div>
         )}
         {visible.map((o, i) => (
-          <div id={"order-" + o.id} key={o.id} className={`bg-surface rounded-2xl shadow-card p-6 fade-up ${focusId === o.id ? "ring-2 ring-accent" : ""} ${(o as any).agentDraft ? "border-2 border-accent/40" : ""}`} style={{ animationDelay: `${(i % 6) * 60}ms` }}>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <h2 className="font-bold text-[16px] text-ink">{o.title}</h2>
-              {o.status === "moderation"
-                ? <Badge tone="honey">На модерации</Badge>
-                : (o as any).agentDraft ? <Badge tone="ai">Черновик агента</Badge>
-                : o.myOwn ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
-            </div>
-            <p className="text-[13.5px] text-ink-soft leading-relaxed mt-2">{o.desc}</p>
-            {o.refName && (
-              <p className="flex items-center gap-1.5 text-[11.5px] text-ai font-semibold mt-2.5">
-                {o.refType === "video" ? <Video size={12} /> : <Camera size={12} />} Референс: {o.refName}
-              </p>
-            )}
-            {(o as any).agentPhoto && (
-              <img src={(o as any).agentPhoto} alt="" className="mt-3 w-24 h-24 object-cover rounded-[12px] border border-line-soft" />
-            )}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px] mt-4">
-                <p><span className="text-ink-mute">Бюджет:</span> <span className="font-semibold text-ink">до {fmt(o.budget)}</span></p>
-                <p><span className="text-ink-mute">Срок:</span> <span className="font-semibold text-ink">{o.term}</span></p>
-                <p><span className="text-ink-mute">Материал:</span> <span className="font-semibold text-ink">{o.material}</span></p>
-                <p><span className="text-ink-mute">Регион:</span> <span className="font-semibold text-ink">{o.region}</span></p>
-              
-            </div>
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft gap-2 flex-wrap">
-              <span className="text-[12px] text-ink-mute">{fmtDate(o.date)} · откликов: <strong className="text-ink">{o.responses + (responded.includes(o.id) ? 1 : 0)}</strong></span>
-              {(o as any).agentDraft && o.status === "draft" && (
-                <div className="flex gap-1.5">
-                  <button onClick={() => startEdit(o)} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[11.5px] font-bold hover:bg-line cursor-pointer flex items-center gap-1"><Edit3 size={12} /> Редактировать</button>
-                  <button onClick={() => deleteDraft(o.id)} className="h-8 px-3 rounded-[8px] bg-line-soft text-error text-[11.5px] font-bold hover:bg-line cursor-pointer flex items-center gap-1"><Trash2 size={12} /> Удалить</button>
-                  <button onClick={() => sendDraft(o.id)} className="h-8 px-3 rounded-[8px] bg-accent text-ink text-[11.5px] font-bold hover:bg-accent-deep cursor-pointer flex items-center gap-1"><Send size={12} /> Отправить мастерам</button>
+          <div id={"order-" + o.id} key={o.id} className={`bg-surface rounded-2xl shadow-card overflow-hidden fade-up ${focusId === o.id ? "ring-2 ring-accent" : ""} ${(o as any).agentDraft ? "border-2 border-accent/40" : ""}`} style={{ animationDelay: `${(i % 6) * 60}ms` }}>
+            <div className="relative h-40 bg-cream/50 border-b border-line-soft flex items-center justify-center overflow-hidden group">
+              {o.coverImage ? (
+                <img src={o.coverImage} alt={o.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              ) : (
+                <div className="text-center">
+                  <Boxes size={32} className="text-ink-mute mx-auto mb-2" />
+                  <p className="text-[12px] font-semibold text-ink-mute">Без фото</p>
                 </div>
               )}
-              {sellerActive && !o.myOwn && o.status === "published" && (
-                responded.includes(o.id)
-                  ? <Badge tone="success"><CheckCircle2 size={11} /> Вы откликнулись</Badge>
-                  : <Btn size="sm" onClick={() => respond(o.id)}>Отправить предложение</Btn>
-              )}
+              <div className="absolute top-3 right-3 flex gap-2">
+                {o.status === "moderation" ? <Badge tone="honey">На модерации</Badge>
+                : (o as any).agentDraft ? <Badge tone="ai">Черновик</Badge>
+                : o.myOwn ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
+              </div>
+            </div>
+            <div className="p-5">
+              <h2 className="font-bold text-[17px] text-ink leading-tight mb-2 line-clamp-2">{o.title}</h2>
+              <p className="text-[13px] text-ink-soft leading-relaxed mb-4 line-clamp-3">{o.desc}</p>
+              <div className="grid grid-cols-2 gap-y-3 text-[12.5px] mb-4">
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Бюджет</span><span className="font-bold text-ink text-[14px]">до {fmt(o.budget)}</span></div>
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Срок</span><span className="font-semibold text-ink">{o.term}</span></div>
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Материал</span><span className="font-semibold text-ink">{o.material || "Не указан"}</span></div>
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Регион</span><span className="font-semibold text-ink truncate" title={o.region}>{o.region}</span></div>
+              </div>
+              <div className="flex items-center justify-between pt-4 border-t border-line-soft gap-2 flex-wrap">
+                <span className="text-[11px] text-ink-mute">{fmtDate(o.date)} · <strong className="text-ink">{o.responses + (responded.includes(o.id) ? 1 : 0)}</strong> откликов</span>
+                <div className="flex gap-2">
+                  {o.myOwn && (
+                    <>
+                      <button onClick={() => setDetailOrderId(o.id)} className="h-8 px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Eye size={12} /> Подробнее</button>
+                      <button onClick={() => startEdit(o)} className="h-8 px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Edit3 size={12} /> Изменить</button>
+                      {(o as any).agentDraft && o.status === "draft" && (
+                        <button onClick={() => sendDraft(o.id)} className="h-8 px-3 rounded-lg bg-accent text-ink text-[12px] font-bold hover:bg-accent-deep cursor-pointer flex items-center gap-1 transition-colors"><Send size={12} /> Отправить</button>
+                      )}
+                      <button onClick={() => deleteDraft(o.id)} className="h-8 px-3 rounded-lg bg-error/10 text-error text-[12px] font-bold hover:bg-error/20 cursor-pointer flex items-center gap-1 transition-colors" title="Удалить"><Trash2 size={12} /></button>
+                    </>
+                  )}
+                  {sellerActive && !o.myOwn && o.status === "published" && (
+                    responded.includes(o.id)
+                      ? <span className="h-8 px-3 rounded-lg bg-success/10 text-success text-[12px] font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Отклик отправлен</span>
+                      : <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn><Btn size="sm" onClick={() => respond(o.id)}>Откликнуться</Btn></div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         ))}
@@ -312,6 +322,49 @@ export function MarketPage() {
           <p className="text-[14px] text-ink-soft">Создайте первый индивидуальный заказ.</p>
         </div>
       )}
+
+
+      {/* Модальное окно подробностей заказа */}
+      <Modal open={!!detailOrderId} onClose={() => setDetailOrderId(null)} title="Подробности заказа" wide>
+        {detailOrder && (
+          <div className="space-y-4">
+            {detailOrder.coverImage && (
+              <img src={detailOrder.coverImage} alt={detailOrder.title} className="w-full h-64 object-cover rounded-xl" />
+            )}
+            <div>
+              <h3 className="font-bold text-[20px] text-ink mb-2">{detailOrder.title}</h3>
+              <p className="text-[14px] text-ink-soft leading-relaxed">{detailOrder.desc}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 bg-cream/50 rounded-xl p-4">
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Бюджет</span><span className="font-bold text-[16px] text-ink">до {fmt(detailOrder.budget)}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Срок</span><span className="font-semibold text-ink">{detailOrder.term}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Материал</span><span className="font-semibold text-ink">{detailOrder.material || "Не указан"}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Регион</span><span className="font-semibold text-ink">{detailOrder.region}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Категория</span><span className="font-semibold text-ink">{detailOrder.type}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Статус</span><Badge tone={detailOrder.status === "published" ? "success" : "honey"}>{detailOrder.status === "published" ? "Опубликован" : "На модерации"}</Badge></div>
+            </div>
+            {detailOrder.images && detailOrder.images.length > 0 && (
+              <div>
+                <p className="text-[12px] font-semibold text-ink-mute mb-2">Фотографии ({detailOrder.images.length}):</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {detailOrder.images.map((img, idx) => (
+                    <img key={idx} src={img} alt="" className="aspect-square object-cover rounded-lg border border-line-soft cursor-pointer hover:ring-2 hover:ring-accent transition-all" />
+                  ))}
+                </div>
+              </div>
+            )}
+            {sellerActive && !detailOrder.myOwn && detailOrder.status === "published" && (
+              <div className="pt-4 border-t border-line-soft">
+                {responded.includes(detailOrder.id) ? (
+                  <p className="text-center text-success font-semibold flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Вы уже откликнулись на этот заказ</p>
+                ) : (
+                  <Btn size="lg" className="w-full" onClick={() => { respond(detailOrder.id); setDetailOrderId(null); }}>Откликнуться на заказ</Btn>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* AI-визард */}
       <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : "Новый индивидуальный заказ"} wide>
@@ -437,6 +490,30 @@ export function MarketPage() {
           )}
         </div>
         {fErr && <p className="text-[12.5px] font-semibold text-error mt-3">{fErr}</p>}
+        {refs.length > 1 && (
+          <div className="mt-4">
+            <p className="text-[12px] font-semibold text-ink-mute mb-2">Выберите обложку для карточки заказа:</p>
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+              {refs.filter(r => r.type === "image").map((file, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSelectedCoverImage(file.url)}
+                  className={`relative group aspect-square rounded-lg border-2 overflow-hidden transition-all ${selectedCoverImage === file.url ? 'border-accent ring-2 ring-accent/30' : 'border-line-soft hover:border-accent/50'}`}
+                  title={file.name}
+                >
+                  <img src={file.url} alt="" className="w-full h-full object-cover" />
+                  {selectedCoverImage === file.url && (
+                    <div className="absolute inset-0 bg-accent/80 flex items-center justify-center">
+                      <Check size={20} className="text-cream" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-ink-soft mt-2">Первое фото будет обложкой по умолчанию</p>
+          </div>
+        )}
         {editOrderId ? (
           <div className="flex gap-3 mt-5">
             <Btn size="lg" className="flex-1" variant="outline" onClick={() => saveDraft(false)}>Сохранить черновик</Btn>
