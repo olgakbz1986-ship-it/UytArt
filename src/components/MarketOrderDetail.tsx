@@ -14,6 +14,13 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
   const [loading, setLoading] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
+  // Состояния для отклика мастера
+  const [showResponseForm, setShowResponseForm] = useState(false);
+  const [responsePrice, setResponsePrice] = useState("");
+  const [responseDeadline, setResponseDeadline] = useState("");
+  const [responseComment, setResponseComment] = useState("");
+  const [submittingResponse, setSubmittingResponse] = useState(false);
+  
   // Состояния для отзыва
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
@@ -94,6 +101,39 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const submitResponse = async () => {
+    if (!responsePrice || !responseDeadline || !responseComment.trim()) {
+      alert("Пожалуйста, заполните все поля: цену, сроки и комментарий");
+      return;
+    }
+    setSubmittingResponse(true);
+    try {
+      const res = await fetch(`http://localhost:8787/api/orders/${order.id}/responses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          master_id: "dev-master-1", // В реальности ID текущего пользователя-мастера
+          price: Number(responsePrice),
+          deadline_days: Number(responseDeadline),
+          comment: responseComment.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert("Ваш отклик успешно отправлен заказчику!");
+        setShowResponseForm(false);
+        setResponsePrice("");
+        setResponseDeadline("");
+        setResponseComment("");
+      }
+    } catch (e) {
+      console.error("Ошибка отправки отклика", e);
+      alert("Не удалось отправить отклик");
+    } finally {
+      setSubmittingResponse(false);
+    }
+  };
+
   const submitReview = async () => {
     if (!reviewText.trim()) {
       alert("Пожалуйста, напишите текст отзыва");
@@ -168,10 +208,74 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
               </div>
             )}
           </div>
+          
+          {/* Кнопка отклика для опубликованных заказов */}
+          {order.status === 'published' && !showResponseForm && (
+            <button
+              onClick={() => setShowResponseForm(true)}
+              className="h-[44px] px-6 rounded-xl bg-accent text-ink font-bold text-[14px] hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-2 shrink-0"
+            >
+              <Send size={16} /> Откликнуться на заказ
+            </button>
+          )}
           <button onClick={onClose} className="p-2 rounded-full hover:bg-line-soft transition-colors cursor-pointer">
             <X size={20} className="text-ink-soft" />
           </button>
         </div>
+
+        {/* Форма отклика мастера */}
+        {showResponseForm && order.status === 'published' && (
+          <div className="p-6 bg-cream/30 border-b border-line-soft">
+            <h3 className="font-bold text-[16px] text-ink mb-4">Ваше предложение</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Ваша цена, ₽</label>
+                <input
+                  type="number"
+                  value={responsePrice}
+                  onChange={(e) => setResponsePrice(e.target.value)}
+                  placeholder="Например, 50000"
+                  className="w-full h-[44px] px-4 rounded-xl border border-line-soft bg-surface text-[14px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Срок выполнения, дней</label>
+                <input
+                  type="number"
+                  value={responseDeadline}
+                  onChange={(e) => setResponseDeadline(e.target.value)}
+                  placeholder="Например, 14"
+                  className="w-full h-[44px] px-4 rounded-xl border border-line-soft bg-surface text-[14px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
+                />
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Комментарий (почему вы подходите)</label>
+              <textarea
+                value={responseComment}
+                onChange={(e) => setResponseComment(e.target.value)}
+                placeholder="Расскажите о своем опыте, материалах и подходе к работе..."
+                rows={3}
+                className="w-full px-4 py-3 rounded-xl border border-line-soft bg-surface text-[14px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all resize-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={submitResponse}
+                disabled={submittingResponse || !responsePrice || !responseDeadline || !responseComment.trim()}
+                className="h-[44px] px-6 rounded-xl bg-accent text-ink font-bold text-[14px] hover:bg-accent-deep hover:text-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-2"
+              >
+                {submittingResponse ? "Отправка..." : "Отправить отклик"}
+              </button>
+              <button
+                onClick={() => setShowResponseForm(false)}
+                className="h-[44px] px-6 rounded-xl border border-line-soft text-ink-soft font-bold text-[14px] hover:bg-line-soft transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Тело: 2 колонки (Этапы слева, Чат справа) */}
         <div className="flex-1 flex overflow-hidden">
