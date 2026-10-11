@@ -281,7 +281,7 @@ export function MarketPage() {
         </div>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visible.length === 0 && (
           <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
             <p className="text-[14px] font-bold text-ink mb-1">Заказов на бирже пока нет</p>
@@ -343,7 +343,7 @@ export function MarketPage() {
       {/* AI-визард */}
       <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : "Новый индивидуальный заказ"} wide>
         <p className="text-[13px] text-ink-soft mb-5 flex items-center gap-2"><Sparkles size={15} className="text-ai" /> AI-помощник поможет мастеру понять задачу. Прикрепите референс и опишите детали.</p>
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Field label="Название" required>
             <input className="field" value={fTitle} onChange={(e) => setFTitle(e.target.value)} placeholder="Например: Дубовый стол на кухню" />
           </Field>
@@ -692,7 +692,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Field label="Название магазина" required><input className="field" value={s.shopName} onChange={(e) => s.setInfo({ shopName: e.target.value })} placeholder="Глиняный дом" /></Field>
             <Field label="Имя мастера" required><input className="field" value={s.masterName} onChange={(e) => s.setInfo({ masterName: e.target.value })} placeholder="Мария" /></Field>
             <Field label="ФИО" required><input className="field" value={s.contactName} onChange={(e) => s.setInfo({ contactName: e.target.value })} placeholder="Ковалёва Мария Сергеевна" /></Field>
@@ -707,7 +707,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
           <div className="mt-6 pt-6 border-t border-line-soft">
             <p className="font-display font-bold text-[16px] text-ink mb-1">О мастере</p>
             <p className="text-[12px] text-ink-mute mb-4">Расскажите о становлении бизнеса — это повышает доверие покупателей. Сервис распределит вас по категориям.</p>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <Field label="Лет опыта"><input className="field" value={s.yearsExperience} onChange={(e) => s.setInfo({ yearsExperience: e.target.value })} placeholder="7" /></Field>
               <Field label="Достижения"><input className="field" value={s.achievements} onChange={(e) => s.setInfo({ achievements: e.target.value })} placeholder="Ярмарки, конкурсы, публикации…" /></Field>
             </div>
@@ -1554,7 +1554,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               )}
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-surface rounded-2xl shadow-card p-6">
                 <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Воронка продаж</p>
                 {funnel.map(([label, val, pct]) => (
@@ -2424,7 +2424,7 @@ export function LegalIndexPage() {
     <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Правовая информация</h1>
       <p className="text-[14px] text-ink-soft mb-8">Здесь собраны все юридические документы и правила платформы Quantiform.</p>
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {LEGAL_INDEX.map((d) => (
           <Link key={d.to} to={d.to}
             className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col">
@@ -2582,7 +2582,7 @@ export function MasterProfileBlock() {
                   <input type="checkbox" checked={!!s.acceptsCustomOrders} onChange={(e) => s.setInfo({ acceptsCustomOrders: e.target.checked })} />
                   Принимаю индивидуальные заказы
                 </label>
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
                     <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина <span className="text-[10.5px] text-ink-mute font-normal">— лицо бренда: карточки товаров, чеки, шапка кабинета</span></p>
                     <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: "Максимум 1.5 МБ" }); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />

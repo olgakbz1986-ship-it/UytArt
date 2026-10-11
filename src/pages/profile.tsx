@@ -395,9 +395,9 @@ export default function ProfilePage() {
                   ) : null;
                 })}
               </div>
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4">
                 <span className="font-display font-bold text-[19px] text-ink">{fmt(o.total)}</span>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 sm:gap-3 flex-wrap">
                   <Btn size="sm" variant="outline" onClick={() => setChatOrder(o)}><MessageSquare size={14} /> Чат</Btn>
                   {o.status !== "received" && (
                     <Btn size="sm" variant="ghost" onClick={() => advanceStatus(o.id)} title="Демо-продвижение статуса">
@@ -434,7 +434,7 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-3">
                 {marketOrders.map((mo) => (
-                  <div key={mo.id} onClick={() => setSelectedMarketOrder(mo)} className="bg-surface rounded-xl shadow-card p-4 border border-line-soft cursor-pointer hover:border-accent hover:shadow-lg transition-all group">
+                  <div key={mo.id} onClick={() => setSelectedMarketOrder(mo)} className="bg-surface rounded-xl shadow-card p-4 sm:p-5 border border-line-soft cursor-pointer hover:border-accent hover:shadow-lg transition-all group">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-[15px] text-ink truncate">{mo.title}</p>
@@ -828,7 +828,7 @@ export default function ProfilePage() {
 
           {/* Тема — со «Старт» */}
           <SettingsSection title="Тема оформления" icon={<Palette size={15} />} minLevel={1} level={tier.level} nextLabel="тариф «Старт»" accent={tier.accent}>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 sm:gap-3 flex-wrap">
               {([["light", "Светлая"], ["dark", "Тёмная"], ["system", "Системная"]] as const).map(([id, label]) => (
                 <button key={id} onClick={() => setTheme(id)}
                   className={`px-4 h-10 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${theme === id ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>

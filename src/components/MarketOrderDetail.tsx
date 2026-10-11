@@ -194,7 +194,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-surface w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="bg-surface w-full max-w-4xl max-h-[90vh] md:max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Шапка */}
         <div className="flex items-center justify-between p-5 border-b border-line-soft shrink-0">
           <div>
@@ -278,9 +278,9 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
         )}
 
         {/* Тело: 2 колонки (Этапы слева, Чат справа) */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Левая колонка: Этапы */}
-          <div className="w-1/3 border-r border-line-soft p-5 overflow-y-auto bg-cream/30">
+          <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-line-soft p-5 overflow-y-auto bg-cream/30 max-h-[40vh] md:max-h-none">
             <h3 className="font-bold text-[15px] text-ink mb-4 flex items-center gap-2">
               <Clock size={16} className="text-accent-deep" /> Этапы выполнения
             </h3>
@@ -328,7 +328,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
           </div>
 
           {/* Правая колонка: Чат */}
-          <div className="flex-1 flex flex-col bg-surface">
+          <div className="flex-1 flex flex-col bg-surface min-h-[50vh] md:min-h-0">
             <div className="p-4 border-b border-line-soft shrink-0">
               <h3 className="font-bold text-[15px] text-ink flex items-center gap-2">
                 <MessageSquare size={16} className="text-accent-deep" /> Чат по заказу
