@@ -623,4 +623,79 @@ function createNotification(userId, type, title, text, link) {
   }
   return null;
 }
+
+// ==========================================
+// API ЭТАПА 10: ОТЗЫВЫ И РЕЙТИНГИ ДЛЯ БИРЖИ
+// (Изолировано от отзывов магазина useReviewStore)
+// ==========================================
+app.post("/api/market/orders/:id/reviews", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewer_id, reviewee_id, rating, text } = req.body;
+    
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+
+    const newReview = {
+      id: require("crypto").randomUUID(),
+      order_id: id,
+      reviewer_id: reviewer_id || "dev-user-1",
+      reviewee_id: reviewee_id || "dev-master-1",
+      rating: Number(rating),
+      text: text || "",
+      created_at: new Date().toISOString()
+    };
+
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [], custom_orders: [] };
+      if (!d.market_reviews) d.market_reviews = [];
+      
+      d.market_reviews.push(newReview);
+      
+      // Помечаем заказ как reviewed
+      if (d.custom_orders) {
+        const order = d.custom_orders.find(o => o.id === id);
+        if (order) {
+          order.reviewed = true;
+          order.updated_at = new Date().toISOString();
+        }
+      }
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    }
+
+    res.json({ ok: true, review: newReview });
+  } catch (e) {
+    console.error("[MARKET REVIEW API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.get("/api/market/users/:id/reviews", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let reviews = [];
+    let avgRating = 0;
+
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [] };
+      
+      reviews = (d.market_reviews || []).filter(r => r.reviewee_id === id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      if (reviews.length > 0) {
+        const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+        avgRating = (sum / reviews.length).toFixed(1);
+      }
+    }
+
+    res.json({ ok: true, reviews, avgRating: Number(avgRating), count: reviews.length });
+  } catch (e) {
+    console.error("[MARKET USER REVIEWS API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
