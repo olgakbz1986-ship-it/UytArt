@@ -197,9 +197,6 @@ export function MarketPage() {
   const [ref, setRef] = useState<{ name: string; type: "image" | "video" } | null>(null);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [filterRegion, setFilterRegion] = useState("all");
-  const [maxBudget, setMaxBudget] = useState("");
-  const [sortBy, setSortBy] = useState("newest"); // newest, expensive, cheap
   
   const REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
 
@@ -225,16 +222,7 @@ export function MarketPage() {
 ];
   const visible = orders
     .filter((o) => o.status === "published" || o.myOwn)
-    .filter((o) => filterType === "all" || o.type === filterType)
-    .filter((o) => filterRegion === "all" || o.region === filterRegion || (filterRegion === "Любой регион" && (!o.region || o.region === "Любой регион")))
-    .filter((o) => !maxBudget || o.budget <= Number(maxBudget))
-    .sort((a, b) => {
-      if (sortBy === "expensive") return b.budget - a.budget;
-      if (sortBy === "cheap") return a.budget - b.budget;
-      const dateB = b.date || b.created_at || new Date().toISOString();
-      const dateA = a.date || a.created_at || new Date().toISOString();
-      return new Date(dateB).getTime() - new Date(dateA).getTime();
-    });
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const publish = () => {
     if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
@@ -266,18 +254,6 @@ export function MarketPage() {
         <div className="flex items-center gap-2.5 bg-premium-soft border border-premium/40 rounded-[10px] px-4 py-3 mb-6">
           <AlertTriangle size={16} className="text-[#a07c50] shrink-0" />
           <p className="text-[13px] text-ink flex-1">Вы достигли лимита активных заказов ({fmtLimit(lim.marketOrders)}). <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link></p>
-        </div>
-      )}
-
-      {/* фильтр по типу (для мастеров) */}
-      {sellerActive && (
-        <div className="flex gap-2 flex-wrap mb-6">
-          {["all", ...TYPES].map((t) => (
-            <button key={t} onClick={() => setFilterType(t)}
-              className={`px-4 min-h-[40px] rounded-full text-[12.5px] font-bold transition-all cursor-pointer ${filterType === t ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
-              {t === "all" ? "Все типы" : t}
-            </button>
-          ))}
         </div>
       )}
 
