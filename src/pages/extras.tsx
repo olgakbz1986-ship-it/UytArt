@@ -170,7 +170,7 @@ export function MarketPage() {
 
   const patchOrder = (id: string, patch: any) => useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
   const removeOrder = (id: string) => useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
-  const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); setRef(null); setFErr(""); setWizardOpen(true); };
+  const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); setRefs([]); setFErr(""); setWizardOpen(true); };
   const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
   const cancelEdit = () => { setEditingDraft(null); };
   const sendDraft = (id: string) => { patchOrder(id, { status: "moderation", agentDraft: false }); useNotifyStore.getState().push({ kind: "report", title: "Черновик отправлен мастерам", text: "Ваш заказ поступил на модерацию биржи." }); };
@@ -179,11 +179,11 @@ export function MarketPage() {
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
     const patch: any = { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion };
     if (editPhoto) patch.agentPhoto = editPhoto;
-    if (ref?.name) patch.refName = ref.name;
+    if (refs.length > 0) { patch.refName = refs[0].name; patch.refType = refs[0].type; }
     if (send) { patch.status = "moderation"; patch.agentDraft = false; }
     useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === editOrderId ? { ...o, ...patch } : o)) }));
     useNotifyStore.getState().push({ kind: "report", title: send ? "Черновик отправлен мастерам" : "Черновик обновлён", text: send ? "Заказ поступил на модерацию биржи." : "Изменения сохранены, включая фото референса." });
-    setEditOrderId(null); setEditPhoto(null); setRef(null); setFErr(""); setWizardOpen(false);
+    setEditOrderId(null); setEditPhoto(null); setRefs([]); setFErr(""); setWizardOpen(false);
   };
   const deleteDraft = (id: string) => { if (confirm("Удалить черновик безвозвратно?")) { removeOrder(id); useNotifyStore.getState().push({ kind: "report", title: "Черновик удалён", text: "Запись убрана с биржи." }); } };
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -194,8 +194,7 @@ export function MarketPage() {
   const [fMaterial, setFMaterial] = useState("Дуб");
   const [fTitle, setFTitle] = useState("");
   const [fDesc, setFDesc] = useState("");
-  const [ref, setRef] = useState<{ name: string; type: "image" | "video" } | null>(null);
-  const [refPreview, setRefPreview] = useState<string | null>(null);
+  const [refs, setRefs] = useState<Array<{ name: string; type: "image" | "video"; url: string; file?: File }>>([]);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
   
@@ -227,14 +226,14 @@ export function MarketPage() {
     if (editOrderId) {
       patchOrder(editOrderId, { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion });
       useNotifyStore.getState().push({ kind: "report", title: "Черновик обновлён", text: "Изменения сохранены. Черновик остаётся на бирже до отправки мастерам." });
-      setEditOrderId(null); setFTitle(""); setFDesc(""); setRef(null); setFErr("");
+      setEditOrderId(null); setFTitle(""); setFDesc(""); setRefs([]); setFErr("");
       setWizardOpen(false);
       return;
     }
     if (overLimit) { setFErr(`Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
-    addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: ref?.name, refType: ref?.type });
-    setFTitle(""); setFDesc(""); setRef(null); setFErr("");
+    addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: refs[0]?.name, refType: refs[0]?.type });
+    setFTitle(""); setFDesc(""); setRefs([]); setFErr("");
     setWizardOpen(false);
   };
 
@@ -245,7 +244,7 @@ export function MarketPage() {
           <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Биржа индивидуальных заказов</h1>
           <p className="text-[14px] text-ink-soft max-w-xl">Опишите, что нужно изготовить, — мастера пришлют предложения. Сделка защищена: предоплата резервируется на платформе.</p>
         </div>
-        <Btn size="lg" onClick={() => { setEditOrderId(null); setFTitle(""); setFDesc(""); setFMaterial(""); setFBudget(""); setRef(null); setFErr(""); setWizardOpen(true); }}><Sparkles size={18} /> Создать заказ</Btn>
+        <Btn size="lg" onClick={() => { setEditOrderId(null); setFTitle(""); setFDesc(""); setFMaterial(""); setFBudget(""); setRefs([]); setFErr(""); setWizardOpen(true); }}><Sparkles size={18} /> Создать заказ</Btn>
       </div>
 
       {overLimit && (
@@ -352,22 +351,68 @@ export function MarketPage() {
           <label className="flex items-center gap-3 border-2 border-dashed border-line rounded-[10px] px-4 py-3 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
             <Upload size={16} className="text-ink-mute" />
             <span className="text-[13px] font-semibold text-ink-soft">
-              {ref ? (
-                <div className="flex items-center gap-2">
-                  {refPreview ? <img src={refPreview} alt="" className="w-12 h-12 object-cover rounded-[8px] border border-line" /> : <div className="w-12 h-12 bg-cream rounded-[8px] border border-line flex items-center justify-center">{ref.type === "video" ? <Video size={16} className="text-ai" /> : <Camera size={16} className="text-ai" />}</div>}
-                  <span className="text-[12px] text-ink-soft truncate max-w-[180px]">{ref.name}</span>
+              {refs.length > 0 ? (
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mt-2">
+                  {refs.map((file, idx) => (
+                    <div key={idx} className="relative group">
+                      {file.type === "video" ? (
+                        <div className="aspect-square bg-cream rounded-[8px] border border-line flex items-center justify-center">
+                          <Video size={24} className="text-ai" />
+                        </div>
+                      ) : (
+                        <img src={file.url} alt="" className="aspect-square object-cover rounded-[8px] border border-line" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); setRefs((prev) => prev.filter((_, i) => i !== idx)); }}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-cream rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
+                        aria-label="Удалить файл"
+                      >
+                        <X size={12} />
+                      </button>
+                      <p className="text-[9px] text-ink-soft mt-1 truncate" title={file.name}>{file.name.slice(0, 15)}{file.name.length > 15 ? '...' : ''}</p>
+                    </div>
+                  ))}
                 </div>
               ) : editPhoto ? (
                 <span className="flex items-center gap-2"><img src={editPhoto} alt="" className="w-10 h-10 object-cover rounded-[8px]" /> Фото черновика прикреплено</span>
-              ) : "Прикрепить фото или видео-референс"}
+              ) : "Прикрепить фото и видео (до 10 фото + 1 видео)"}
             </span>
-            <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              setRef({ name: f.name, type: f.type.startsWith("video") ? "video" : "image" });
-              if (f.type.startsWith("image/")) { const r = new FileReader(); r.onload = () => setRefPreview(String(r.result)); r.readAsDataURL(f); }
+            <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              const videoCount = refs.filter(r => r.type === "video").length;
+              const imageCount = refs.filter(r => r.type === "image").length;
+              
+              files.forEach((f) => {
+                const isVideo = f.type.startsWith("video/");
+                if (isVideo && videoCount >= 1) {
+                  setFErr("Можно загрузить только одно видео");
+                  return;
+                }
+                if (!isVideo && imageCount >= 10) {
+                  setFErr("Можно загрузить не более 10 фото");
+                  return;
+                }
+                const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+                if (f.size > maxSize) {
+                  setFErr('Файл "' + f.name + '" слишком большой (макс ' + (isVideo ? '50' : '10') + 'MB)');
+                  return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = () => {
+                  setRefs((prev) => [...prev, {
+                    name: f.name,
+                    type: isVideo ? "video" : "image",
+                    url: reader.result as string,
+                    file: f
+                  }]);
+                  setFErr("");
+                };
+                reader.readAsDataURL(f);
+              });
             }} />
-            {ref && <button onClick={(e) => { e.preventDefault(); setRef(null); setRefPreview(null); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
+            {refs.length > 0 && <button onClick={(e) => { e.preventDefault(); setRefs([]); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
           </label>
         </div>
         {fErr && <p className="text-[12.5px] font-semibold text-error mt-3">{fErr}</p>}
