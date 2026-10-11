@@ -195,6 +195,7 @@ export function MarketPage() {
   const [fTitle, setFTitle] = useState("");
   const [fDesc, setFDesc] = useState("");
   const [ref, setRef] = useState<{ name: string; type: "image" | "video" } | null>(null);
+  const [refPreview, setRefPreview] = useState<string | null>(null);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
   
@@ -204,21 +205,18 @@ export function MarketPage() {
   const overLimit = myActive >= lim.marketOrders;
 
   const TYPES = [
-  "Мебель и интерьер",
-  "Декор и аксессуары",
-  "Освещение",
-  "Текстиль и одежда",
-  "3D-печать и прототипирование",
-  "Ковка и металл",
-  "Керамика и стекло",
-  "Кожа и дерево",
-  "Ювелирные изделия",
-  "Строительство и ремонт",
-  "Садоводство и благоустройство",
-  "Искусство и живопись",
-  "Полиграфия и печать",
-  "Электроника и гаджеты",
-  "Другое"
+  "Мебель и интерьер", "Декор и аксессуары", "Освещение", "Текстиль и одежда", 
+  "3D-печать и прототипирование", "Ковка и металл", "Керамика и стекло", "Кожа и дерево", 
+  "Ювелирные изделия", "Строительство и ремонт", "Садоводство и благоустройство", 
+  "Искусство и живопись", "Полиграфия и печать", "Электроника и гаджеты", "Другое",
+  "Столярные изделия", "Резьба по дереву", "Художественная ковка", "Лазерная резка", 
+  "Гравировка", "Вышивка и шитье", "Вязание", "Лоскутное шитье", "Изделия из кожи", 
+  "Плетение из лозы", "Макраме", "Бисероплетение", "Скрапбукинг", "Декупаж", 
+  "Мыловарение", "Свечеварение", "Гончарное дело", "Флористика", "Фитодизайн", 
+  "Аэрография", "Роспись по ткани", "Витражи", "Мозаика", "Лепка", "Скульптура", 
+  "Реставрация", "Пошив штор", "Дизайн интерьера", "Архитектурное моделирование", 
+  "Сувенирная продукция", "Упаковка и брендирование", "Изготовление штампов", 
+  "Переплетное дело", "Ремонт обуви", "Ремонт одежды", "Кастомизация одежды"
 ];
   const visible = orders
     .filter((o) => o.status === "published" || o.myOwn)
@@ -324,9 +322,10 @@ export function MarketPage() {
             <input className="field" value={fTitle} onChange={(e) => setFTitle(e.target.value)} placeholder="Например: Дубовый стол на кухню" />
           </Field>
           <Field label="Тип изделия" required>
-            <select className="field" value={fType} onChange={(e) => setFType(e.target.value)}>
-              {TYPES.map((t) => <option key={t}>{t}</option>)}
-            </select>
+            <input list="types-datalist" value={fType} onChange={(e) => setFType(e.target.value)} placeholder="Начните вводить или выберите..." className="w-full h-[44px] px-4 rounded-[10px] border border-line bg-cream/50 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all" />
+            <datalist id="types-datalist">
+              {TYPES.map(t => <option key={t} value={t} />)}
+            </datalist>
           </Field>
           <Field label="Материал">
             <input className="field" value={fMaterial} onChange={(e) => setFMaterial(e.target.value)} placeholder="Дуб, ротанг, лён…" />
@@ -340,11 +339,8 @@ export function MarketPage() {
               {["2–3 недели", "1–2 месяца", "2–3 месяца", "Не срочно"].map((t) => <option key={t}>{t}</option>)}
             </select>
           </Field>
-          <Field label="Регион доставки">
-            <select className="field" value={fRegion} onChange={(e) => setFRegion(e.target.value)}>
-              {!DISTRICTS.some((d) => d.id === fRegion) && <option value={fRegion}>{fRegion}</option>}
-              {DISTRICTS.map((d) => <option key={d.id} value={d.id}>{d.name} округ</option>)}
-            </select>
+          <Field label="Регион доставки / Адрес">
+            <input type="text" value={fRegion} onChange={(e) => setFRegion(e.target.value)} placeholder="Например: Москва, ул. Ленина 10" className="w-full h-[44px] px-4 rounded-[10px] border border-line bg-cream/50 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all" />
           </Field>
         </div>
         <div className="mt-4">
@@ -368,7 +364,7 @@ export function MarketPage() {
               setRef({ name: f.name, type: f.type.startsWith("video") ? "video" : "image" });
               if (f.type.startsWith("image")) { const r = new FileReader(); r.onload = () => setEditPhoto(String(r.result)); r.readAsDataURL(f); }
             }} />
-            {ref && <button onClick={(e) => { e.preventDefault(); setRef(null); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
+            {ref && <button onClick={(e) => { e.preventDefault(); setRef(null); setRefPreview(null); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
           </label>
         </div>
         {fErr && <p className="text-[12.5px] font-semibold text-error mt-3">{fErr}</p>}
