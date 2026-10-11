@@ -27,6 +27,7 @@ interface NotifyState {
   markAll: () => void;
   remove: (id: string) => void;
   resolve: (id: string, v: "accepted" | "declined") => void;
+  mergeServerNotifications: (notifs: Array<{ id: string; kind: NotifyKind; title: string; text: string; createdAt: number; read: boolean; deepLink?: string }>) => void;
 }
 
 export const useNotifyStore = create<NotifyState>()(
@@ -49,6 +50,12 @@ export const useNotifyStore = create<NotifyState>()(
             return { ...i, resolved: v, read: true };
           }),
         })),
+      mergeServerNotifications: (notifs) => set((s) => {
+        const existingIds = new Set(s.items.map((i) => i.id));
+        const newItems = notifs.filter((n) => !existingIds.has(n.id));
+        if (newItems.length === 0) return s;
+        return { items: [...newItems, ...s.items].slice(0, 100) };
+      }),
     }),
     { name: "quantiform-notify" }
   )

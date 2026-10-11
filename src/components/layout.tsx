@@ -17,6 +17,12 @@ function NotifyBell() {
   const items = useNotifyStore((s) => s.items);
   const nav = useNavigate();
   const markRead = useNotifyStore((s) => s.markRead);
+  
+  // Обертка для синхронизации прочтения с сервером
+  const handleMarkRead = (id: string) => {
+    markRead(id);
+    fetch(`http://localhost:8787/api/notifications/${id}/read`, { method: 'PUT' }).catch(console.error);
+  };
   const markAll = useNotifyStore((s) => s.markAll);
   const remove = useNotifyStore((s) => s.remove);
   const resolve = useNotifyStore((s) => s.resolve);
@@ -24,9 +30,33 @@ function NotifyBell() {
   const unread = items.filter((i) => !i.read).length;
   useEffect(() => {
     if (open) {
+      // 1. Очистка старых прочитанных (существующая логика)
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const toClean = items.filter((i) => i.read && i.createdAt < sevenDaysAgo);
       toClean.forEach((i) => remove(i.id));
+
+      // 2. Синхронизация с API уведомлений биржи (Этап 9)
+      fetch('http://localhost:8787/api/notifications')
+        .then(res => res.json())
+        .then(data => {
+          if (data.ok && data.notifications) {
+            const store = useNotifyStore.getState();
+            const mapped = data.notifications.map((n: any) => {
+              const kind: any = n.type === 'message' ? 'question' : (n.type === 'accepted' ? 'confirm' : 'alert');
+              return {
+                id: n.id,
+                kind,
+                title: n.title,
+                text: n.text,
+                deepLink: n.link,
+                createdAt: new Date(n.created_at).getTime(),
+                read: n.read
+              };
+            });
+            store.mergeServerNotifications(mapped);
+          }
+        })
+        .catch(err => console.error("Ошибка загрузки уведомлений биржи", err));
     }
   }, [open]);
 
@@ -78,7 +108,7 @@ function NotifyBell() {
             <div key={g.label}>
               <p className="text-[10.5px] font-bold text-ink-mute uppercase tracking-wide px-2 pt-1 pb-1.5">{g.label}</p>
               {g.list.map((i) => (
-                <div key={i.id} onClick={() => { markRead(i.id); if ((i as any).deepLink) nav((i as any).deepLink); }} className={`group rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"} ${(i as any).deepLink ? "hover:ring-2 hover:ring-accent/30" : ""}`}>
+                <div key={i.id} onClick={() => { handleMarkRead(i.id); if ((i as any).deepLink) nav((i as any).deepLink); }} className={`group rounded-xl p-3 mb-2 cursor-pointer ${i.read ? "bg-cream/60" : "bg-accent-soft/60"} ${(i as any).deepLink ? "hover:ring-2 hover:ring-accent/30" : ""}`}>
                   <div className="flex items-start gap-2.5">
                     <span className="mt-0.5">{kindIcon(i.kind)}</span>
                     <div className="flex-1 min-w-0">
