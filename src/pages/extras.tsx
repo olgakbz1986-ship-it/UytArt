@@ -353,7 +353,10 @@ export function MarketPage() {
             <Upload size={16} className="text-ink-mute" />
             <span className="text-[13px] font-semibold text-ink-soft">
               {ref ? (
-                <span className="flex items-center gap-1.5">{ref.type === "video" ? <Video size={13} className="text-ai" /> : <Camera size={13} className="text-ai" />} {ref.name}</span>
+                <div className="flex items-center gap-2">
+                  {refPreview ? <img src={refPreview} alt="" className="w-12 h-12 object-cover rounded-[8px] border border-line" /> : <div className="w-12 h-12 bg-cream rounded-[8px] border border-line flex items-center justify-center">{ref.type === "video" ? <Video size={16} className="text-ai" /> : <Camera size={16} className="text-ai" />}</div>}
+                  <span className="text-[12px] text-ink-soft truncate max-w-[180px]">{ref.name}</span>
+                </div>
               ) : editPhoto ? (
                 <span className="flex items-center gap-2"><img src={editPhoto} alt="" className="w-10 h-10 object-cover rounded-[8px]" /> Фото черновика прикреплено</span>
               ) : "Прикрепить фото или видео-референс"}
