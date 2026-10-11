@@ -365,7 +365,7 @@ export function MarketPage() {
               const f = e.target.files?.[0];
               if (!f) return;
               setRef({ name: f.name, type: f.type.startsWith("video") ? "video" : "image" });
-              if (f.type.startsWith("image")) { const r = new FileReader(); r.onload = () => setEditPhoto(String(r.result)); r.readAsDataURL(f); }
+              if (f.type.startsWith("image/")) { const r = new FileReader(); r.onload = () => setRefPreview(String(r.result)); r.readAsDataURL(f); }
             }} />
             {ref && <button onClick={(e) => { e.preventDefault(); setRef(null); setRefPreview(null); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
           </label>
