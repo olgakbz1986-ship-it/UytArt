@@ -348,72 +348,93 @@ export function MarketPage() {
           </Field>
         </div>
         <div className="mt-4">
-          <label className="flex items-center gap-3 border-2 border-dashed border-line rounded-[10px] px-4 py-3 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors">
-            <Upload size={16} className="text-ink-mute" />
+          {/* Зона превью загруженных файлов */}
+          {refs.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[12px] font-semibold text-ink-mute mb-2">Прикрепленные файлы:</p>
+              <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+                {refs.map((file, idx) => (
+                  <div key={idx} className="relative group">
+                    {file.type === "video" ? (
+                      <div className="aspect-square bg-cream rounded-[8px] border border-line flex items-center justify-center">
+                        <Video size={24} className="text-ai" />
+                      </div>
+                    ) : (
+                      <img src={file.url} alt="" className="aspect-square object-cover rounded-[8px] border border-line" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setRefs((prev) => prev.filter((_, i) => i !== idx)); }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-cream rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
+                      aria-label="Удалить файл"
+                    >
+                      <X size={12} />
+                    </button>
+                    <p className="text-[9px] text-ink-soft mt-1 truncate" title={file.name}>{file.name.slice(0, 12)}{file.name.length > 12 ? '...' : ''}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Кнопка загрузки */}
+          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-line rounded-[10px] px-4 py-4 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors w-full">
+            <Upload size={18} className="text-ink-mute" />
             <span className="text-[13px] font-semibold text-ink-soft">
-              {refs.length > 0 ? (
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mt-2">
-                  {refs.map((file, idx) => (
-                    <div key={idx} className="relative group">
-                      {file.type === "video" ? (
-                        <div className="aspect-square bg-cream rounded-[8px] border border-line flex items-center justify-center">
-                          <Video size={24} className="text-ai" />
-                        </div>
-                      ) : (
-                        <img src={file.url} alt="" className="aspect-square object-cover rounded-[8px] border border-line" />
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); setRefs((prev) => prev.filter((_, i) => i !== idx)); }}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-cream rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
-                        aria-label="Удалить файл"
-                      >
-                        <X size={12} />
-                      </button>
-                      <p className="text-[9px] text-ink-soft mt-1 truncate" title={file.name}>{file.name.slice(0, 15)}{file.name.length > 15 ? '...' : ''}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : editPhoto ? (
-                <span className="flex items-center gap-2"><img src={editPhoto} alt="" className="w-10 h-10 object-cover rounded-[8px]" /> Фото черновика прикреплено</span>
-              ) : "Прикрепить фото и видео (до 10 фото + 1 видео)"}
+              {editPhoto ? "Фото черновика прикреплено" : (refs.length > 0 ? "Добавить еще фото или видео" : "Прикрепить фото и видео (до 10 фото + 1 видео)")}
             </span>
-            <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              const videoCount = refs.filter(r => r.type === "video").length;
-              const imageCount = refs.filter(r => r.type === "image").length;
-              
-              files.forEach((f) => {
-                const isVideo = f.type.startsWith("video/");
-                if (isVideo && videoCount >= 1) {
-                  setFErr("Можно загрузить только одно видео");
-                  return;
-                }
-                if (!isVideo && imageCount >= 10) {
-                  setFErr("Можно загрузить не более 10 фото");
-                  return;
-                }
-                const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-                if (f.size > maxSize) {
-                  setFErr('Файл "' + f.name + '" слишком большой (макс ' + (isVideo ? '50' : '10') + 'MB)');
-                  return;
-                }
+            <input 
+              type="file" 
+              accept="image/*,video/*" 
+              multiple 
+              className="hidden" 
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                const videoCount = refs.filter(r => r.type === "video").length;
+                const imageCount = refs.filter(r => r.type === "image").length;
                 
-                const reader = new FileReader();
-                reader.onload = () => {
-                  setRefs((prev) => [...prev, {
-                    name: f.name,
-                    type: isVideo ? "video" : "image",
-                    url: reader.result as string,
-                    file: f
-                  }]);
-                  setFErr("");
-                };
-                reader.readAsDataURL(f);
-              });
-            }} />
-            {refs.length > 0 && <button onClick={(e) => { e.preventDefault(); setRefs([]); }} className="ml-auto text-ink-mute hover:text-error cursor-pointer" aria-label="Убрать референс"><X size={14} /></button>}
+                files.forEach((f) => {
+                  const isVideo = f.type.startsWith("video/");
+                  if (isVideo && videoCount >= 1) {
+                    setFErr("Можно загрузить только одно видео");
+                    return;
+                  }
+                  if (!isVideo && imageCount >= 10) {
+                    setFErr("Можно загрузить не более 10 фото");
+                    return;
+                  }
+                  const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+                  if (f.size > maxSize) {
+                    setFErr('Файл "' + f.name + '" слишком большой (макс ' + (isVideo ? '50' : '10') + 'MB)');
+                    return;
+                  }
+                  
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    setRefs((prev) => [...prev, {
+                      name: f.name,
+                      type: isVideo ? "video" : "image",
+                      url: reader.result as string,
+                      file: f
+                    }]);
+                    setFErr("");
+                  };
+                  reader.readAsDataURL(f);
+                });
+                e.target.value = "";
+              }} 
+            />
           </label>
+          
+          {refs.length > 0 && (
+            <button 
+              type="button"
+              onClick={(e) => { e.preventDefault(); setRefs([]); }} 
+              className="mt-2 text-[12px] font-semibold text-error hover:text-error-deep cursor-pointer flex items-center gap-1"
+            >
+              <X size={12} /> Очистить все файлы
+            </button>
+          )}
         </div>
         {fErr && <p className="text-[12.5px] font-semibold text-error mt-3">{fErr}</p>}
         {editOrderId ? (
