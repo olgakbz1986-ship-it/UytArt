@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, CheckCircle2, Clock, MessageSquare, Send, Paperclip } from "lucide-react";
+import { X, CheckCircle2, Clock, MessageSquare, Send, Paperclip, Star } from "lucide-react";
 import { MarketOrder } from "../pages/extras";
 
 interface MarketOrderDetailProps {
@@ -13,6 +13,12 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  // Состояния для отзыва
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [masterRatings, setMasterRatings] = useState<Record<string, any>>({});
 
   // Загрузка данных при открытии
   useEffect(() => {
@@ -88,6 +94,61 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const submitReview = async () => {
+    if (!reviewText.trim()) {
+      alert("Пожалуйста, напишите текст отзыва");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const res = await fetch(`http://localhost:8787/api/market/orders/${order.id}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reviewer_id: "dev-user-1",
+          reviewee_id: "dev-master-1", // В реальности берем из принятого отклика
+          rating: reviewRating,
+          text: reviewText.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert("Спасибо за ваш отзыв!");
+        // Обновляем локальный статус заказа, чтобы скрыть форму
+        (order as any).reviewed = true;
+        setReviewText("");
+        setReviewRating(5);
+      }
+    } catch (e) {
+      console.error("Ошибка отправки отзыва", e);
+      alert("Не удалось отправить отзыв");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  // Загрузка рейтинга мастера при загрузке откликов
+  useEffect(() => {
+    const fetchRatings = async () => {
+      const ratingsMap: Record<string, any> = {};
+      for (const m of milestones) {
+        // Заглушка: в реальности берем master_id из принятого отклика
+        const masterId = "dev-master-1"; 
+        if (!ratingsMap[masterId]) {
+          try {
+            const res = await fetch(`http://localhost:8787/api/market/users/${masterId}/reviews`);
+            const data = await res.json();
+            if (data.ok) ratingsMap[masterId] = data;
+          } catch (e) {
+            console.error("Ошибка загрузки рейтинга", e);
+          }
+        }
+      }
+      setMasterRatings(ratingsMap);
+    };
+    if (milestones.length > 0) fetchRatings();
+  }, [milestones]);
+
   const completedCount = milestones.filter(m => m.status === 'completed').length;
   const progress = milestones.length > 0 ? (completedCount / milestones.length) * 100 : 0;
 
@@ -99,6 +160,13 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
           <div>
             <h2 className="font-display font-bold text-[20px] text-ink">{order.title}</h2>
             <p className="text-[13px] text-ink-mute mt-1">{order.type} · {order.region} · {order.budget.toLocaleString('ru-RU')} ₽</p>
+            {masterRatings["dev-master-1"] && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <Star size={14} className="text-accent-deep" fill="#d98e32" color="#d98e32" />
+                <span className="text-[13px] font-bold text-ink">{masterRatings["dev-master-1"].avgRating.toFixed(1)}</span>
+                <span className="text-[12px] text-ink-soft">({masterRatings["dev-master-1"].count} отзывов)</span>
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-line-soft transition-colors cursor-pointer">
             <X size={20} className="text-ink-soft" />
@@ -216,6 +284,67 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
             </form>
           </div>
         </div>
+
+        {/* Секция отзыва (только для завершенных заказов) */}
+        {order.status === 'completed' && (
+          <div className="border-t border-line-soft p-6 bg-cream/30">
+            <h3 className="font-bold text-[16px] text-ink mb-4 flex items-center gap-2">
+              <Star size={18} className="text-accent-deep" /> 
+              {(order as any).reviewed ? "Ваш отзыв" : "Оставить отзыв о работе мастера"}
+            </h3>
+            
+            {(order as any).reviewed ? (
+              <div className="bg-success-soft/50 border border-success/30 rounded-xl p-4 text-center">
+                <p className="text-[14px] font-bold text-success">✓ Спасибо! Вы уже оставили отзыв на этот заказ.</p>
+                <p className="text-[12px] text-ink-soft mt-1">Он поможет другим пользователям сделать правильный выбор.</p>
+              </div>
+            ) : (
+              <div className="max-w-2xl">
+                <div className="mb-4">
+                  <label className="text-[13px] font-bold text-ink mb-2 block">Ваша оценка</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewRating(star)}
+                        className="transition-transform hover:scale-110 cursor-pointer"
+                      >
+                        <Star 
+                          size={32} 
+                          fill={star <= reviewRating ? "#d98e32" : "none"} 
+                          color={star <= reviewRating ? "#d98e32" : "#d9d4c7"} 
+                        />
+                      </button>
+                    ))}
+                    <span className="ml-3 text-[14px] font-bold text-ink-soft self-center">
+                      {reviewRating === 5 ? "Отлично!" : reviewRating === 4 ? "Хорошо" : reviewRating === 3 ? "Нормально" : "Плохо"}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <label className="text-[13px] font-bold text-ink mb-2 block">Комментарий</label>
+                  <textarea
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                    placeholder="Расскажите, что вам понравилось или что можно улучшить..."
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-line-soft bg-surface text-[13px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all resize-none"
+                  />
+                </div>
+
+                <button
+                  onClick={submitReview}
+                  disabled={submittingReview || !reviewText.trim()}
+                  className="h-[44px] px-6 rounded-xl bg-accent text-ink font-bold text-[14px] hover:bg-accent-deep hover:text-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  {submittingReview ? "Отправка..." : "Отправить отзыв"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
