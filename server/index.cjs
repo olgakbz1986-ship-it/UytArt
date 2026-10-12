@@ -706,6 +706,73 @@ function createNotification(userId, type, title, text, link) {
 // API ЭТАПА 10: ОТЗЫВЫ И РЕЙТИНГИ ДЛЯ БИРЖИ
 // (Изолировано от отзывов магазина useReviewStore)
 // ==========================================
+// ==========================================
+// API МАСТЕРОВ И ТОВАРОВ (Phase 3)
+// ==========================================
+function devDbRead() {
+  const FILE = require("path").resolve(__dirname, "dev-db.json");
+  const fs = require("fs");
+  return { FILE, fs, d: fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [], masters: [], products: [] } };
+}
+
+app.get("/api/masters", (_q, r) => {
+  try { const { d } = devDbRead(); r.json({ ok: true, masters: d.masters || [] }); }
+  catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+app.post("/api/masters", (req, r) => {
+  try {
+    const m = req.body || {};
+    console.log("[MASTERS POST] received:", m.id, m.name);
+    if (!m.id) return r.status(400).json({ error: "no_id" });
+    const { FILE, fs, d } = devDbRead();
+    console.log("[MASTERS POST] FILE:", FILE, "masters count:", (d.masters||[]).length);
+    if (!d.masters) d.masters = [];
+    const idx = d.masters.findIndex((x) => x.id === m.id);
+    if (idx >= 0) {
+      d.masters[idx] = Object.assign({}, d.masters[idx], m, { updated_at: new Date().toISOString() });
+      console.log("[MASTERS POST] updated existing master at index", idx);
+    } else {
+      d.masters.push(Object.assign({}, m, { created_at: new Date().toISOString() }));
+      console.log("[MASTERS POST] added new master");
+    }
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    console.log("[MASTERS POST] saved, total masters:", d.masters.length);
+    r.json({ ok: true });
+  } catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+app.get("/api/products", (_q, r) => {
+  try { const { d } = devDbRead(); r.json({ ok: true, products: d.products || [] }); }
+  catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+app.post("/api/products", (req, r) => {
+  try {
+    const p = req.body || {};
+    if (!p.id) return r.status(400).json({ error: "no_id" });
+    const { FILE, fs, d } = devDbRead();
+    if (!d.products) d.products = [];
+    const idx = d.products.findIndex((x) => x.id === p.id);
+    if (idx >= 0) d.products[idx] = Object.assign({}, d.products[idx], p, { updated_at: new Date().toISOString() });
+    else d.products.push(Object.assign({}, p, { created_at: new Date().toISOString() }));
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    r.json({ ok: true });
+  } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+app.delete("/api/products/:id", (req, r) => {
+  try {
+    const { FILE, fs, d } = devDbRead();
+    const arr = d.products || [];
+    const idx = arr.findIndex((x) => x.id === req.params.id);
+    if (idx === -1) return r.status(404).json({ error: "not_found" });
+    arr.splice(idx, 1); d.products = arr;
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    r.json({ ok: true });
+  } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
 app.post("/api/market/orders/:id/reviews", async (req, res) => {
   try {
     const { id } = req.params;

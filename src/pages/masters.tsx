@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MapPin, ShieldCheck, Flag, Store, MessageSquare } from "lucide-react";
 import { fmt, vendorById } from "../data/seed";
@@ -33,7 +33,7 @@ const regionByCity = (city: string): string => {
   return "";
 };
 
-const buildRealMaster = (reg: any): any => {
+const buildRealMaster = (reg: any, userId?: string): any => {
   if (!reg || reg.status !== "active" || !reg.shopName || !reg.isMaster) return null;
   const lm = LEGAL_META[reg.legalType] || LEGAL_META.self_employed;
   const goods = marketProducts().filter((x) => x.id.startsWith("sp-"));
@@ -42,8 +42,8 @@ const buildRealMaster = (reg: any): any => {
   const rating = revs.length ? Math.round((revs.reduce((a: number, r: any) => a + r.rating, 0) / revs.length) * 10) / 10 : 0;
   const sales = useSellerAccount.getState().transactions.filter((t: any) => t.kind === "sale").length;
   return {
-    id: "self",
-    slug: "self",
+    id: userId || "self",
+    slug: userId || "self",
     name: reg.shopName,
     city: reg.city || "",
     region: regionByCity(reg.city),
@@ -64,19 +64,45 @@ const buildRealMaster = (reg: any): any => {
 
 export function MastersPage() {
   const reg = useSellerReg();
+  const session = useAppStore((s) => s.session);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("all");
+  const [serverMasters, setServerMasters] = useState<any[]>([]);
 
-  const list = useMemo(
-    () =>
-[buildRealMaster(useSellerReg.getState())].filter(Boolean).filter((v: any) => {
-        const okQ = !q.trim() || (v.name + " " + v.city + " " + v.story).toLowerCase().includes(q.toLowerCase());
-        const okR = region === "all" || v.region === region;
-        return okQ && okR;
-      }),
-    [q, region]
-  );
-  const totalMasters = useMemo(() => [buildRealMaster(useSellerReg.getState())].filter(Boolean).length, []);
+  // Загрузка мастеров с сервера при монтировании
+  useEffect(() => {
+    const syncMaster = () => {
+      const state = useSellerReg.getState();
+      if (state.status === "active" && state.shopName && state.isMaster) {
+        const master = buildRealMaster(state, session?.userId);
+        fetch('/api/masters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(master)
+        }).catch(() => {});
+      }
+    };
+    
+    syncMaster();
+    const unsub = useSellerReg.subscribe(syncMaster);
+    return unsub;
+  }, [session?.userId]);
+
+  const localMaster = buildRealMaster(useSellerReg.getState(), session?.userId);
+  
+  const list = useMemo(() => {
+    // Объединяем серверных мастеров с локальным (локальный перекрывает по id)
+    const merged = new Map<string, any>();
+    serverMasters.forEach((m) => merged.set(m.id, m));
+    if (localMaster) merged.set(localMaster.id, localMaster);
+    
+    return Array.from(merged.values()).filter((v: any) => {
+      const okQ = !q.trim() || (v.name + " " + v.city + " " + v.story).toLowerCase().includes(q.toLowerCase());
+      const okR = region === "all" || v.region === region;
+      return okQ && okR;
+    });
+  }, [q, region, serverMasters, localMaster]);
+  const totalMasters = useMemo(() => list.length, [list]);
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-10">
