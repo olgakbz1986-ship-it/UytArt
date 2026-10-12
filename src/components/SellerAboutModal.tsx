@@ -4,7 +4,15 @@ import { X, Play, MapPin, ShieldCheck, Copy, Check, Building2, Sparkles } from "
 import { useSellerReg } from "../lib/seller";
 import { useSellerAccount } from "../lib/seller";
 
-export function SellerAboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export interface SellerData {
+  shopName?: string;
+  sellerCity?: string;
+  inn?: string;
+  legalType?: string;
+  avatar?: string;
+}
+
+export function SellerAboutModal({ open, onClose, sellerData }: { open: boolean; onClose: () => void; sellerData?: SellerData }) {
   const reg = useSellerReg();
   const [copied, setCopied] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -17,9 +25,9 @@ export function SellerAboutModal({ open, onClose }: { open: boolean; onClose: ()
 
   if (!open || typeof document === "undefined") return null;
 
-  const displayName = reg.shopName || reg.masterName || "Продавец";
+  const displayName = sellerData?.shopName || reg.shopName || reg.masterName || "Продавец";
   const typeLabel = reg.isMaster ? "Мастер" : (reg.legalName ? "Бизнес" : "Производство");
-  const avatar = reg.shopLogo || reg.masterAvatar;
+  const avatar = sellerData?.avatar || reg.shopLogo || reg.masterAvatar;
   const gallery = (reg.productionGallery || []).filter(Boolean);
   const allProducts = useSellerAccount.getState().products;
   const stats = {
@@ -145,9 +153,9 @@ export function SellerAboutModal({ open, onClose }: { open: boolean; onClose: ()
               <div className="flex items-center justify-between gap-2">
                 <span className="text-ink-mute min-w-[100px]">ИНН</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-ink font-semibold">{reg.inn || "—"}</span>
-                  {reg.inn && (
-                    <button type="button" onClick={() => copy("inn", reg.inn)}
+                  <span className="text-ink font-semibold">{sellerData?.inn || reg.inn || "—"}</span>
+                  {(sellerData?.inn || reg.inn) && (
+                    <button type="button" onClick={() => copy("inn", sellerData?.inn || reg.inn)}
                       className="w-6 h-6 rounded-md hover:bg-line flex items-center justify-center text-ink-mute hover:text-ink cursor-pointer">
                       {copied === "inn" ? <Check size={12} className="text-success" /> : <Copy size={12} />}
                     </button>

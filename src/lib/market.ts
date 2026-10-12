@@ -36,6 +36,11 @@ export function sellerMarketProducts(): Product[] {
       description: p.description || "",
       createdAt: p.createdAt,
       isNew: true,
+      shopName: p.shopName,
+      sellerCity: p.sellerCity,
+      legalType: p.legalType,
+      inn: p.inn,
+      avatar: p.avatar,
     } as unknown as Product;
   });
 }
@@ -49,6 +54,8 @@ export function marketProducts(buyerCity?: string): Product[] {
   return all.filter((p) => {
     if (!p.id.startsWith("sp-")) return true;
     const item = useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
-    return isZoneMatch(item?.deliveryZone, item?.sellerCity || "", city);
+    // Если зоны доставки нет или она "по всей России", показываем всем
+    if (!item?.deliveryZone || item.deliveryZone.mode === "nationwide") return true;
+    return isZoneMatch(item.deliveryZone, item.sellerCity || "", city);
   });
 }

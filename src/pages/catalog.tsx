@@ -53,6 +53,23 @@ export function CatalogPage() {
   const [showOther, setShowOther] = useState(true);
   const [quality, setQuality] = useState(false);
 
+  // Загрузка серверных товаров при монтировании каталога
+  useEffect(() => {
+    fetch('/api/products')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && Array.isArray(d.products)) {
+          const acc = useSellerAccount.getState();
+          d.products.forEach((p: any) => {
+            if (!acc.products.find((x: any) => x.id === p.id)) {
+              acc.addProduct(p);
+            }
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const accountId = useAppStore((s) => s.session?.userId || "guest");
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(accountId));
   const lim = buyerLimits(buyerPlan);
@@ -380,27 +397,29 @@ export function ProductPage() {
           {/* продавец — обязателен по ст. 12 ЗоЗПП */}
           <div className="mt-7 bg-surface rounded-2xl shadow-card p-5">
             <div className="flex items-center gap-3.5">
-              {sellerItem ? (
+              {(p as any).avatar ? (
+                <img src={(p as any).avatar} className="w-12 h-12 rounded-[14px] object-cover" />
+              ) : sellerItem ? (
                 session?.avatar ? (
                   <img src={session.avatar} className="w-12 h-12 rounded-[14px] object-cover" />
                 ) : (
-                  <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: "var(--color-dark)" }}>{(sellerReg.shopName[0] || "М").toUpperCase()}</span>
+                  <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: "var(--color-dark)" }}>{((p as any).shopName?.[0] || "М").toUpperCase()}</span>
                 )
               ) : (
                 <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: vendor?.avatarColor }}>{vendor?.emoji}</span>
               )}
               <div className="flex-1 min-w-0">
-                {sellerItem ? (
-                  <span className="font-bold text-[15px] text-ink">{sellerReg.shopName || "Мастерская"}</span>
+                {(p as any).shopName ? (
+                  <span className="font-bold text-[15px] text-ink">{(p as any).shopName}</span>
                 ) : (
-                  <Link to={`/shop/${vendor?.slug}`} className="font-bold text-[15px] text-ink hover:text-accent-deep transition-colors">{vendor?.name}</Link>
+                  <Link to={`/shop/${vendor?.slug}`} className="font-bold text-[15px] text-ink hover:text-accent-deep transition-colors">{vendor?.name || "Мастерская"}</Link>
                 )}
                 <p className="text-[12px] text-ink-mute flex items-center gap-1.5 mt-0.5">
-                  <MapPin size={12} /> {sellerItem ? (sellerReg.city || sellerItem.sellerCity || "Россия") : vendor?.city} · <Rating value={sellerItem ? 0 : (vendor?.rating || 0)} size={10} />
+                  <MapPin size={12} /> {(p as any).sellerCity || vendor?.city || "Россия"} · <Rating value={(p as any).shopName ? 0 : (vendor?.rating || 0)} size={10} />
                 </p>
               </div>
-              {sellerItem
-                ? <Badge tone="success"><ShieldCheck size={12} /> Продавец сервиса</Badge>
+              {(p as any).shopName
+                ? <Badge tone="success"><ShieldCheck size={12} /> Проверенный продавец</Badge>
                 : (vendor?.verified ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge> : <Badge tone="honey">На проверке</Badge>)}
             </div>
             <button type="button" onClick={() => setSellerAboutOpen(true)}
@@ -447,7 +466,7 @@ export function ProductPage() {
           {tab === "delivery" && (
             <div className="space-y-3 text-[14px] text-ink-soft leading-relaxed">
               <p className="flex gap-2.5"><ShieldCheck size={17} className="text-success shrink-0 mt-0.5" /> <span><strong className="text-ink">Безопасная сделка:</strong> деньги резервируются на транзитном счёте и уходят мастеру только после отправки.</span></p>
-              <p className="flex gap-2.5"><MapPin size={17} className="text-ai shrink-0 mt-0.5" /> <span>{sellerItem?.deliveryZone && sellerItem.deliveryZone.mode !== "nationwide" ? <>Зона доставки продавца: <strong className="text-ink">{zoneLabel(sellerItem.deliveryZone, sellerItem.sellerCity || "")}</strong>. За пределы зоны товар не отправляется.</> : <>СДЭК, Boxberry и Почта России — 2–7 дней по России. Отправка из г. {sellerItem?.sellerCity || vendor?.city}.</>}</span></p>
+              <p className="flex gap-2.5"><MapPin size={17} className="text-ai shrink-0 mt-0.5" /> <span>{sellerItem?.deliveryZone && sellerItem.deliveryZone.mode !== "nationwide" ? <>Зона доставки продавца: <strong className="text-ink">{zoneLabel(sellerItem.deliveryZone, sellerItem.sellerCity || "")}</strong>. За пределы зоны товар не отправляется.</> : <>СДЭК, Boxberry и Почта России — 2–7 дней по России. Отправка из г. {(p as any).sellerCity || vendor?.city}.</>}</span></p>
               <p className="flex gap-2.5"><Ban size={17} className="text-error shrink-0 mt-0.5" /> <span>{custom ? "Товар изготавливается по индивидуальным параметрам и возврату не подлежит (абз. 4 п. 4 ст. 26.1 ЗоЗПП)." : "Возврат в течение 7 дней с момента получения (ст. 26.1 ЗоЗПП)."}</span></p>
             </div>
           )}
@@ -464,7 +483,7 @@ export function ProductPage() {
       )}
 
       <ChatModal open={chatOpen} onClose={() => setChatOpen(false)} kind="product" product={p} />
-      <SellerAboutModal open={sellerAboutOpen} onClose={() => setSellerAboutOpen(false)} />
+      <SellerAboutModal open={sellerAboutOpen} onClose={() => setSellerAboutOpen(false)} sellerData={{ shopName: (p as any)?.shopName, sellerCity: (p as any)?.sellerCity, inn: (p as any)?.inn, legalType: (p as any)?.legalType, avatar: (p as any)?.avatar }} />
     </div>
   );
 }

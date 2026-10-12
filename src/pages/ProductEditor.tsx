@@ -489,6 +489,7 @@ export function ProductEditorPage() {
     setTimeout(() => {
       // Единый id: URL -> черновик -> новый
       const finalId = id || draftId || "p" + Date.now().toString(36);
+      const reg = useSellerReg.getState();
       const data = {
         id: finalId,
         name: draft.name.trim(),
@@ -505,7 +506,11 @@ export function ProductEditorPage() {
         manufacturer: draft.manufacturer || undefined,
         sku: draft.sku || undefined,
         tags: draft.tags || [],
-        sellerCity: draft.sellerCity,
+        sellerCity: draft.sellerCity || reg.city || "Россия",
+        shopName: reg.shopName || "Мастерская",
+        legalType: reg.legalType || "self_employed",
+        inn: reg.inn || "",
+        avatar: reg.shopLogo || reg.masterAvatar || "",
         instant: draft.instant,
         isDraft: false,
         draftSavedAt: undefined,
@@ -519,6 +524,13 @@ export function ProductEditorPage() {
       } else {
         acc.addProduct(data);
       }
+      
+      // Синхронизация с сервером
+      fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).catch(e => console.error('[Product Sync] error', e));
       
       // Обновляем URL чтобы не создавать дубликаты при следующем автосохранении
       if (!id) {

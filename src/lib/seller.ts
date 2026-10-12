@@ -257,7 +257,7 @@ export type ServiceMode = "online" | "visit" | "both";
 export type SlotTime = string;
 
 export interface SellerProductItem {
-  id: string;
+id: string;
   name: string;
   category: string;
   price: number;
@@ -283,7 +283,6 @@ export interface SellerProductItem {
   dimensions?: { length?: number; width?: number; height?: number; unit?: "см" | "мм" | "м" };
   weight?: number;
   specs?: { id?: string; key: string; value: string }[];
-  sellerCity?: string;
   deliveryZone?: DeliveryZone;
   serviceMode?: ServiceMode;
   slots?: SlotTime[];
@@ -299,6 +298,12 @@ export interface SellerProductItem {
     captions: string[];
     frameMs: number;
   };
+  shopName?: string;
+  sellerCity?: string;
+  legalType?: string;
+  inn?: string;
+  avatar?: string;
+
 }
 
 /* ---------- работы в Студии Quantiform ---------- */
