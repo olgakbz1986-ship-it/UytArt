@@ -33,6 +33,7 @@ import {
   useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
+import MarketOrderDetail from "../components/MarketOrderDetail";
 import { Markdown } from "../components/markdown";
 ;
 import { SellerAvatar } from "../components/SellerAvatar";
@@ -75,7 +76,7 @@ export const useMarketStore = create<MarketState>()(
         
         // Отправляем на сервер
         try {
-          const response = await fetch('http://localhost:8787/api/orders', {
+          const response = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -114,7 +115,7 @@ export function MarketPage() {
   useEffect(() => {
     const loadOrders = async () => {
       try {
-        const response = await fetch('http://localhost:8787/api/orders');
+        const response = await fetch('/api/orders');
         const data = await response.json();
         if (data.ok && data.orders.length > 0) {
           const existingIds = new Set(useMarketStore.getState().orders.map(o => o.id));
@@ -197,6 +198,7 @@ export function MarketPage() {
   const [refs, setRefs] = useState<Array<{ name: string; type: "image" | "video"; url: string; file?: File }>>([]);
   const [selectedCoverImage, setSelectedCoverImage] = useState<string | null>(null);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+  const [respondOrderId, setRespondOrderId] = useState<string | null>(null);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
   
@@ -223,6 +225,7 @@ export function MarketPage() {
     .filter((o) => o.status === "published" || o.myOwn)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const detailOrder = visible.find((o: any) => o.id === detailOrderId);
+  const respondOrder = visible.find((o: any) => o.id === respondOrderId);
 
   const publish = () => {
     if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
@@ -306,7 +309,7 @@ export function MarketPage() {
                   {sellerActive && !o.myOwn && o.status === "published" && (
                     responded.includes(o.id)
                       ? <span className="h-8 px-3 rounded-lg bg-success/10 text-success text-[12px] font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Отклик отправлен</span>
-                      : <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn><Btn size="sm" onClick={() => respond(o.id)}>Откликнуться</Btn></div>
+                      : <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn><Btn size="sm" onClick={() => setRespondOrderId(o.id)}>Откликнуться</Btn></div>
                   )}
                 </div>
               </div>
@@ -358,13 +361,18 @@ export function MarketPage() {
                 {responded.includes(detailOrder.id) ? (
                   <p className="text-center text-success font-semibold flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Вы уже откликнулись на этот заказ</p>
                 ) : (
-                  <Btn size="lg" className="w-full" onClick={() => { respond(detailOrder.id); setDetailOrderId(null); }}>Откликнуться на заказ</Btn>
+                  <Btn size="lg" className="w-full" onClick={() => { setDetailOrderId(null); setRespondOrderId(detailOrder.id); }}>Откликнуться на заказ</Btn>
                 )}
               </div>
             )}
           </div>
         )}
       </Modal>
+
+      {/* Модальное окно отклика мастера */}
+      {respondOrder && (
+        <MarketOrderDetail order={respondOrder} onClose={() => setRespondOrderId(null)} />
+      )}
 
       {/* AI-визард */}
       <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : "Новый индивидуальный заказ"} wide>

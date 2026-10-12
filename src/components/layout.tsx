@@ -21,7 +21,7 @@ function NotifyBell() {
   // Обертка для синхронизации прочтения с сервером
   const handleMarkRead = (id: string) => {
     markRead(id);
-    fetch(`http://localhost:8787/api/notifications/${id}/read`, { method: 'PUT' }).catch(console.error);
+    fetch(`/api/notifications/${id}/read`, { method: 'PUT' }).catch(console.error);
   };
   const markAll = useNotifyStore((s) => s.markAll);
   const remove = useNotifyStore((s) => s.remove);
@@ -36,7 +36,7 @@ function NotifyBell() {
       toClean.forEach((i) => remove(i.id));
 
       // 2. Синхронизация с API уведомлений биржи (Этап 9)
-      fetch('http://localhost:8787/api/notifications')
+      fetch('/api/notifications')
         .then(res => res.json())
         .then(data => {
           if (data.ok && data.notifications) {

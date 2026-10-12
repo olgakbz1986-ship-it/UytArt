@@ -33,8 +33,8 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
       setLoading(true);
       try {
         const [msgRes, mileRes] = await Promise.all([
-          fetch(`http://localhost:8787/api/orders/${order.id}/messages`),
-          fetch(`http://localhost:8787/api/orders/${order.id}/milestones`)
+          fetch(`/api/orders/${order.id}/messages`),
+          fetch(`/api/orders/${order.id}/milestones`)
         ]);
         const msgData = await msgRes.json();
         const mileData = await mileRes.json();
@@ -65,7 +65,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     ];
     const created = [];
     for (const m of defaults) {
-      const res = await fetch(`http://localhost:8787/api/orders/${order.id}/milestones`, {
+      const res = await fetch(`/api/orders/${order.id}/milestones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(m)
@@ -82,7 +82,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     
     const msgData = { sender_id: "dev-user-1", message: newMessage.trim() };
     try {
-      const res = await fetch(`http://localhost:8787/api/orders/${order.id}/messages`, {
+      const res = await fetch(`/api/orders/${order.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(msgData)
@@ -108,7 +108,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     }
     setSubmittingResponse(true);
     try {
-      const res = await fetch(`http://localhost:8787/api/orders/${order.id}/responses`, {
+      const res = await fetch(`/api/orders/${order.id}/responses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,7 +141,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     }
     setSubmittingReview(true);
     try {
-      const res = await fetch(`http://localhost:8787/api/market/orders/${order.id}/reviews`, {
+      const res = await fetch(`/api/market/orders/${order.id}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -176,7 +176,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
         const masterId = "dev-master-1"; 
         if (!ratingsMap[masterId]) {
           try {
-            const res = await fetch(`http://localhost:8787/api/market/users/${masterId}/reviews`);
+            const res = await fetch(`/api/market/users/${masterId}/reviews`);
             const data = await res.json();
             if (data.ok) ratingsMap[masterId] = data;
           } catch (e) {

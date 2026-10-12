@@ -115,7 +115,7 @@ export default function ProfilePage() {
   const loadResponses = async (orderId: string) => {
     setLoadingResponses(prev => ({ ...prev, [orderId]: true }));
     try {
-      const res = await fetch(`http://localhost:8787/api/orders/${orderId}/responses`);
+      const res = await fetch(`/api/orders/${orderId}/responses`);
       const data = await res.json();
       if (data.ok) {
         setResponsesMap(prev => ({ ...prev, [orderId]: data.responses }));
@@ -130,7 +130,7 @@ export default function ProfilePage() {
 
   const handleAcceptResponse = async (orderId: string, responseId: string) => {
     try {
-      const res = await fetch(`http://localhost:8787/api/orders/${orderId}/responses/${responseId}`, {
+      const res = await fetch(`/api/orders/${orderId}/responses/${responseId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'accepted' })
@@ -150,7 +150,7 @@ export default function ProfilePage() {
 
   const handleRejectResponse = async (orderId: string, responseId: string) => {
     try {
-      const res = await fetch(`http://localhost:8787/api/orders/${orderId}/responses/${responseId}`, {
+      const res = await fetch(`/api/orders/${orderId}/responses/${responseId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'rejected' })
