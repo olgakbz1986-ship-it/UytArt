@@ -44,10 +44,10 @@ import { usePrefsStore } from "../lib/prefs";
    ============================================================ */
 export interface MarketOrder {
   id: string; title: string; type: string; desc: string; material: string;
-  budget: number; term: string; region: string; refName?: string; refType?: "image" | "video"; coverImage?: string; images?: string[];
+  budget: number; term: string; region: string; refName?: string; refType?: "image" | "video"; coverImage?: string; images?: string[]; moderationIssues?: string[]; moderationWarnings?: string[];
   date: string; status: "draft" | "moderation" | "published" | "in_progress" | "completed" | "cancelled";
   responses: number; myOwn?: boolean;
-  agentPhoto?: string; agentItems?: string[]; agentDraft?: boolean;
+  agentPhoto?: string | null; agentItems?: string[]; agentDraft?: boolean;
   // Поля из API
   user_id?: string;
   category?: string;
@@ -71,23 +71,17 @@ export const useMarketStore = create<MarketState>()(
       orders: [],
       responded: [],
       addOrder: async (o) => {
-        const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: "moderation" as const, responses: 0, myOwn: true };
+        const verdict = moderateOrder(o);
+        const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: (verdict.issues.length ? "moderation" : "published") as any, responses: 0, myOwn: true, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings };
         set((s) => ({ orders: [newOrder, ...s.orders] }));
+        useNotifyStore.getState().push(verdict.issues.length ? { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + verdict.issues.length + ". " + verdict.issues.join(" ") + " Исправьте и отправьте снова." } : { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (verdict.warnings.length ? " Рекомендации: " + verdict.warnings.join(" ") : "") });
         
         // Отправляем на сервер
         try {
           const response = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: o.title,
-              description: o.desc,
-              category: o.type,
-              budget_min: o.budget,
-              budget_type: 'fixed',
-              region: o.region,
-              attachments: []
-            })
+            body: JSON.stringify(newOrder)
           });
           const data = await response.json();
           if (data.ok) {
@@ -108,6 +102,22 @@ export const useMarketStore = create<MarketState>()(
   )
 );
 
+// ===== Агент модерации карточек заказов =====
+const MODERATION_RULES: Array<{ id: string; check: (o: any) => boolean; hint: string }> = [
+  { id: "title", check: (o) => String(o.title || "").trim().length >= 3, hint: "Название короче 3 символов — сформулируйте, что нужно изготовить." },
+  { id: "desc", check: (o) => String(o.desc || "").trim().length >= 10, hint: "Описание короче 10 символов — добавьте деталей: размеры, назначение, пожелания." },
+  { id: "budget", check: (o) => Number(o.budget) > 0, hint: "Бюджет не указан или равен 0 — мастерам важно понимать вилку цены." },
+  { id: "term", check: (o) => String(o.term || "").trim().length > 0, hint: "Не указан желаемый срок изготовления." },
+  { id: "region", check: (o) => String(o.region || "").trim().length > 0, hint: "Не указан регион — мастерам важно понимать географию заказа." },
+];
+function moderateOrder(o: any): { issues: string[]; warnings: string[] } {
+  const issues = MODERATION_RULES.filter((r) => !r.check(o)).map((r) => r.hint);
+  const warnings: string[] = [];
+  const hasPhoto = !!(o.coverImage || (Array.isArray(o.images) && o.images.length > 0) || o.agentPhoto);
+  if (!hasPhoto) warnings.push("Нет ни одного фото: добавьте обложку — карточки с фото получают больше откликов.");
+  return { issues, warnings };
+}
+
 export function MarketPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -123,16 +133,25 @@ export function MarketPage() {
             .filter((o: any) => !existingIds.has(o.id))
             .map((o: any) => ({
               id: o.id,
-              title: o.title,
-              type: o.category || 'Другое',
-              desc: o.description,
-              material: '',
-              budget: o.budget_min || 0,
-              term: '',
+              title: o.title || 'Без названия',
+              type: o.type || o.category || 'Другое',
+              desc: o.desc || o.description || '',
+              material: o.material || '',
+              budget: Number(o.budget ?? o.budget_min ?? 0),
+              term: o.term || o.deadline || '',
               region: o.region || '',
-              date: o.created_at,
-              status: o.status,
-              responses: 0,
+              date: o.date || o.created_at || new Date().toISOString(),
+              status: o.status || 'published',
+              responses: Number(o.responses || 0),
+              refName: o.refName,
+              refType: o.refType,
+              coverImage: o.coverImage || (Array.isArray(o.images) ? o.images[0] : Array.isArray(o.attachments) ? o.attachments[0] : undefined),
+              images: Array.isArray(o.images) ? o.images : Array.isArray(o.attachments) ? o.attachments : [],
+              agentDraft: !!o.agentDraft,
+              agentPhoto: o.agentPhoto || null,
+              user_id: o.user_id,
+              moderationIssues: Array.isArray(o.moderationIssues) ? o.moderationIssues : [],
+              moderationWarnings: Array.isArray(o.moderationWarnings) ? o.moderationWarnings : [],
               myOwn: o.user_id === 'dev-user-1',
               attachments: o.attachments || []
             }));
@@ -161,7 +180,9 @@ export function MarketPage() {
   const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const user = useAppStore((s) => s.session);
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
-  const lim = buyerLimits(buyerPlan);
+  const sellerSub = useSellerAccount((s) => s);
+  const isTopTier = buyerPlan === "premium" || (["self_employed", "ip", "ooo"] as SellerLegalType[]).some((t) => { const list = SELLER_PLANS[t]; return list.length > 0 && sellerSub.getPlan(user?.userId || "guest", t) === list[list.length - 1].id; });
+  const lim = { ...buyerLimits(buyerPlan), marketOrders: isTopTier ? Infinity : buyerLimits(buyerPlan).marketOrders };
   const orders = useMarketStore((s) => s.orders);
   const responded = useMarketStore((s) => s.responded);
   const addOrder = useMarketStore((s) => s.addOrder);
@@ -169,21 +190,68 @@ export function MarketPage() {
   const sellerActive = useSellerReg((s) => s.status === "active");
 
 
-  const patchOrder = (id: string, patch: any) => useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
-  const removeOrder = (id: string) => useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
+  const patchOrder = async (id: string, patch: any) => {
+    useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
+    const updated = useMarketStore.getState().orders.find((o) => o.id === id);
+    try {
+      const res = await fetch('/api/orders/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+
+      if (res.status === 404 && updated) {
+        const postRes = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+        const postData = await postRes.json();
+        const newId = postData && postData.order ? postData.order.id : null;
+        if (newId) {
+          useMarketStore.setState((st) => ({
+            orders: st.orders.map((o) => (o.id === id ? { ...o, id: newId } : o))
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('[sync PUT/POST]', e);
+    }
+  };
+  const removeOrder = async (id: string) => {
+    useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
+    try { await fetch('/api/orders/' + id, { method: 'DELETE' }); } catch (e) { console.error('[sync DELETE]', e); }
+  };
   const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); const photos: Array<{ name: string; type: "image" | "video"; url: string }> = []; if (o.images && o.images.length > 0) { o.images.forEach((url: string, idx: number) => photos.push({ name: o.refName || "Фото " + (idx+1), type: "image", url })); } else if (o.coverImage) { photos.push({ name: "Обложка", type: "image", url: o.coverImage }); } else if (o.agentPhoto) { photos.push({ name: "Фото агента", type: "image", url: o.agentPhoto }); } setRefs(photos); setSelectedCoverImage(o.coverImage || photos[0]?.url || null); setFErr(""); setWizardOpen(true); };
   const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
   const cancelEdit = () => { setEditingDraft(null); };
-  const sendDraft = (id: string) => { patchOrder(id, { status: "moderation", agentDraft: false }); useNotifyStore.getState().push({ kind: "report", title: "Черновик отправлен мастерам", text: "Ваш заказ поступил на модерацию биржи." }); };
+  const sendDraft = (id: string) => {
+    const o = useMarketStore.getState().orders.find((x) => x.id === id);
+    const verdict = moderateOrder(o || {});
+    const p: any = { agentDraft: false, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings, status: verdict.issues.length ? "moderation" : "published" };
+    patchOrder(id, p);
+    useNotifyStore.getState().push(verdict.issues.length ? { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + verdict.issues.length + ". " + verdict.issues.join(" ") + " Исправьте и отправьте снова." } : { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (verdict.warnings.length ? " Рекомендации: " + verdict.warnings.join(" ") : "") });
+  };
   const saveDraft = (send: boolean) => {
     if (!editOrderId) return;
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
     const patch: any = { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion };
     if (editPhoto) patch.agentPhoto = editPhoto;
-    if (refs.length > 0) { patch.refName = refs[0].name; patch.refType = refs[0].type; }
-    if (send) { patch.status = "moderation"; patch.agentDraft = false; }
-    useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === editOrderId ? { ...o, ...patch } : o)) }));
-    useNotifyStore.getState().push({ kind: "report", title: send ? "Черновик отправлен мастерам" : "Черновик обновлён", text: send ? "Заказ поступил на модерацию биржи." : "Изменения сохранены, включая фото референса." });
+    if (refs.length > 0) { patch.refName = refs[0].name; patch.refType = refs[0].type; patch.coverImage = selectedCoverImage || refs[0].url; patch.images = refs.map(r => r.url); }
+    if (send) {
+      patch.agentDraft = false;
+      const candidate = { ...(useMarketStore.getState().orders.find((o) => o.id === editOrderId) || {}), ...patch };
+      const verdict = moderateOrder(candidate);
+      patch.status = verdict.issues.length ? "moderation" : "published";
+      patch.moderationIssues = verdict.issues;
+      patch.moderationWarnings = verdict.warnings;
+    }
+    patchOrder(editOrderId, patch);
+    if (send) {
+      useNotifyStore.getState().push(patch.status === "published" ? { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (patch.moderationWarnings?.length ? " Рекомендации: " + patch.moderationWarnings.join(" ") : "") } : { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + patch.moderationIssues.length + ". " + patch.moderationIssues.join(" ") + " Исправьте и нажмите «Сохранить и опубликовать» снова." });
+    } else {
+      useNotifyStore.getState().push({ kind: "report", title: "Черновик обновлён", text: "Изменения сохранены, включая фото референса." });
+    }
     setEditOrderId(null); setEditPhoto(null); setRefs([]); setFErr(""); setWizardOpen(false);
   };
   const deleteDraft = (id: string) => { if (confirm("Удалить черновик безвозвратно?")) { removeOrder(id); useNotifyStore.getState().push({ kind: "report", title: "Черновик удалён", text: "Запись убрана с биржи." }); } };
@@ -236,7 +304,7 @@ export function MarketPage() {
       setWizardOpen(false);
       return;
     }
-    if (overLimit) { setFErr(`Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
+    if (overLimit) { setFErr(buyerPlan === "premium" ? `Тариф Премиум: максимум ${fmtLimit(lim.marketOrders)} активных заказов. Завершите или удалите один из заказов.` : `Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
     addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: refs[0]?.name, refType: refs[0]?.type });
     setFTitle(""); setFDesc(""); setRefs([]); setFErr("");
@@ -256,7 +324,11 @@ export function MarketPage() {
       {overLimit && (
         <div className="flex items-center gap-2.5 bg-premium-soft border border-premium/40 rounded-[10px] px-4 py-3 mb-6">
           <AlertTriangle size={16} className="text-[#a07c50] shrink-0" />
-          <p className="text-[13px] text-ink flex-1">Вы достигли лимита активных заказов ({fmtLimit(lim.marketOrders)}). <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link></p>
+          {buyerPlan === "premium" ? (
+            <p className="text-[13px] text-ink flex-1">Тариф Премиум: это максимум активных заказов ({fmtLimit(lim.marketOrders)}). Завершите или удалите один из заказов, чтобы разместить новый.</p>
+          ) : (
+            <p className="text-[13px] text-ink flex-1">Вы достигли лимита активных заказов ({fmtLimit(lim.marketOrders)}). <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link></p>
+          )}
         </div>
       )}
 
@@ -279,7 +351,7 @@ export function MarketPage() {
                 </div>
               )}
               <div className="absolute top-3 right-3 flex gap-2">
-                {o.status === "moderation" ? <Badge tone="honey">На модерации</Badge>
+                {o.status === "moderation" ? <Badge tone="honey">На модерации{(o as any).moderationIssues?.length ? " · " + (o as any).moderationIssues.length : ""}</Badge>
                 : (o as any).agentDraft ? <Badge tone="ai">Черновик</Badge>
                 : o.myOwn ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
               </div>
@@ -345,6 +417,12 @@ export function MarketPage() {
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Регион</span><span className="font-semibold text-ink">{detailOrder.region}</span></div>
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Категория</span><span className="font-semibold text-ink">{detailOrder.type}</span></div>
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Статус</span><Badge tone={detailOrder.status === "published" ? "success" : "honey"}>{detailOrder.status === "published" ? "Опубликован" : "На модерации"}</Badge></div>
+              {detailOrder.status === "moderation" && (detailOrder as any).moderationIssues?.length > 0 && (
+                <div className="col-span-full rounded-[10px] bg-accent-soft p-3">
+                  <p className="text-[12px] font-bold text-ink mb-1">🤖 Агент модерации: исправьте замечания и отправьте заказ снова</p>
+                  <ul className="list-disc pl-4 text-[12px] text-ink-soft space-y-0.5">{(detailOrder as any).moderationIssues.map((t: string, i: number) => (<li key={i}>{t}</li>))}</ul>
+                </div>
+              )}
             </div>
             {detailOrder.images && detailOrder.images.length > 0 && (
               <div>
@@ -525,7 +603,7 @@ export function MarketPage() {
         {editOrderId ? (
           <div className="flex gap-3 mt-5">
             <Btn size="lg" className="flex-1" variant="outline" onClick={() => saveDraft(false)}>Сохранить черновик</Btn>
-            <Btn size="lg" className="flex-1" onClick={() => saveDraft(true)}>Сохранить и отправить</Btn>
+            <Btn size="lg" className="flex-1" onClick={() => saveDraft(true)}>Сохранить и опубликовать</Btn>
           </div>
         ) : (
           <Btn size="lg" className="w-full mt-5" onClick={publish}>Опубликовать заказ</Btn>

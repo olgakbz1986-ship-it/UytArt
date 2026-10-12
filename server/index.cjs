@@ -46,7 +46,7 @@ if (process.env.DATABASE_URL) {
 const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 465), secure: +(process.env.SMTP_PORT || 465) === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }) : null;
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
 const profileOf = (r) => ({ id: r.id, email: r.email, name: r.name, phone: r.phone, role: r.role, legal_type: r.legal_type, tier: r.tier, avatar_url: r.avatar_url });
 function guard(req, res, next) {
@@ -74,9 +74,9 @@ app.post("/api/auth/register", async (req, res) => {
     if (await db.byEmail(email)) return res.status(409).json({ error: "exists" });
     const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
-    await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: false, confirm_token: token, confirm_expires: exp });
+    await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp });
     const dev = await sendConfirm(email, name, token);
-    res.json({ ok: true, needConfirm: true, devConfirmUrl: dev || undefined });
+    res.json({ ok: true, needConfirm: db.mode.startsWith("postgres"), devConfirmUrl: dev || undefined });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });
 
@@ -95,7 +95,7 @@ app.post("/api/auth/login", async (req, res) => {
   try {
     const u = await db.byEmail(String(req.body.email || "").trim().toLowerCase());
     if (!u || !(await bcrypt.compare(String(req.body.password || ""), u.password_hash))) return res.status(401).json({ error: "bad_credentials" });
-    if (!u.email_confirmed) return res.status(403).json({ error: "need_confirm" });
+    if (!u.email_confirmed && db.mode.startsWith("postgres")) return res.status(403).json({ error: "need_confirm" });
     res.cookie(COOKIE, jwt.sign({ sub: u.id }, JWT_SECRET, { expiresIn: "7d" }), { httpOnly: true, sameSite: "lax", maxAge: 7 * DAY, secure: process.env.NODE_ENV === "production" });
     res.json({ ok: true, profile: profileOf(u) });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
@@ -253,17 +253,36 @@ app.post("/api/agent/negotiate", async (req, res) => {
 // ==========================================
 app.post("/api/orders", async (req, res) => {
   try {
-    const { title, description, category, budget_min, budget_max, budget_type, deadline, region, attachments } = req.body;
-    const userId = "dev-user-1"; 
-    
+    const b = req.body || {};
+    const now = new Date().toISOString();
+    const images = Array.isArray(b.images) ? b.images : Array.isArray(b.attachments) ? b.attachments : [];
     const newOrder = {
       id: crypto.randomUUID(),
-      user_id: userId,
-      title, description, category, budget_min, budget_max, budget_type, deadline, region,
-      status: "published",
-      attachments: attachments || [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      user_id: b.user_id || "dev-user-1",
+      title: b.title || "",
+      description: b.desc || b.description || "",
+      desc: b.desc || b.description || "",
+      category: b.type || b.category || "Другое",
+      type: b.type || b.category || "Другое",
+      material: b.material || "",
+      budget: Number(b.budget ?? b.budget_min ?? 0),
+      budget_min: Number(b.budget ?? b.budget_min ?? 0),
+      budget_max: Number(b.budget_max ?? b.budget ?? b.budget_min ?? 0),
+      budget_type: b.budget_type || "fixed",
+      deadline: b.term || b.deadline || "",
+      term: b.term || b.deadline || "",
+      region: b.region || "",
+      status: b.status || "published",
+      responses: Number(b.responses || 0),
+      refName: b.refName,
+      refType: b.refType,
+      coverImage: b.coverImage || images[0],
+      images,
+      attachments: images,
+      agentDraft: !!b.agentDraft,
+      agentPhoto: b.agentPhoto || null,
+      created_at: b.date || b.created_at || now,
+      updated_at: now
     };
 
     if (db.mode === "json-dev (бесплатно)") {
@@ -401,6 +420,65 @@ app.put("/api/orders/:id/responses/:rid", async (req, res) => {
 // ==========================================
 // API ЭТАПА 7: ДЕТАЛЬНАЯ КАРТОЧКА, ЧАТ И ЭТАПЫ
 // ==========================================
+app.put("/api/orders/:id", async (req, res) => {
+  try {
+    const patch = req.body || {};
+    let saved = null;
+    if (String(db.mode).indexOf("json-dev") !== -1) {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [] };
+      const arr = d.custom_orders || [];
+      const idx = arr.findIndex(function(o){ return o.id === req.params.id; });
+      if (idx === -1) return res.status(404).json({ error: "not_found" });
+      const prev = arr[idx];
+      const next = Object.assign({}, prev, patch, { id: prev.id, updated_at: new Date().toISOString() });
+
+      if (patch.images) next.attachments = patch.images;
+      if (patch.attachments) next.images = patch.attachments;
+      if (patch.desc && !patch.description) next.description = patch.desc;
+      if (patch.description && !patch.desc) next.desc = patch.description;
+      if (patch.type && !patch.category) next.category = patch.type;
+      if (patch.category && !patch.type) next.type = patch.category;
+      if (patch.term && !patch.deadline) next.deadline = patch.term;
+      if (patch.deadline && !patch.term) next.term = patch.deadline;
+      if (patch.budget !== undefined) {
+        next.budget = Number(patch.budget);
+        next.budget_min = Number(patch.budget);
+      }
+
+      arr[idx] = next;
+      d.custom_orders = arr;
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      saved = next;
+    }
+    res.json({ ok: true, order: saved });
+  } catch (e) {
+    console.error("[ORDERS UPDATE ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.delete("/api/orders/:id", async (req, res) => {
+  try {
+    if (String(db.mode).indexOf("json-dev") !== -1) {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [] };
+      const arr = d.custom_orders || [];
+      const idx = arr.findIndex(function(o){ return o.id === req.params.id; });
+      if (idx === -1) return res.status(404).json({ error: "not_found" });
+      arr.splice(idx, 1);
+      d.custom_orders = arr;
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[ORDERS DELETE ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.get("/api/orders/:id", async (req, res) => {
   try {
     const { id } = req.params;
