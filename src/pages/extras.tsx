@@ -2033,6 +2033,72 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             </Btn>
           </SettingsSection>
 
+          {/* Приватность и данные — доступно на всех тарифах */}
+          <SettingsSection title="Приватность и данные" icon={<Shield size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
+            <p className="text-[13px] text-ink-soft leading-relaxed mb-4">Управление видимостью профиля, экспорт данных и удаление аккаунта.</p>
+            
+            {/* Видимость профиля */}
+            <div className="flex items-center justify-between py-3 border-b border-line-soft">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">Видимость профиля</p>
+                <p className="text-[11px] text-ink-mute mt-0.5">Показывать магазин в каталоге мастеров</p>
+              </div>
+              <Switch 
+                checked={s.isMaster || false} 
+                onChange={(v) => s.setInfo({ isMaster: v })} 
+                label="Публичный профиль" 
+              />
+            </div>
+
+            {/* Экспорт данных */}
+            <div className="flex items-center justify-between py-3 border-b border-line-soft">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">Экспорт данных</p>
+                <p className="text-[11px] text-ink-mute mt-0.5">Скачать все ваши данные в формате JSON</p>
+              </div>
+              <Btn 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  const data = {
+                    profile: { shopName: s.shopName, email: s.email, inn: s.inn, city: s.city },
+                    products: acc.products.filter((p) => p.ownerId === user?.userId),
+                    exportedAt: new Date().toISOString()
+                  };
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `quantiform-data-${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Скачать данные
+              </Btn>
+            </div>
+
+            {/* Удаление аккаунта */}
+            <div className="pt-3">
+              <Btn 
+                size="sm" 
+                variant="ghost" 
+                className="!text-error"
+                onClick={() => {
+                  if (confirm('⚠️ Вы уверены, что хотите удалить аккаунт? Это действие необратимо. Все ваши товары и данные будут удалены.')) {
+                    if (confirm('Последнее предупреждение: удалить аккаунт без возможности восстановления?')) {
+                      useAppStore.getState().logout();
+                      useSellerReg.getState().resetFlow();
+                      window.location.href = '/';
+                    }
+                  }
+                }}
+              >
+                Удалить аккаунт
+              </Btn>
+            </div>
+          </SettingsSection>
+
           {/* Уведомления — всем */}
           <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
             <div className="space-y-3.5">
@@ -2059,12 +2125,6 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               ))}
             </div>
             <p className="text-[12px] text-ink-mute mt-2.5">Настройка баннера, обложки и цветов вашего магазина.</p>
-          </SettingsSection>
-
-          {/* Приватность — с 3-го тарифа */}
-          <SettingsSection title="Приватность и данные" icon={<Shield size={15} />} minLevel={2} level={lvl} nextLabel="тариф выше" accent={lvlMeta.accent}>
-            <p className="text-[13px] text-ink-soft leading-relaxed mb-3">Управление видимостью профиля, экспорт данных и удаление аккаунта.</p>
-            <Btn size="sm" variant="ghost" className="!text-error">Удалить аккаунт</Btn>
           </SettingsSection>
 
           {/* Интеграции — топ-тариф */}
