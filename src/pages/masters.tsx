@@ -2,8 +2,8 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MapPin, ShieldCheck, Flag, Store, MessageSquare } from "lucide-react";
 import { fmt, vendorById } from "../data/seed";
-import { useSellerReg, useSellerAccount } from "../lib/seller";
-import { marketProducts } from "../lib/market";
+import { useSellerReg, useSellerAccount, type SellerProfile } from "../lib/seller";
+import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useReviewStore } from "../lib/review";
 import { ProductGrid } from "../components/product";
@@ -33,10 +33,11 @@ const regionByCity = (city: string): string => {
   return "";
 };
 
-const buildRealMaster = (reg: any, userId?: string): any => {
+const buildRealMaster = (reg: any, userId?: string, allGoods?: any[]): any => {
   if (!reg || reg.status !== "active" || !reg.shopName || !reg.isMaster) return null;
   const lm = LEGAL_META[reg.legalType] || LEGAL_META.self_employed;
-  const goods = marketProducts().filter((x) => x.id.startsWith("sp-"));
+  /* Товары только ЭТОГО мастера — жёсткая привязка по ownerId */
+  const goods = (allGoods || []).filter((x: any) => x.id.startsWith("sp-") && (!userId || x.ownerId === userId));
   const ids = new Set(goods.map((g) => g.id));
   const revs = useReviewStore.getState().reviews.filter((r: any) => r.status === "approved" && ids.has(r.productId));
   const rating = revs.length ? Math.round((revs.reduce((a: number, r: any) => a + r.rating, 0) / revs.length) * 10) / 10 : 0;
@@ -88,7 +89,8 @@ export function MastersPage() {
     return unsub;
   }, [session?.userId]);
 
-  const localMaster = buildRealMaster(useSellerReg.getState(), session?.userId);
+  const marketAll = useMarketProducts();
+  const localMaster = buildRealMaster(useSellerReg.getState(), session?.userId, marketAll);
   
   const list = useMemo(() => {
     // Объединяем серверных мастеров с локальным (локальный перекрывает по id)
@@ -101,7 +103,7 @@ export function MastersPage() {
       const okR = region === "all" || v.region === region;
       return okQ && okR;
     });
-  }, [q, region, serverMasters, localMaster]);
+  }, [q, region, serverMasters, localMaster, marketAll]);
   const totalMasters = useMemo(() => list.length, [list]);
 
   return (
@@ -172,14 +174,23 @@ export function MastersPage() {
 
 export function ShopPage() {
   const { slug } = useParams();
-  const reg = useSellerReg();
-  const master = buildRealMaster(reg);
+  const activeReg = useSellerReg();
+  const profiles = useSellerReg((s) => s.profilesByAccount);
+  const session = useAppStore((s) => s.session);
+  const marketAll = useMarketProducts();
+
+  /* Canonical id продавца: "self" -> активная сессия, иначе slug = id аккаунта */
+  const ownerId = slug === "self" || !slug ? (session?.userId || "") : slug;
+  /* Профиль из реестра по id владельца (Проблемы №1/№3); fallback — активный стор */
+  const reg: SellerProfile | null = profiles[ownerId] || (ownerId === session?.userId ? (activeReg as unknown as SellerProfile) : null);
+  const master = buildRealMaster(reg, ownerId, marketAll);
   const reviews = useReviewStore((s) => s.reviews);
-  const goods = useMemo(() => marketProducts().filter((x) => x.id.startsWith("sp-")), []);
+  /* Витрина магазина: только товары этого продавца */
+  const goods = useMemo(() => marketAll.filter((x) => x.id.startsWith("sp-") && (x as any).ownerId === ownerId), [marketAll, ownerId]);
   const goodsIds = new Set(goods.map((g) => g.id));
   const shopReviews = reviews.filter((r) => r.status === "approved" && goodsIds.has(r.productId));
 
-  if (!master || (slug !== "self" && slug !== reg.slug)) {
+  if (!master || !reg) {
     return (
       <div className="max-w-[720px] mx-auto px-4 py-24 text-center">
         <div className="text-[56px] mb-4">🏪</div>

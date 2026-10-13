@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing , Trash2} from "lucide-react";
-import { marketProducts } from "../lib/market";
+import { useMarketProducts } from "../lib/market";
 import { CATEGORIES, fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { CITIES } from "../lib/geo";
@@ -175,6 +175,7 @@ function SmartSearch() {
     return useSellerAccount.getState().products.map((pr) => pr.sellerCity || "").find((c) => c && qq.includes(c.toLowerCase()));
   }, [q]);
   const [open, setOpen] = useState(false);
+  const marketList = useMarketProducts(queryCity || undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
 
@@ -193,7 +194,7 @@ function SmartSearch() {
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (t.length < 2) return [];
-    return marketProducts(queryCity).filter((p) => {
+    return marketList.filter((p) => {
       const cat = catBySlug(p.categoryId);
       const g = cat ? groupById(cat.group) : undefined;
       const subName = cat?.subs.find((s) => s.slug === p.sub)?.name.toLowerCase() ?? "";
@@ -206,7 +207,7 @@ function SmartSearch() {
         (g?.name.toLowerCase().includes(t) ?? false)
       );
     }).slice(0, 6);
-  }, [q]);
+  }, [q, marketList]);
 
   const showPanel = open && q.trim().length >= 2;
   const go = (to: string) => { setOpen(false); setQ(""); inputRef.current?.blur(); nav(to); };

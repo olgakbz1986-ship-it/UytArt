@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send , Download, Star, RefreshCw} from "lucide-react";
 import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
+import { useAppStore } from "../lib/store";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
 import { CategoryPicker } from "../components/CategoryPicker";
 import { getGroupsForCategory, type SpecGroupDef, type SpecFieldDef } from "../lib/specSystem";
@@ -511,6 +512,7 @@ export function ProductEditorPage() {
         legalType: reg.legalType || "self_employed",
         inn: reg.inn || "",
         avatar: reg.shopLogo || reg.masterAvatar || "",
+        ownerId: useAppStore.getState().session?.userId,
         instant: draft.instant,
         isDraft: false,
         draftSavedAt: undefined,

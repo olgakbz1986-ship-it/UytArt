@@ -23,7 +23,7 @@ import {
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
-import { marketProducts } from "../lib/market";
+import { useMarketProducts, sellerProfileOf } from "../lib/market";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById,
   SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX,
@@ -1135,6 +1135,7 @@ import AgentPanelSeller from "../components/agent-panel-seller";
 export function SellerDashboardPage() {
   const s = useSellerReg();
   const acc = useSellerAccount();
+  const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
   const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
   const nav = useNavigate();
@@ -1204,7 +1205,8 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const payout = Math.round(revenue * (1 - commissionNow / 100));
   const cartEvents = useAppStore((st) => st.cartEvents);
   const [anaPeriod, setAnaPeriod] = useState<7 | 30 | 90>(30);
-  const totalViews = acc.products.reduce((s2, pr) => s2 + (pr.views || 0), 0);
+  /* Проблемa №1: аналитика считается только по товарам ТЕКУЩЕГО аккаунта */
+  const totalViews = acc.products.filter((p) => p.ownerId === user?.userId || (!p.ownerId && user?.role === "seller")).reduce((s2, pr) => s2 + (pr.views || 0), 0);
   const receivedCount = myOrders.filter((o) => o.status === "received").length;
   const pctOf = (n: number) => (totalViews ? Math.round((n / totalViews) * 1000) / 10 : 0);
   const cartAdds = cartEvents.filter((e) => e.productId.startsWith("sp-")).length;
@@ -1251,7 +1253,10 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     );
   }
 
-  const activeProducts = acc.products.filter((p) => !p.archived);
+  /* Проблемa №1: кабинет показывает только товары ТЕКУЩЕГО аккаунта.
+     Legacy-товары без ownerId мигрируют к активному продавцу (см. seller.ts). */
+  const myProducts = acc.products.filter((p) => p.ownerId === user?.userId || (!p.ownerId && user?.role === "seller"));
+  const activeProducts = myProducts.filter((p) => !p.archived);
   const overProducts = activeProducts.length >= plan.maxProducts;
   const aiLimitReached = Number.isFinite(plan.aiCardGens) && aiUsed >= plan.aiCardGens;
   const nextCharge = new Date(Date.now() + 20 * 864e5);
@@ -1267,7 +1272,13 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
   const publishProduct = () => {
     if (prod.name.trim().length < 3 || !+prod.price || overProducts) return;
-    acc.addProduct({ name: prod.name.trim(), category: prod.category, price: +prod.price, media: media.length ? media : undefined, aiGenerated: false });
+    acc.addProduct({
+      name: prod.name.trim(), category: prod.category, price: +prod.price,
+      media: media.length ? media : undefined, aiGenerated: false,
+      ownerId: user?.userId,
+      shopName: s.shopName, sellerCity: s.city, legalType: s.legalType || undefined, inn: s.inn,
+      avatar: s.shopLogo || s.masterAvatar || undefined,
+    } as any);
     setProd({ name: "", category: CATEGORIES[0].name, price: "" });
     setMedia([]);
   };
@@ -1427,14 +1438,14 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                 <Btn size="sm" variant="ghost" onClick={() => { bulk.forEach((id) => acc.toggleArchive(id)); setBulk([]); }}>В архив</Btn>
               </div>
             )}
-            {acc.products.length === 0 && (
+            {myProducts.length === 0 && (
               <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
                 <p className="text-[44px] mb-3">📦</p>
                 <p className="font-display font-bold text-[19px] text-ink mb-2">Товаров пока нет</p>
                 <p className="text-[14px] text-ink-soft">Добавьте первый товар в форме слева.</p>
               </div>
             )}
-            {acc.products.map((p) => (
+            {myProducts.map((p) => (
               <div key={p.id} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-4">
                 {plan.massEdit && (
                   <input type="checkbox" checked={bulk.includes(p.id)} aria-label={`Выбрать ${p.name}`}
@@ -1510,7 +1521,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               </div>
               <div className="mt-3 pt-3 border-t border-line-soft space-y-1.5">
                 {o.items.map((it) => {
-                  const prod = marketProducts().find((x) => x.id === it.productId);
+                  const prod = marketList.find((x) => x.id === it.productId);
                   return (
                     <div key={it.productId} className="flex justify-between gap-3 text-[13px]">
                       <span className="text-ink-soft">{prod?.name || it.productId} × {it.qty}</span>
@@ -1683,19 +1694,19 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         const periodOrders = myOrders.filter((o) => nowTs - new Date(o.date).getTime() <= periodMs);
         const catMap: Record<string, number> = {};
         periodOrders.forEach((o) => o.items.forEach((it) => {
-          const pr = marketProducts().find((x) => x.id === it.productId);
+          const pr = marketList.find((x) => x.id === it.productId);
           const cat = (pr as any)?.category || "Прочее";
           catMap[cat] = (catMap[cat] || 0) + ((pr?.price || 0) * it.qty);
         }));
         const catList = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
         const aiTips: { icon: string; title: string; text: string }[] = [];
-        const myGoods = marketProducts().filter((x) => x.id.startsWith("sp-"));
+        const myGoods = marketList.filter((x) => x.id.startsWith("sp-") && (x as any).ownerId === user?.userId);
         if (myGoods.length === 0) aiTips.push({ icon: "📦", title: "Запустите витрину", text: "На витрине нет ваших товаров — создайте первую карточку, чтобы аналитика и советы ожили." });
         if (totalViews >= 20 && cartAdds === 0) aiTips.push({ icon: "👀", title: "Просмотры есть, корзин нет", text: `Карточки посмотрели ${totalViews} раз, но в корзину не добавили ни разу: улучшите главное фото и первое предложение цены.` });
         if (cartAdds > 0 && curOrders / cartAdds < 0.3) aiTips.push({ icon: "🛒", title: "Корзины не доходят до заказа", text: `Только ${Math.round((curOrders / cartAdds) * 100)}% корзин становятся заказами: проверьте цену доставки и сроки отправки.` });
         if (conv > 0 && conv < 1 && totalViews >= 30) aiTips.push({ icon: "📉", title: `Конверсия ${conv}% — ниже рынка`, text: "Средняя конверсия маркетплейса 2-4%. Добавьте фото в интерьере и короткое видео изделия." });
         const avgMine = myGoods.length ? myGoods.reduce((a, b) => a + b.price, 0) / myGoods.length : 0;
-        const catGoods = marketProducts().filter((x) => x.categoryId === (myGoods[0]?.categoryId || ""));
+        const catGoods = marketList.filter((x) => x.categoryId === (myGoods[0]?.categoryId || ""));
         const avgCat = catGoods.length ? catGoods.reduce((a, b) => a + b.price, 0) / catGoods.length : 0;
         if (avgMine && avgCat) {
           const diff = Math.round(((avgMine - avgCat) / avgCat) * 100);
@@ -1704,7 +1715,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           else aiTips.push({ icon: "✅", title: "Цена в рынке", text: `Ваши цены в коридоре ±10% от среднего категории (${fmt(Math.round(avgCat))}) — зона максимальной конверсии.` });
         }
         if (topItems.length > 0 && curRevenue > 0) {
-          const topProd = marketProducts().find((x) => x.id === topItems[0][0]);
+          const topProd = marketList.find((x) => x.id === topItems[0][0]);
           const topShare = Math.round((((topProd?.price || 0) * topItems[0][1]) / curRevenue) * 100);
           if (topShare >= 60) aiTips.push({ icon: "🎯", title: `Один товар = ${topShare}% выручки`, text: `«${topProd?.name || topItems[0][0]}» тянет почти всю выручку: развивайте соседние товары, чтобы снизить риск.` });
         }
@@ -1775,7 +1786,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                   <p className="text-[13.5px] text-ink-soft">Продаж пока нет — топ появится после первых заказов.</p>
                 ) : (
                   topItems.map(([pid, qty], i) => {
-                    const prod = marketProducts().find((x) => x.id === pid);
+                    const prod = marketList.find((x) => x.id === pid);
                     const revenue = (prod?.price || 0) * qty;
                     return (
                       <div key={pid} className="flex justify-between gap-3 py-2 border-b border-line-soft last:border-0 text-[13px]">

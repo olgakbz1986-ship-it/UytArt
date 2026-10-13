@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Send, Camera, ScanLine, ShoppingBag, Palette, Upload, X } from "lucide-react";
 import { Product, PRODUCTS, aiPickProducts, fmt, fmtDate } from "../data/seed";
-import { marketProducts } from "../lib/market";
+import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits, selectAiLeft, fmtLimit } from "../lib/subscriptions";
 import { Badge, Btn, ProductImg } from "../components/ui";
@@ -24,6 +24,10 @@ export default function AiPage() {
   const aiGensLeft = useSubStore((s) => selectAiLeft(s, accountId));
   const addConcept = useSubStore((s) => s.addConcept);
   const lim = buyerLimits(buyerPlan);
+
+  const marketList = useMarketProducts();
+  const useMarketProductsRef = useRef(marketList);
+  useMarketProductsRef.current = marketList;
 
   const [mode, setMode] = useState<Mode>("chat");
   const [input, setInput] = useState("");
@@ -99,7 +103,7 @@ export default function AiPage() {
     setSearching(true);
     setResults([]);
     setTimeout(() => {
-      const shuffled = marketProducts().filter((x) => x.id.startsWith("sp-")).sort(() => 0.5 - Math.random()).slice(0, 6);
+      const shuffled = useMarketProductsRef.current.filter((x) => x.id.startsWith("sp-")).sort(() => 0.5 - Math.random()).slice(0, 6);
       setResults(shuffled);
       setSearching(false);
     }, 1500);
@@ -160,7 +164,7 @@ export default function AiPage() {
                   <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai" />
                   <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai" />
                   <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai" />
-                  <span className="text-[12px] text-ink-mute ml-1">подбираю из {marketProducts().filter((x) => x.id.startsWith("sp-")).length} товаров…</span>
+                  <span className="text-[12px] text-ink-mute ml-1">подбираю из {marketList.filter((x) => x.id.startsWith("sp-")).length} товаров…</span>
                 </div>
               )}
             </div>

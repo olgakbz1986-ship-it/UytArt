@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { ShieldCheck, Star, Wrench, ArrowRight } from "lucide-react";
 import { fmt } from "../data/seed";
-import { marketProducts } from "../lib/market";
+import { useMarketProducts } from "../lib/market";
 import { ProductGrid } from "../components/product";
 import { Reveal } from "../components/ui";
 
 export default function HomePage() {
-  const sellerHits = marketProducts().filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8);
+  const market = useMarketProducts();
+  const sellerHits = market.filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8);
   const featured = sellerHits.slice(0, 8);
 
   return (

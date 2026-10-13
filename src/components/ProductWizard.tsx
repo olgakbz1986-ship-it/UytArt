@@ -2,7 +2,8 @@ import { StudioSEO } from "./StudioSEO";
 import { StudioCanvas } from "./StudioCanvas";
 import {  useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
-import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller";
+import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
+import { useAppStore } from "../lib/store";
 import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
 import { Modal, Btn, Field, Badge } from "./ui";
@@ -142,8 +143,19 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
       media: draft.media,
       aiGenerated: !!draft.aiCover,
     };
-    if (editItem) acc.updateProduct(editItem.id, data);
-    else acc.addProduct(data);
+    /* Проблемa №3: реквизиты продавца — из актуального профиля, а не из снимка */
+    const prof = currentSellerProfile();
+    const stamped = {
+      ...data,
+      ownerId: useAppStore.getState().session?.userId,
+      shopName: prof?.shopName || undefined,
+      sellerCity: data.sellerCity || prof?.city || undefined,
+      legalType: prof?.legalType || undefined,
+      inn: prof?.inn || undefined,
+      avatar: prof?.shopLogo || prof?.masterAvatar || undefined,
+    };
+    if (editItem) acc.updateProduct(editItem.id, stamped);
+    else acc.addProduct(stamped);
     setDraft(empty);
     setStep(1);
     onClose();

@@ -1,4 +1,4 @@
-import { marketProducts } from "../lib/market";
+import { useMarketProducts } from "../lib/market";
 import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -80,8 +80,9 @@ export function CatalogPage() {
   const groupCats = catsByGroup(group);
   const browseMode = !q && group === "all" && cat === "all";
 
+  const market = useMarketProducts();
   const items = useMemo(() => {
-    let l = marketProducts().filter((x) => x.id.startsWith("sp-") && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
+    let l = market.filter((x) => x.id.startsWith("sp-") && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
     if (q) {
       l = l.filter((p) => {
         const c = catBySlug(p.categoryId);
@@ -116,7 +117,7 @@ export function CatalogPage() {
       case "rating": return l.sort((a, b) => b.rating - a.rating);
       default: return l.sort((a, b) => (b.isHit ? 1 : 0) + b.views / 10000 - ((a.isHit ? 1 : 0) + a.views / 10000));
     }
-  }, [group, cat, sub, q, sort, inStock, region, showOther, quality, lim.qualityFilters]);
+  }, [market, group, cat, sub, q, sort, inStock, region, showOther, quality, lim.qualityFilters]);
 
   return (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-6 py-8">
@@ -260,7 +261,8 @@ const viewedOnce = new Set<string>();
 
 export function ProductPage() {
   const { slug = "" } = useParams();
-  const p = marketProducts().find((x) => x.slug === slug) || productBySlug(slug);
+  const market = useMarketProducts();
+  const p = useMemo(() => market.find((x) => x.slug === slug) || productBySlug(slug), [market, slug]);
   const addToCart = useAppStore((s) => s.addToCart);
   const toggleFav = useAppStore((s) => s.toggleFav);
   const favs = useAppStore((s) => s.favorites);
@@ -273,13 +275,14 @@ export function ProductPage() {
   const cat = p ? catBySlug(p.categoryId) : undefined;
   const vendor = p ? vendorById(p.vendorId) : undefined;
   const similar = useMemo(
-    () => (p ? marketProducts().filter((x) => x.categoryId === p.categoryId && x.id !== p.id).slice(0, 4) : []),
-    [p]
+    () => (p ? market.filter((x) => x.categoryId === p.categoryId && x.id !== p.id).slice(0, 4) : []),
+    [market, p]
   );
+  const sellerProducts = useSellerAccount((st) => st.products);
   const sellerItem = useMemo(() => {
     if (!p || !p.id.startsWith("sp-")) return undefined;
-    return useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
-  }, [p]);
+    return sellerProducts.find((x) => x.id === p.id.slice(3));
+  }, [sellerProducts, p]);
   const sellerMedia = sellerItem?.media || [];
   useEffect(() => {
     if (sellerItem && !viewedOnce.has(sellerItem.id)) {

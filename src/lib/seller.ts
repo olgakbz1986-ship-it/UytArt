@@ -97,10 +97,41 @@ export function getCurrentPlanKey(type: SellerLegalType | null | undefined, acco
   return "free"; // заглушка, реальное значение берётся в компоненте
 }
 
-/* ---------- состояние регистрации ---------- */
+/* ---------- состояние регистрации + реестр профилей по аккаунтам ---------- */
 export type SellerRegStatus = "inactive" | "docs" | "moderation" | "rejected" | "payment" | "active" | "blocked";
 
+export interface SellerProfile {
+  accountId: string;
+  status: SellerRegStatus;
+  legalType: SellerLegalType | null;
+  shopName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  city: string;
+  inn: string;
+  ogrn: string;
+  legalName: string;
+  legalAddress: string;
+  shopLogo?: string;
+  masterAvatar?: string;
+  slug: string;
+  production_region: string;
+  commissionRate: number;
+  submittedAt: string;
+  isMaster: boolean;
+  acceptsCustomOrders: boolean;
+  masterName: string;
+  yearsExperience: string;
+  businessStory: string;
+  achievements: string;
+  categories: string[];
+  productionGallery: string[];
+  videoTourUrl: string;
+}
+
 interface SellerRegState {
+  /* Активный черновик/профиль регистрации (заполняется в текущей сессии) */
   status: SellerRegStatus;
   legalType: SellerLegalType | null;
   shopName: string;
@@ -135,6 +166,10 @@ interface SellerRegState {
   videoTourUrl: string;
   submittedAt: string;
 
+  /* РЕЕСТР ПРОФИЛЕЙ: id аккаунта -> профиль продавца.
+     Ключ к решению Проблем №1 и №3: каждый магазин живёт отдельно. */
+  profilesByAccount: Record<string, SellerProfile>;
+
   setLegalType: (t: SellerLegalType) => void;
   setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar" | "isMaster" | "acceptsCustomOrders" | "productionGallery" | "videoTourUrl" | "submittedAt">>) => void;
   toggleCategory: (slug: string) => void;
@@ -148,13 +183,19 @@ interface SellerRegState {
   retryDocuments: () => void;
   payFee: (method: string) => void;
   resetFlow: () => void;
+  /* Загрузить в активный стор профиль аккаунта uid (при входе/переключении) */
+  loadProfile: (uid: string) => void;
+  /* Сохранить активный профиль в реестр под uid */
+  saveProfile: (uid: string) => void;
+  /* Сброс при выходе (чтобы следующий пользователь не увидел чужой кабинет) */
+  clearActive: () => void;
 }
 
 const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "master";
 
 export const useSellerReg = create<SellerRegState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       status: "inactive",
       legalType: null,
       shopName: "",
@@ -185,9 +226,16 @@ export const useSellerReg = create<SellerRegState>()(
       productionGallery: [],
       videoTourUrl: "",
       submittedAt: "",
+      profilesByAccount: {},
 
       setLegalType: (t) => set({ legalType: t, docs: {} }),
-      setInfo: (patch) => set(patch),
+      /* Любая правка профиля сохраняет активный профиль в реестр под id аккаунта.
+         Это обеспечивает Проблему №3: изменил профиль → товары «отзеркалят» новые данные. */
+      setInfo: (patch) => {
+        set(patch as Partial<SellerRegState>);
+        const uid = activeUserId();
+        if (uid) get().saveProfile(uid);
+      },
       toggleCategory: (slug) =>
         set((s) => ({
           categories: s.categories.includes(slug) ? s.categories.filter((c) => c !== slug) : [...s.categories, slug],
@@ -212,18 +260,22 @@ export const useSellerReg = create<SellerRegState>()(
             : { status: "rejected", rejectionCount: count, rejectionReason: reason };
         }),
       retryDocuments: () => set({ status: "docs", docs: {} }),
-      payFee: (method) =>
+      payFee: (method) => {
         set((s) => {
           const info = sellerTypeInfo(s.legalType);
           return {
-            status: "active",
+            status: "active" as const,
             submittedAt: new Date().toISOString(),
             payMethod: method,
             commissionRate: info?.commission ?? 15,
             slug: slugify(s.shopName),
             production_region: cityToDistrict(s.city || "Москва"),
           };
-        }),
+        });
+        /* Регистрация завершена — фиксируем профиль в реестре под id аккаунта */
+        const uid = activeUserId();
+        if (uid) get().saveProfile(uid);
+      },
       resetFlow: () =>
         set({
           status: "inactive", legalType: null, shopName: "", contactName: "", email: "", phone: "", city: "",
@@ -231,10 +283,48 @@ export const useSellerReg = create<SellerRegState>()(
           rejectionCount: 0, rejectionReason: "", moderationPassedAt: null, slug: "", production_region: "ЦФО",
           masterName: "", yearsExperience: "", categories: [], businessStory: "", achievements: "",
         }),
+
+      /* ---------- реестр профилей ---------- */
+      loadProfile: (uid) => {
+        const p = get().profilesByAccount[uid];
+        if (!p) {
+          set({ ...EMPTY_REG });
+          return;
+        }
+        const { accountId, ...rest } = p;
+        set({ ...rest, docs: {} });
+      },
+      saveProfile: (uid) => {
+        if (!uid) return;
+        const s = get();
+        const prof: SellerProfile = {
+          accountId: uid,
+          status: s.status, legalType: s.legalType, shopName: s.shopName, contactName: s.contactName,
+          email: s.email, phone: s.phone, city: s.city, inn: s.inn, ogrn: s.ogrn, legalName: s.legalName,
+          legalAddress: s.legalAddress, shopLogo: s.shopLogo, masterAvatar: s.masterAvatar, slug: s.slug,
+          production_region: s.production_region, commissionRate: s.commissionRate, submittedAt: s.submittedAt,
+          isMaster: s.isMaster, acceptsCustomOrders: s.acceptsCustomOrders, masterName: s.masterName,
+          yearsExperience: s.yearsExperience, businessStory: s.businessStory, achievements: s.achievements,
+          categories: s.categories, productionGallery: s.productionGallery, videoTourUrl: s.videoTourUrl,
+        };
+        set((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: prof } }));
+      },
+      clearActive: () => set({ ...EMPTY_REG }),
     }),
     { name: "uyutart-seller-reg-v3" }
   )
 );
+
+const EMPTY_REG = {
+  status: "inactive" as SellerRegStatus, legalType: null as SellerLegalType | null,
+  shopName: "", shopLogo: undefined as string | undefined, masterAvatar: undefined as string | undefined,
+  contactName: "", email: "", phone: "", city: "", inn: "", ogrn: "", legalName: "", legalAddress: "",
+  docs: {} as Record<string, { fileName: string; size: number; ok: boolean }>, payMethod: "",
+  commissionRate: 15, rejectionCount: 0, rejectionReason: "", moderationPassedAt: null as string | null,
+  slug: "", production_region: "ЦФО", masterName: "", yearsExperience: "", categories: [] as string[],
+  businessStory: "", achievements: "", isMaster: false, acceptsCustomOrders: false,
+  productionGallery: [] as string[], videoTourUrl: "", submittedAt: "",
+};
 
 /* ---------- кабинет продавца ---------- */
 export interface SellerTx {
@@ -262,6 +352,9 @@ id: string;
   category: string;
   price: number;
   createdAt: string;
+  /* ВЛАДЕЛЕЦ ТОВАРА — id аккаунта продавца, из которого товар был создан.
+     Жёсткая привязка: каждый магазин видит только свои товары (Проблема №1). */
+  ownerId?: string;
   isDraft?: boolean;
   draftSavedAt?: string;
   manufacturer?: string;
@@ -349,8 +442,58 @@ interface SellerAccountState {
   requestWithdrawal: (amount: number) => void;
   incrementViews: (id: string) => void;
   updateProduct: (id: string, patch: Partial<SellerProductItem>) => void;
+  migrateOwnerlessProducts: (uid: string) => void;
   recordSale: (t: { orderId: string; productPrice: number; commissionAmount: number }) => void;
   consumeAiCardGen: (month: string) => boolean;
+}
+
+/* ============================================================
+   РЕЕСТР ПРОФИЛЕЙ ПРОДАВЦОВ (Проблемы №1 и №3)
+   Профиль продавца хранится ПО id аккаунта: у каждого магазина —
+   свои название, ИНН, город. Товар жёстко привязан к владельцу
+   через ownerId; реквизиты продавца НЕ копируются в товар,
+   а резолвятся из профиля «на лету» — карточка товара всегда
+   зеркало актуального профиля.
+   ============================================================ */
+import { useAppStore } from "./store";
+
+const activeUserId = (): string => {
+  try { return useAppStore.getState().session?.userId || ""; } catch { return ""; }
+};
+
+/* Профиль из реестра по id аккаунта (без проверки статуса) */
+export function sellerProfileOf(uid: string): SellerProfile | null {
+  if (!uid) return null;
+  return useSellerReg.getState().profilesByAccount[uid] || null;
+}
+
+/* Текущий профиль = активная запись реестра для активного аккаунта.
+   Если реестр пуст (legacy-данные), падаем обратно на активный стор
+   useSellerReg — обратная совместимость без потери данных. */
+export function currentSellerProfile(): SellerProfile | null {
+  const uid = activeUserId();
+  if (!uid) return null;
+  const st = useSellerReg.getState();
+  const rec = st.profilesByAccount[uid];
+  if (rec && rec.status === "active") return rec;
+  if (!rec && st.status === "active" && st.shopName) {
+    return { ...st, accountId: uid } as SellerProfile;
+  }
+  return null;
+}
+
+/* Реквизиты продавца для подстановки при создании/публикации товара.
+   Источник истины — профиль (реестр), а не снимок в товаре. */
+export function sellerStampForProduct(): { shopName?: string; sellerCity?: string; legalType?: string; inn?: string; avatar?: string } {
+  const uid = activeUserId();
+  const p = (uid && useSellerReg.getState().profilesByAccount[uid]) || currentSellerProfile() || (useSellerReg.getState() as unknown as SellerProfile);
+  return {
+    shopName: p?.shopName || undefined,
+    sellerCity: p?.city || undefined,
+    legalType: p?.legalType || undefined,
+    inn: p?.inn || undefined,
+    avatar: p?.shopLogo || p?.masterAvatar || undefined,
+  };
 }
 
 export const useSellerAccount = create<SellerAccountState>()(
@@ -383,14 +526,26 @@ export const useSellerAccount = create<SellerAccountState>()(
       products: [],
       team: [],
       aiCardGens: {},
-      addProduct: (p) =>
+      addProduct: (p) => {
+        /* Жёсткая привязка к владельцу: товар создаётся от имени активного аккаунта.
+           Legacy-товары с сервера без ownerId мигрируют к текущему продавцу. */
+        const uid = activeUserId();
+        if (!p.ownerId && p.id && uid) p = { ...p, ownerId: uid };
         set((s) => ({
-          products: [{ ...p, id: p.id || "sp-" + Date.now(), createdAt: p.createdAt || new Date().toISOString() }, ...s.products],
-        })),
+          products: [{ ...p, ownerId: p.ownerId || uid || undefined, id: p.id || "sp-" + Date.now(), createdAt: p.createdAt || new Date().toISOString() }, ...s.products],
+        }));
+      },
       removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
       toggleArchive: (id) =>
         set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, archived: !p.archived } : p)) })),
-      updateProduct: (id, patch) => set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
+      updateProduct: (id, patch) => {
+        /* Защита: ownerId нельзя «перевесить» на другой аккаунт */
+        const { ownerId: _ignored, ...safe } = patch as Partial<SellerProductItem>;
+        void _ignored;
+        set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, ...safe } : p)) }));
+      },
+      migrateOwnerlessProducts: (uid) =>
+        set((s) => ({ products: s.products.map((p) => (!p.ownerId && uid ? { ...p, ownerId: uid } : p)) })),
       triggerAIGeneration: (id: string) => {
         // 1. Сразу ставим статус "processing"
         set((s) => ({
@@ -477,3 +632,41 @@ export const selectBalance = (s: SellerAccountState) =>
 /* ---------- экспорты для ProductWizard ---------- */
 export const currentMonth = () => new Date().toISOString().slice(0, 7);
 export const consumeAiCardGen = (month: string) => useSellerAccount.getState().consumeAiCardGen(month);
+
+/* ============================================================
+   СИНХРОНИЗАЦИЯ СОСТОЯНИЯ МЕЖДУ АККАУНТАМИ (Проблемы №1 и №3)
+   Подписки на смену активной сессии:
+   - при входе продавца загружаем ЕГО профиль из реестра;
+   - legacy-товары без ownerId привязываем к текущему аккаунту;
+   - при выходе сбрасываем активный профиль, чтобы следующий
+     пользователь не увидел чужой кабинет.
+   ============================================================ */
+let lastSyncedUid = "";
+useAppStore.subscribe((st) => {
+  const uid = st.session?.userId || "";
+  const isSeller = st.session?.role === "seller";
+  if (!uid) {
+    if (lastSyncedUid) {
+      try { useSellerReg.getState().clearActive(); } catch { /* noop */ }
+      lastSyncedUid = "";
+    }
+    return;
+  }
+  if (uid === lastSyncedUid) return;
+  lastSyncedUid = uid;
+  try {
+    const reg = useSellerReg.getState();
+    if (isSeller) {
+      if (reg.profilesByAccount[uid]) reg.loadProfile(uid);
+      else if (reg.status !== "active") reg.clearActive();
+      /* Миграция legacy: товары без владельца -> текущий аккаунт */
+      const acc = useSellerAccount.getState();
+      if (acc.products.some((p) => !p.ownerId)) {
+        acc.migrateOwnerlessProducts(uid);
+      }
+    } else {
+      reg.clearActive();
+    }
+  } catch { /* noop */ }
+});
+
