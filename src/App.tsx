@@ -10,6 +10,7 @@ import { CartPage, CheckoutPage } from "./pages/checkout";
 import { AuthPage } from "./pages/auth";
 import { MastersPage, ShopPage } from "./pages/masters";
 import AiPage from "./pages/ai";
+import AiDesignerPage from "./features/ai-designer/AiDesigner";
 import ProfilePage from "./pages/profile";
 import {
   PlansPage, MarketPage, SellerRegisterPage, SellerDashboardPage,
@@ -90,6 +91,7 @@ export default function App() {
               <Route path="/masters" element={<MastersPage />} />
               <Route path="/shop/:slug" element={<ShopPage />} />
               <Route path="/ai-assistant" element={<AiPage />} />
+              <Route path="/ai-designer" element={<AiDesignerPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/market" element={<MarketPage />} />

@@ -843,4 +843,8 @@ app.get("/api/market/users/:id/reviews", async (req, res) => {
     res.status(500).json({ error: "server" });
   }
 });
+
+/* Модуль «AI-дизайнер»: изолированные серверные маршруты (/api/ai-designer/*) */
+require("./ai-designer.cjs").mount(app, { guard, db });
+
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));

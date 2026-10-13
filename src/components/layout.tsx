@@ -313,7 +313,7 @@ export function Header() {
     { to: "/catalog", label: "Каталог" },
     { to: "/market", label: "Заказы" },
     { to: "/masters", label: "Мастера" },
-    { to: "/ai-assistant", label: "AI-дизайнер" },
+    { to: "/ai-designer", label: "AI-дизайнер" },
     { to: "/about", label: "О нас" },
     { to: "/contacts", label: "Контакты" },
     { to: "/legal", label: "Документы" },
