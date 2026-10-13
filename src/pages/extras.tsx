@@ -21,7 +21,6 @@ import {
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
   Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
-import { DISTRICTS } from "../lib/geo";
 import { useAppStore } from "../lib/store";
 import { useMarketProducts, sellerProfileOf } from "../lib/market";
 import {
@@ -2003,7 +2002,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
               <p><span className="text-ink-mute block">Форма</span><span className="font-semibold text-ink">{sellerTypeInfo(lt)?.short}</span></p>
               <p><span className="text-ink-mute block">ИНН</span><span className="font-semibold text-ink">{s.inn || "—"}</span></p>
-              <p><span className="text-ink-mute block">Регион производства</span><span className="font-semibold text-ink">{s.production_region}</span></p>
+              <p><span className="text-ink-mute block">Регион производства</span><span className="font-semibold text-ink">{s.city || s.production_region}</span></p>
             </div>
 
             {/* контакты магазина — редактируемые */}

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { cityToDistrict } from "./geo";
 
 /* ============================================================
    Раздельные регистрации продавцов: самозанятый / ИП / ООО
@@ -269,7 +268,7 @@ export const useSellerReg = create<SellerRegState>()(
             payMethod: method,
             commissionRate: info?.commission ?? 15,
             slug: slugify(s.shopName),
-            production_region: cityToDistrict(s.city || "Москва"),
+            production_region: (s.city || "").trim() || "Москва", /* регион производства = реальный город мастера */
           };
         });
         /* Регистрация завершена — фиксируем профиль в реестре под id аккаунта */

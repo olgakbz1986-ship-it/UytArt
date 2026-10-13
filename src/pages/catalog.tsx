@@ -8,7 +8,7 @@ import {
   GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
   vendorById, productBySlug,
 } from "../data/seed";
-import { canDeliver, DISTRICTS, DistrictId, zoneLabel } from "../lib/geo";
+import { canDeliver, CITIES, zoneLabel } from "../lib/geo";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { ProductGrid } from "../components/product";
@@ -49,7 +49,7 @@ export function CatalogPage() {
   const q = (sp.get("q") || "").trim().toLowerCase();
   const [sort, setSort] = useState<SortId>("popular");
   const [inStock, setInStock] = useState(false);
-  const [region, setRegion] = useState<DistrictId | "all">("all");
+  const [region, setRegion] = useState<string>("all"); /* город покупателя (или "all") */
   const [showOther, setShowOther] = useState(true);
   const [quality, setQuality] = useState(false);
 
@@ -214,10 +214,14 @@ export function CatalogPage() {
             ) : (
               <Link to="/plans" className="text-[12.5px] font-bold text-premium" title="Доступно на платных тарифах">★ Премиум-фильтры</Link>
             )}
-            <select value={region} onChange={(e) => setRegion(e.target.value as DistrictId | "all")} aria-label="Регион доставки"
+            <select value={region} onChange={(e) => setRegion(e.target.value)} aria-label="Город доставки"
               className="h-[44px] px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium cursor-pointer outline-none focus:border-ai">
               <option value="all">🌍 Вся Россия</option>
-              {DISTRICTS.map((d) => <option key={d.id} value={d.id}>{d.name} округ</option>)}
+              {[...new Set(CITIES.map((c) => c.district))].map((d) => (
+                <optgroup key={d} label={d}>
+                  {CITIES.filter((c) => c.district === d).sort((a, b) => a.name.localeCompare(b.name, "ru")).map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </optgroup>
+              ))}
             </select>
             <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Сортировка"
               className="h-[44px] px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium cursor-pointer outline-none focus:border-ai">
@@ -231,7 +235,7 @@ export function CatalogPage() {
         <div className="flex items-center gap-2.5 bg-ai-soft border border-ai/20 rounded-[10px] px-4 py-3 mb-6 fade-up">
           <MapPin size={16} className="text-ai shrink-0" />
           <p className="text-[13px] text-ink flex-1">
-            Выбран <strong>{DISTRICTS.find((d) => d.id === region)?.name}</strong> округ. Крупногабарит показывается только от мастеров, которые сюда доставляют.
+            Выбран город <strong>{region}</strong>. Крупногабарит показывается только от мастеров, которые сюда доставляют.
           </p>
           <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-soft cursor-pointer select-none whitespace-nowrap">
             <input type="checkbox" checked={showOther} onChange={(e) => setShowOther(e.target.checked)} /> Показывать из других регионов

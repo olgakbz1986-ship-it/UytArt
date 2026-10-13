@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MapPin, ShieldCheck, Flag, Store, MessageSquare } from "lucide-react";
+import { CITIES } from "../lib/geo";
 import { fmt, vendorById } from "../data/seed";
 import { useSellerReg, useSellerAccount, type SellerProfile } from "../lib/seller";
 import { useMarketProducts } from "../lib/market";
@@ -16,22 +17,6 @@ const LEGAL_META: Record<string, { label: string; emoji: string; color: string }
   ooo: { label: "Производство", emoji: "🏭", color: "#1e3a2f" },
 };
 
-const REGION_CITIES: [string, string[]][] = [
-  ["ЦФО", ["москва", "тула", "тверь", "ярослав", "владимир", "рязань", "калуга", "брянск", "орел", "курск", "воронеж", "липецк", "тамбов", "иваново", "кострома", "смоленск", "белгород"]],
-  ["СЗФО", ["санкт-петербург", "псков", "новгород", "калининград", "мурманск", "архангельск", "вологда", "череповец", "сыктывкар", "петрозаводск"]],
-  ["ЮФО", ["ростов", "краснодар", "сочи", "волгоград", "астрахань", "майкоп", "элиста", "симферополь", "севастополь", "адлер"]],
-  ["СКФО", ["ставрополь", "пятогорск", "кисловодск", "нальчик", "владикавказ", "грозный", "махачкала", "дербент", "черкесск", "ессентуки"]],
-  ["ПФО", ["нижний новгород", "казань", "самара", "саратов", "уфа", "пермь", "ульяновск", "киров", "ижевск", "чебоксары", "йошкар-ола", "пенза", "саранск", "оренбург"]],
-  ["УФО", ["екатеринбург", "челябинск", "тюмень", "сургут", "курган", "магнитогорск", "нижний тагил", "ханты-мансийск"]],
-  ["СФО", ["новосибирск", "омск", "красноярск", "томск", "кемерово", "барнаул", "иркутск", "новокузнецк"]],
-  ["ДФО", ["владивосток", "хабаровск", "якутск", "южно-сахалинск", "петропавловск", "магадан", "благовещенск", "чита", "улан-удэ"]],
-];
-const regionByCity = (city: string): string => {
-  const c = (city || "").toLowerCase();
-  if (!c.trim()) return "";
-  for (const [r, list] of REGION_CITIES) if (list.some((w) => c.includes(w))) return r;
-  return "";
-};
 
 const buildRealMaster = (reg: any, userId?: string, allGoods?: any[]): any => {
   if (!reg || reg.status !== "active" || !reg.shopName || !reg.isMaster) return null;
@@ -47,7 +32,6 @@ const buildRealMaster = (reg: any, userId?: string, allGoods?: any[]): any => {
     slug: userId || "self",
     name: reg.shopName,
     city: reg.city || "",
-    region: regionByCity(reg.city),
     story: reg.businessStory || "",
     avatar: reg.shopLogo || reg.masterAvatar || (useAppStore.getState().session?.avatar || ""),
     initial: reg.shopName[0]?.toUpperCase() || "М",
@@ -100,7 +84,7 @@ export function MastersPage() {
     
     return Array.from(merged.values()).filter((v: any) => {
       const okQ = !q.trim() || (v.name + " " + v.city + " " + v.story).toLowerCase().includes(q.toLowerCase());
-      const okR = region === "all" || v.region === region;
+      const okR = region === "all" || (v.city || "").trim().toLowerCase() === region.toLowerCase();
       return okQ && okR;
     });
   }, [q, region, serverMasters, localMaster, marketAll]);
@@ -114,8 +98,8 @@ export function MastersPage() {
       <div className="flex gap-3 flex-wrap mb-7">
         <input className="field max-w-[320px]" placeholder="Поиск по имени или городу…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="field max-w-[240px] cursor-pointer" value={region} onChange={(e) => setRegion(e.target.value)}>
-          <option value="all">Все округа</option>
-          {["ЦФО", "СЗФО", "ЮФО", "СКФО", "ПФО", "УФО", "СФО", "ДФО"].map((r) => <option key={r} value={r}>{r}</option>)}
+          <option value="all">Все города</option>
+          {[...new Set([...CITIES.map((c) => c.name), ...list.map((v: any) => (v.city || "").trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "ru")).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
@@ -165,7 +149,7 @@ export function MastersPage() {
         <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
           <p className="text-[44px] mb-3">🔍</p>
           <p className="font-display font-bold text-[20px] text-ink mb-2">Мастера не найдены</p>
-          <p className="text-[14px] text-ink-soft">Попробуйте изменить запрос или округ.</p>
+          <p className="text-[14px] text-ink-soft">Попробуйте изменить запрос или город.</p>
         </div>
       )}
     </div>
