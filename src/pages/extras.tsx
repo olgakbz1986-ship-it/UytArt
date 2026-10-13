@@ -21,11 +21,13 @@ import {
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
   Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
+import { CITIES, safeDistrictLabel } from "../lib/geo";
+import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from "../lib/inn";
 import { useAppStore } from "../lib/store";
 import { useMarketProducts, sellerProfileOf } from "../lib/market";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById,
-  SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX,
+  SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX, previewLegalTypeChange, LegalTypePreview, SellerProfile,
 } from "../lib/seller";
 import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
 import {
@@ -1198,6 +1200,17 @@ export function SellerDashboardPage() {
   const plan = sellerLimits(lt, planId);
   const lvl = levelOf(lt, planId);
   const lvlMeta = SELLER_LEVEL[lvl];
+  const [legalWizardOpen, setLegalWizardOpen] = useState(false);
+  const [legalStep, setLegalStep] = useState<1 | 2 | 3>(1);
+  const [legalTarget, setLegalTarget] = useState<SellerLegalType | null>(null);
+  const [legalPreview, setLegalPreview] = useState<LegalTypePreview | null>(null);
+  const [legalErr, setLegalErr] = useState("");
+  const sellerUid = user?.userId || "";
+  const verificationStatus = useSellerReg((st) => (sellerUid ? st.profilesByAccount[sellerUid]?.verificationStatus : undefined));
+  const [legalDraft, setLegalDraft] = useState({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress });
+  const [legalSaved, setLegalSaved] = useState(false);
+  const [legalFetching, setLegalFetching] = useState(false);
+  useEffect(() => { setLegalDraft({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress }); }, [sellerUid]);
 const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.commissionRate;
   const sentOrders = myOrders.filter((o) => o.status !== "paid");
   const revenue = sentOrders.reduce((sum, o) => sum + o.total, 0);
@@ -1999,14 +2012,53 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <div className="mb-5"><SellerAvatar /></div>
           {/* Профиль и юр. данные — доступны и редактируемы на любом тарифе */}
           <SettingsSection title="Профиль и юридические данные" icon={<Settings size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
-            {/* юридические данные (из регистрации, только чтение) */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-5">
-              <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink break-words">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
-              <p><span className="text-ink-mute block">Форма</span><span className="font-semibold text-ink">{sellerTypeInfo(lt)?.short}</span></p>
-              <p><span className="text-ink-mute block">ИНН</span><span className="font-semibold text-ink">{s.inn || "—"}</span></p>
-              <p><span className="text-ink-mute block">Регион производства</span><span className="font-semibold text-ink">{s.city || s.production_region}</span></p>
-            </div>
+            {/* юридические данные : статус проверки + смена формы */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-5">
+                <Field label="Продавец"><input className="field break-words" value={legalDraft.legalName} onChange={(e) => setLegalDraft({ ...legalDraft, legalName: e.target.value })} /></Field>
+                <Field label="Форма"><span className="font-semibold text-ink text-[13px]">{sellerTypeInfo(lt)?.short}</span></Field>
+                <Field label="ИНН">
+                  <input className="field" inputMode="numeric" value={legalDraft.inn} onChange={(e) => setLegalDraft({ ...legalDraft, inn: e.target.value.replace(/\D/g, "") })} placeholder="602709876543" />
+                  {lt !== "self_employed" && (
+                    <button type="button" disabled={legalFetching} onClick={async () => {
+                      const v = validateINN(legalDraft.inn); if (!v.valid) { setLegalErr(v.error || "Невалидный ИНН"); return; }
+                      setLegalFetching(true); setLegalErr("");
+                      try {
+                        const data = await fetchCompanyDataByINN(legalDraft.inn);
+                        if (!data) { setLegalErr("Автозаполнение по ИНН станет доступно после подключения справочника ФНС/DaData"); return; }
+                        setLegalDraft((d) => ({ ...d, legalName: data.legalName || d.legalName, ogrn: data.ogrn || d.ogrn, legalAddress: data.legalAddress || d.legalAddress, production_city: d.production_city || data.productionCity || "" }));
+                        setLegalSaved(false);
+                      } finally { setLegalFetching(false); }
+                    }} className="mt-1 text-[11.5px] font-semibold underline decoration-dotted underline-offset-2" style={{ color: "#2d5f4c" }}>
+                      {legalFetching ? "Запрос…" : "Подтянуть реквизиты по ИНН"}
+                    </button>
+                  )}
+                </Field>
+                <Field label="Город производства">
+                  <div className="space-y-1">
+                    <input className="field" list="rf-cities" value={legalDraft.production_city} onChange={(e) => setLegalDraft({ ...legalDraft, production_city: e.target.value })} placeholder="Например: Курск" />
+                    <datalist id="rf-cities">{CITIES.map((c) => <option key={c.name} value={c.name} />)}</datalist>
+                    {legalDraft.production_city && <p className="text-[11.5px] text-ink-mute">{safeDistrictLabel(legalDraft.production_city)}</p>}
+                  </div>
+                </Field>
+                {lt !== "self_employed" && (<>
+                  <Field label="ОГРН"><input className="field" inputMode="numeric" value={legalDraft.ogrn} onChange={(e) => setLegalDraft({ ...legalDraft, ogrn: e.target.value.replace(/\D/g, "") })} placeholder="15 цифр" /></Field>
+                  <Field label="Юридический адрес"><input className="field" value={legalDraft.legalAddress} onChange={(e) => setLegalDraft({ ...legalDraft, legalAddress: e.target.value })} placeholder="Индекс, регион, город, улица, дом, офис" /></Field>
+                </>)}
+              </div>
+              <div className="flex items-center gap-3 mb-5">
+                <Btn size="sm" onClick={() => { const v = validateINN(legalDraft.inn); if (!v.valid) { setLegalErr(v.error || "Невалидный ИНН"); setLegalSaved(false); return; } const patch: Partial<Pick<SellerProfile, "legalName" | "inn" | "production_city" | "ogrn" | "legalAddress">> = { legalName: legalDraft.legalName, inn: legalDraft.inn, production_city: legalDraft.production_city }; if (lt !== "self_employed") { const vg = validateOGRN(legalDraft.ogrn); if (!vg.valid) { setLegalErr(vg.error || "Невалидный ОГРН"); setLegalSaved(false); return; } patch.ogrn = legalDraft.ogrn; patch.legalAddress = legalDraft.legalAddress; } const res = s.updateLegalFields(sellerUid, patch, "Изменение реквизитов"); if (!res.ok) { setLegalErr(res.error || "Не удалось сохранить"); setLegalSaved(false); return; } setLegalErr(""); setLegalSaved(true); setTimeout(() => setLegalSaved(false), 2200); }}>Сохранить реквизиты</Btn>
+                {legalSaved && <span className="text-[12px] font-semibold" style={{ color: "#2d5f4c" }}>Сохранено — на проверке</span>}
+                {legalErr && <span className="text-[12px] font-semibold text-error">{legalErr}</span>}
+              </div>
 
+            <div className="flex items-center justify-between gap-2 mb-5">
+              <div className="flex items-center gap-2">
+                {verificationStatus === "verified" && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold text-white" style={{ background: "#2d5f4c" }}>Проверено</span>}
+                {verificationStatus === "pending" && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold text-white" style={{ background: "#c77e28" }}>На проверке</span>}
+                {verificationStatus === "rejected" && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold text-white" style={{ background: "#b3261e" }}>Отклонено модерацией</span>}
+              </div>
+              <Btn size="sm" variant="outline" onClick={() => { setLegalWizardOpen(true); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }}>Сменить правовую форму</Btn>
+            </div>
             {/* контакты магазина — редактируемые */}
             <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-2.5">Контакты магазина</p>
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
@@ -2139,6 +2191,64 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         </div>
       )}
       <ProductWizard_v2 open={prodWizardOpen} editId={editProductId} onClose={() => { setProdWizardOpen(false); setEditProductId(null); }} />
+      <Modal open={legalWizardOpen} onClose={() => { setLegalWizardOpen(false); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }} title="Смена правовой формы">
+        {legalStep === 1 && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-soft">Выберите новую правовую форму. Текущая: {sellerTypeInfo(lt)?.short}.</p>
+            <div className="grid gap-2">
+              {SELLER_TYPES.filter((t) => t.type !== lt).map((t) => (
+                <button key={t.type} onClick={() => { setLegalTarget(t.type); setLegalPreview(previewLegalTypeChange(lt, planId, t.type)); }}
+                  className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${legalTarget === t.type ? "" : "border-line-soft"}`}
+                  style={legalTarget === t.type ? { borderColor: "#2d5f4c", background: "#eef4f0" } : undefined}>
+                  <p className="text-[13.5px] font-bold text-ink">{t.short} — {t.label}</p>
+                  <p className="text-[11.5px] text-ink-mute">Разовый сбор {t.fee} ₽ · базовая комиссия {t.commission}%</p>
+                </button>
+              ))}
+            </div>
+            {legalPreview && (
+              <div className="rounded-xl bg-line-soft p-3 space-y-1">
+                <p className="text-[12px] font-bold text-ink">Последствия перехода:</p>
+                {legalPreview.warnings.map((w, i) => <p key={i} className="text-[12px] text-ink-soft">• {w}</p>)}
+                <p className="text-[12px] text-ink-soft">• Рекомендуемый тариф: {legalPreview.newPlanName} ({legalPreview.newPrice} ₽/мес)</p>
+                <p className="text-[12px] text-ink-mute mt-1">Потребуется загрузить документы: {legalPreview.docsRequired.map((d) => d.name).join(", ")}</p>
+              </div>
+            )}
+            <Btn className="w-full" disabled={!legalTarget} onClick={() => setLegalStep(2)}>Далее</Btn>
+          </div>
+        )}
+        {legalStep === 2 && legalTarget && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-soft">Подтвердите смену формы: {sellerTypeInfo(lt)?.short} → {sellerTypeInfo(legalTarget)?.short}.</p>
+            <p className="text-[12px] text-ink-mute">После применения текущие документы будут сброшены, магазин получит статус «На проверке», и потребуется загрузить новые документы.</p>
+            {legalErr && <p className="text-[12px] font-semibold text-error">{legalErr}</p>}
+            <div className="flex gap-2">
+              <Btn variant="outline" className="flex-1" onClick={() => setLegalStep(1)}>Назад</Btn>
+              <Btn className="flex-1" onClick={() => { const res = s.changeLegalType(sellerUid, legalTarget, planId); if (!res.ok) { setLegalErr(res.error || "Не удалось сменить форму"); return; } setLegalErr(""); setLegalStep(3); }}>Применить форму</Btn>
+            </div>
+          </div>
+        )}
+        {legalStep === 3 && legalTarget && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-soft">Загрузите документы для формы «{sellerTypeInfo(legalTarget)?.short}».</p>
+            <div className="space-y-2">
+              {sellerTypeInfo(legalTarget)!.docs.map((d) => {
+                const doc = s.docs[d.key];
+                return (
+                  <div key={d.key} className="rounded-xl border border-line-soft p-3">
+                    <p className="text-[12.5px] font-semibold text-ink">{d.name}</p>
+                    <p className="text-[11px] text-ink-mute mb-1.5">{d.note}</p>
+                    <input type="file" className="text-[12px] text-ink-soft" onChange={(e) => { const f = e.target.files?.[0]; if (f) s.addDoc(d.key, f.name, f.size); }} />
+                    {doc && <p className="text-[11.5px] text-ink-mute mt-1.5">Загружено: {doc.fileName} · {(doc.size / 1024).toFixed(0)} КБ</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <Btn className="w-full" disabled={sellerTypeInfo(legalTarget)!.docs.some((d) => !s.docs[d.key])} onClick={() => { s.saveProfile(sellerUid); setLegalWizardOpen(false); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }}>
+              Сохранить документы и закрыть
+            </Btn>
+          </div>
+        )}
+      </Modal>
 
       {/* вывод средств */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Вывод средств">

@@ -339,6 +339,27 @@ body::before {
 .field:focus { border-color: var(--color-ai); }
 .field-error { border-color: var(--color-error) !important; }
 
+/* --- подавление нативной стрелки datalist у полей с автодополнением (подсказки сохраняются) --- */
+.field[list] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none;
+}
+.field[list]::-webkit-calendar-picker-indicator,
+.field[list]::-webkit-datetime-edit-picker-indicator,
+.field[list]::picker-icon {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 input[type="checkbox"], input[type="radio"] {
   accent-color: var(--color-dark);
   width: 16px; height: 16px; cursor: pointer;

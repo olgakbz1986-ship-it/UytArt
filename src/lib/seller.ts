@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { validateINN } from "./inn";
 import { persist } from "zustand/middleware";
 
 /* ============================================================
@@ -99,6 +100,65 @@ export function getCurrentPlanKey(type: SellerLegalType | null | undefined, acco
 /* ---------- состояние регистрации + реестр профилей по аккаунтам ---------- */
 export type SellerRegStatus = "inactive" | "docs" | "moderation" | "rejected" | "payment" | "active" | "blocked";
 
+/* ---------- аудит-лог изменений реквизитов ---------- */
+export interface AuditEntry {
+  timestamp: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  reason?: string;
+  status: "pending" | "approved" | "rejected";
+  approvedAt?: string;
+}
+
+/* ---------- предпросмотр смены правовой формы (чистая функция, без побочных эффектов) ---------- */
+/* NOTE: дублирует матрицу уровней из getCommissionRate — техдолг: унифицировать при рефакторинге тарифов */
+const PLAN_LEVEL: Record<string, number> = {
+  free: 0, master: 1, business: 1, corp: 1,
+  profi: 2, "business-pro": 2, "corp-pro": 2,
+  top: 3, "business-premium": 3, "corp-premium": 3,
+};
+
+export interface LegalTypePreview {
+  newPlanId: string;
+  newPlanName: string;
+  newPrice: number;
+  oldCommission: number;
+  newCommission: number;
+  docsRequired: DocReq[];
+  warnings: string[];
+}
+
+export function previewLegalTypeChange(
+  oldType: SellerLegalType | null,
+  oldPlanId: string,
+  newType: SellerLegalType,
+): LegalTypePreview {
+  const oldInfo = sellerTypeInfo(oldType);
+  const newInfo = sellerTypeInfo(newType)!;
+  const oldCommission = oldType ? getCommissionRate(oldType, oldPlanId) : 15;
+  const oldLevel = PLAN_LEVEL[oldPlanId] ?? 0;
+  const plans = SELLER_PLANS[newType];
+  const target = plans.find((p) => (PLAN_LEVEL[p.id] ?? 0) === oldLevel)
+    || plans.slice().sort((a, b) => Math.abs((PLAN_LEVEL[a.id] ?? 0) - oldLevel) - Math.abs((PLAN_LEVEL[b.id] ?? 0) - oldLevel))[0]
+    || plans[0];
+  const newCommission = getCommissionRate(newType, target.id);
+  const warnings: string[] = [];
+  if (oldInfo && newInfo.fee > oldInfo.fee) warnings.push(`Разовый сбор: ${oldInfo.fee} ₽ → ${newInfo.fee} ₽`);
+  if (newCommission !== oldCommission) warnings.push(`Комиссия: ${oldCommission}% → ${newCommission}%`);
+  const oldPlan = oldType ? sellerPlanById(oldType, oldPlanId) : null;
+  if (oldPlan && oldPlan.price !== target.price) warnings.push(`Цена тарифа: ${oldPlan.price} ₽/мес → ${target.price} ₽/мес`);
+  return {
+    newPlanId: target.id,
+    newPlanName: target.name,
+    newPrice: target.price,
+    oldCommission,
+    newCommission,
+    docsRequired: newInfo.docs,
+    warnings,
+  };
+}
+
 export interface SellerProfile {
   accountId: string;
   status: SellerRegStatus;
@@ -116,6 +176,7 @@ export interface SellerProfile {
   masterAvatar?: string;
   slug: string;
   production_region: string;
+  production_city?: string;
   commissionRate: number;
   submittedAt: string;
   isMaster: boolean;
@@ -127,6 +188,14 @@ export interface SellerProfile {
   categories: string[];
   productionGallery: string[];
   videoTourUrl: string;
+
+  /* ---------- статусы проверки и аудит (премиум-блок) ---------- */
+  verificationStatus?: "verified" | "pending" | "rejected";
+  innValid?: boolean;
+  dataSource?: "manual" | "api";
+  changeReason?: string;
+  auditLog?: AuditEntry[];
+  docs?: Record<string, { fileName: string; size: number; ok: boolean }>;
 }
 
 interface SellerRegState {
@@ -152,6 +221,7 @@ interface SellerRegState {
   moderationPassedAt: string | null;
   slug: string;
   production_region: string;
+  production_city: string;
 
   /* ---------- блок «О мастере» ---------- */
   masterName: string;
@@ -188,6 +258,12 @@ interface SellerRegState {
   saveProfile: (uid: string) => void;
   /* Сброс при выходе (чтобы следующий пользователь не увидел чужой кабинет) */
   clearActive: () => void;
+  /* Изменить юридические реквизиты с записью в аудит-лог и статусом перепроверки */
+  updateLegalFields: (uid: string, patch: Partial<Pick<SellerProfile, "inn" | "ogrn" | "legalName" | "legalAddress" | "production_region" | "production_city" | "legalType">>, reason: string) => { ok: boolean; error?: string };
+  /* Прочитать историю изменений реквизитов аккаунта */
+  getAuditLog: (uid: string) => AuditEntry[];
+  /* Сменить правовую форму аккаунта с предпросмотром последствий и аудит-логом */
+  changeLegalType: (uid: string, newType: SellerLegalType, oldPlanId: string) => { ok: boolean; error?: string; preview?: LegalTypePreview };
 }
 
 const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "master";
@@ -213,7 +289,8 @@ export const useSellerReg = create<SellerRegState>()(
       rejectionReason: "",
       moderationPassedAt: null,
       slug: "",
-      production_region: "ЦФО",
+      production_region: "",
+      production_city: "",
 
       masterName: "",
       yearsExperience: "",
@@ -268,7 +345,7 @@ export const useSellerReg = create<SellerRegState>()(
             payMethod: method,
             commissionRate: info?.commission ?? 15,
             slug: slugify(s.shopName),
-            production_region: (s.city || "").trim() || "Москва", /* регион производства = реальный город мастера */
+            production_city: (s.city || "").trim(), production_region: (s.city || "").trim(),
           };
         });
         /* Регистрация завершена — фиксируем профиль в реестре под id аккаунта */
@@ -279,7 +356,7 @@ export const useSellerReg = create<SellerRegState>()(
         set({
           status: "inactive", legalType: null, shopName: "", contactName: "", email: "", phone: "", city: "",
           inn: "", ogrn: "", legalName: "", legalAddress: "", docs: {}, payMethod: "", commissionRate: 15,
-          rejectionCount: 0, rejectionReason: "", moderationPassedAt: null, slug: "", production_region: "ЦФО",
+          rejectionCount: 0, rejectionReason: "", moderationPassedAt: null, slug: "", production_region: "", production_city: "",
           masterName: "", yearsExperience: "", categories: [], businessStory: "", achievements: "",
         }),
 
@@ -291,24 +368,88 @@ export const useSellerReg = create<SellerRegState>()(
           return;
         }
         const { accountId, ...rest } = p;
-        set({ ...rest, docs: {} });
+        set({ ...rest, production_city: p.production_city || p.city || "", docs: p.docs || {} });
       },
       saveProfile: (uid) => {
         if (!uid) return;
         const s = get();
+        const prev = get().profilesByAccount[uid];
         const prof: SellerProfile = {
           accountId: uid,
           status: s.status, legalType: s.legalType, shopName: s.shopName, contactName: s.contactName,
           email: s.email, phone: s.phone, city: s.city, inn: s.inn, ogrn: s.ogrn, legalName: s.legalName,
           legalAddress: s.legalAddress, shopLogo: s.shopLogo, masterAvatar: s.masterAvatar, slug: s.slug,
-          production_region: s.production_region, commissionRate: s.commissionRate, submittedAt: s.submittedAt,
+          production_region: s.production_region, production_city: s.production_city, commissionRate: s.commissionRate, submittedAt: s.submittedAt,
           isMaster: s.isMaster, acceptsCustomOrders: s.acceptsCustomOrders, masterName: s.masterName,
           yearsExperience: s.yearsExperience, businessStory: s.businessStory, achievements: s.achievements,
           categories: s.categories, productionGallery: s.productionGallery, videoTourUrl: s.videoTourUrl,
+          docs: s.docs,
+          auditLog: prev?.auditLog,
+          verificationStatus: prev?.verificationStatus,
+          innValid: prev?.innValid,
+          dataSource: prev?.dataSource,
+          changeReason: prev?.changeReason,
         };
         set((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: prof } }));
       },
       clearActive: () => set({ ...EMPTY_REG }),
+      updateLegalFields: (uid, patch, reason) => {
+        if (patch.inn !== undefined) {
+          const v = validateINN(patch.inn);
+          if (!v.valid) return { ok: false, error: v.error };
+        }
+        const prof = get().profilesByAccount[uid];
+        if (!prof) return { ok: false, error: "Профиль не найден" };
+        const now = new Date().toISOString();
+        const entries: AuditEntry[] = Object.entries(patch).map(([field, newValue]) => ({
+          timestamp: now,
+          field,
+          oldValue: String((prof as unknown as Record<string, unknown>)[field] ?? ""),
+          newValue: String(newValue ?? ""),
+          reason,
+          status: "pending" as const,
+        }));
+        const updated: SellerProfile = {
+          ...prof,
+          ...patch,
+          verificationStatus: "pending",
+          changeReason: reason,
+            ...(patch.production_city !== undefined ? { production_region: patch.production_city } : {}),
+          innValid: patch.inn !== undefined ? validateINN(patch.inn).valid : prof.innValid,
+          auditLog: [...(prof.auditLog || []), ...entries],
+        };
+        set((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: updated } }));
+        if (uid === activeUserId()) set({ inn: updated.inn, ogrn: updated.ogrn, legalName: updated.legalName, legalAddress: updated.legalAddress, production_region: updated.production_region, production_city: updated.production_city ?? "", legalType: updated.legalType });
+        return { ok: true };
+      },
+      getAuditLog: (uid) => get().profilesByAccount[uid]?.auditLog || [],
+      changeLegalType: (uid, newType, oldPlanId) => {
+        const prof = get().profilesByAccount[uid];
+        if (!prof) return { ok: false, error: "Профиль не найден" };
+        if (prof.legalType === newType) return { ok: false, error: "Такая форма уже указана" };
+        const preview = previewLegalTypeChange(prof.legalType, oldPlanId, newType);
+        const now = new Date().toISOString();
+        const entry: AuditEntry = {
+          timestamp: now,
+          field: "legalType",
+          oldValue: prof.legalType || "",
+          newValue: newType,
+          reason: "Смена правовой формы",
+          status: "pending",
+        };
+        const updated: SellerProfile = {
+          ...prof,
+          legalType: newType,
+          docs: {},
+          verificationStatus: "pending",
+          changeReason: "Смена правовой формы",
+          commissionRate: preview.newCommission,
+          auditLog: [...(prof.auditLog || []), entry],
+        };
+        set((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: updated } }));
+        if (uid === activeUserId()) set({ legalType: newType, docs: {} });
+        return { ok: true, preview };
+      },
     }),
     { name: "uyutart-seller-reg-v3" }
   )
@@ -320,7 +461,7 @@ const EMPTY_REG = {
   contactName: "", email: "", phone: "", city: "", inn: "", ogrn: "", legalName: "", legalAddress: "",
   docs: {} as Record<string, { fileName: string; size: number; ok: boolean }>, payMethod: "",
   commissionRate: 15, rejectionCount: 0, rejectionReason: "", moderationPassedAt: null as string | null,
-  slug: "", production_region: "ЦФО", masterName: "", yearsExperience: "", categories: [] as string[],
+  slug: "", production_region: "", production_city: "", masterName: "", yearsExperience: "", categories: [] as string[],
   businessStory: "", achievements: "", isMaster: false, acceptsCustomOrders: false,
   productionGallery: [] as string[], videoTourUrl: "", submittedAt: "",
 };

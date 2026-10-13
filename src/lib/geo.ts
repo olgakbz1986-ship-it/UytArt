@@ -19,26 +19,39 @@ const LARGE = ["lighting"];
 
 /* сможет ли продавец доставить товар в округ покупателя */
 export function canDeliver(p: Product, cityOrDistrict: string): boolean {
-  const asDistrict = DISTRICTS.some((d) => d.id === cityOrDistrict);
-  const knownCity = CITIES.some((c) => normalizeCity(c.name) === normalizeCity(cityOrDistrict));
-  if (!asDistrict && !knownCity) return true; /* неизвестный пункт — не ограничиваем выдачу */
-  const district = asDistrict ? cityOrDistrict : cityToDistrict(cityOrDistrict);
-  if (LOCAL_ONLY.has(p.categoryId)) return vendorById(p.vendorId)?.production_region === district;
+  const vendorRegion = (vendorById(p.vendorId)?.production_region || "").trim();
+  if (!vendorRegion) return true;
+
+  const inputIsDistrict = DISTRICTS.some((d) => d.id === cityOrDistrict);
+  const inputIsKnownCity = CITIES.some((c) => normalizeCity(c.name) === normalizeCity(cityOrDistrict));
+  if (!inputIsDistrict && !inputIsKnownCity) return true;
+
+  const buyerDistrict = inputIsDistrict ? cityOrDistrict : cityToDistrict(cityOrDistrict);
+
+  const vendorIsDistrict = DISTRICTS.some((d) => d.id === vendorRegion);
+  const vendorDistrict = vendorIsDistrict ? vendorRegion : cityToDistrict(vendorRegion);
+
+  if (!buyerDistrict || !vendorDistrict) return true;
+
+  if (LOCAL_ONLY.has(p.categoryId)) return vendorDistrict === buyerDistrict;
+
   if (LARGE.includes(p.categoryId)) {
-    const own = vendorById(p.vendorId)?.production_region;
-    return own === district || own === "ЦФО" || own === "СЗФО";
+    return vendorDistrict === buyerDistrict || vendorDistrict === "ЦФО" || vendorDistrict === "СЗФО";
   }
+
   return true;
 }
 
 export const vendorDistrictName = (p: Product): string => {
-  const d = vendorById(p.vendorId)?.production_region || "ЦФО";
-  return DISTRICTS.find((x) => x.id === d)?.name || d;
+  const d = vendorById(p.vendorId)?.production_region || "";
+  return DISTRICTS.find((x) => x.id === d)?.name || "округ не определён";
 };
 
 /* определение округа по городу (для регистрации и региональных настроек) */
 export function cityToDistrict(city: string): string {
   const c = city.trim().toLowerCase();
+  const known = CITIES.find((x) => x.name.toLowerCase() === c);
+  if (known) return known.district;
   if (/(санкт|петербург|петрозаводск|архангельск|вологд|калининград|мурманск|новгород|псков)/.test(c)) return "СЗФО";
   if (/(краснодар|ростов|волгоград|астрахан|крым|севастополь|сочи|майкоп|элист)/.test(c)) return "ЮФО";
   if (/(махачкала|грозный|владикавказ|ставропол|пятигорск|нальчик|черкесск)/.test(c)) return "СКФО";
@@ -46,9 +59,16 @@ export function cityToDistrict(city: string): string {
   if (/(новосибирск|омск|красноярск|кемерово|томск|барнаул|иркутск|улан-удэ|чита)/.test(c)) return "СФО";
   if (/(владивосток|хабаровск|сахалин|камчат|магадан|якут|амур|байкал|благовещенск)/.test(c)) return "ДФО";
   if (/(казань|нижний новгород|самара|уфа|пермь|саратов|оренбург|пенза|ижевск|йошкар|саранск|чебоксар|киров|ульяновск)/.test(c)) return "ПФО";
-  return "ЦФО";
+  return "";
 }
 
+
+/* ---------- безопасная подпись округа (не врёт ЦФО для неизвестного города) ---------- */
+export function safeDistrictLabel(city: string): string {
+  const d = cityToDistrict(city);
+  if (!d) return "округ не определён";
+  return (DISTRICTS.find((x) => x.id === d)?.name || d) + " ФО";
+}
 
 /* ---------- справочник городов РФ для гео-зон ---------- */
 export const CITIES: { name: string; lat: number; lon: number; district: string }[] = [
@@ -335,6 +355,6 @@ export function zoneLabel(zone: { mode: "city" | "radius" | "region" | "nationwi
   if (!zone || zone.mode === "nationwide") return "🇷🇺 По России";
   if (zone.mode === "city") return "📍 Только " + (sellerCity || "город продавца") + (zone.withDistrict ? " и район" : "");
   if (zone.mode === "radius") return "🚚 до " + (zone.km || 50) + " км от " + (sellerCity || "...");
-  if (zone.mode === "region") return "🏛 " + (DISTRICTS.find((d) => d.id === cityToDistrict(sellerCity))?.name || "округ");
+  if (zone.mode === "region") return "🏛 " + safeDistrictLabel(sellerCity);
   return "🇷🇺 По России";
 }
