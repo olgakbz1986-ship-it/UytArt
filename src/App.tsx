@@ -8,13 +8,23 @@ import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
 import { CartPage, CheckoutPage } from "./pages/checkout";
 import { AuthPage } from "./pages/auth";
-import { MastersPage, ShopPage } from "./pages/masters";
 
 /* ТЗ 14.2: code-splitting тяжёлых страниц — грузятся динамически при переходе */
 const AiPage = React.lazy(() => import("./pages/ai"));
 const AiDesignerPage = React.lazy(() => import("./features/ai-designer/AiDesigner"));
 const ProfilePage = React.lazy(() => import("./pages/profile"));
 const ProductEditorPage = React.lazy(() => import("./pages/ProductEditor").then((m) => ({ default: m.ProductEditorPage })));
+const MastersPage = React.lazy(() => import("./pages/masters").then((m) => ({ default: m.MastersPage })));
+const ShopPage = React.lazy(() => import("./pages/masters").then((m) => ({ default: m.ShopPage })));
+const PlansPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.PlansPage })));
+const MarketPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.MarketPage })));
+const SellerRegisterPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.SellerRegisterPage })));
+const SellerDashboardPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.SellerDashboardPage })));
+const AboutPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.AboutPage })));
+const LegalIndexPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.LegalIndexPage })));
+const LegalPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.LegalPage })));
+const ContactsPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.ContactsPage })));
+const NotFoundPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.NotFoundPage })));
 
 function PageFallback() {
   return (
@@ -24,11 +34,6 @@ function PageFallback() {
     </div>
   );
 }
-import {
-  PlansPage, MarketPage, SellerRegisterPage, SellerDashboardPage,
-  AboutPage, LegalIndexPage, LegalPage, ContactsPage, NotFoundPage,
-} from "./pages/extras";
-
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
