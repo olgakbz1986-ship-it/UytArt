@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Upload, X, Sparkles, Check, ArrowRight, RefreshCw, Wand2, GitCompareArrows,
-  ShoppingBag, Trash2, Replace, ChevronLeft, Eye, Save, Info, ScanLine, Shirt, Home as HomeIcon,
+  ShoppingBag, Trash2, Replace, ChevronLeft, Eye, Save, Info, ScanLine, Shirt, Home as HomeIcon, Camera,
 } from "lucide-react";
 import { fmt } from "../../data/seed";
 import { Badge, Btn, Rating } from "../../components/ui";
@@ -287,6 +287,19 @@ function UploadStep({ onDone }: { onDone?: () => void }) {
         <Btn variant="outline" onClick={() => inputRef.current?.click()}>Выбрать фото</Btn>
         <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0])} />
+        {/* быстрый доступ к камере на мобильных (iOS Safari / Android Chrome) */}
+        {/Android|iPhone|iPad|iPod/i.test(navigator.userAgent ?? "") && (
+          <div className="mt-3">
+            <Btn variant="ghost" onClick={() => {
+              const cam = document.createElement("input");
+              cam.type = "file";
+              cam.accept = "image/*";
+              (cam as HTMLInputElement & { capture?: string }).capture = "environment";
+              cam.onchange = () => handleFile(cam.files?.[0]);
+              cam.click();
+            }}><Camera size={15} /> Снять на камеру</Btn>
+          </div>
+        )}
       </div>
 
       {(status === "analyzing" || status === "clarifying") && project?.sourceImageId && !modelMode && (
@@ -527,7 +540,7 @@ function ComparePanel() {
   return (
     <div className="mt-8 bg-surface border border-line rounded-[16px] p-5">
       <h3 className="text-[13.5px] font-semibold text-ink mb-3 flex items-center gap-2"><GitCompareArrows size={15} className="text-accent-deep" /> Сравнение вариантов</h3>
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         {[a, b].map((v) => (
           <div key={v.id}>
             <img src={v.imageUrl} alt={v.title} className="w-full aspect-video object-cover rounded-xl border border-line mb-2" />
@@ -734,8 +747,8 @@ function ShoppingStep() {
               ))}
             </div>
             <div className="flex gap-2">
-              <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Например: сделай палитру теплее"
-                className="flex-1 bg-cream border border-line rounded-[10px] px-3.5 py-2.5 text-[13px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent" />
+              <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Например: сделай палитру теплее" enterKeyHint="send"
+                className="flex-1 min-w-0 bg-cream border border-line rounded-[10px] px-3.5 py-2.5 text-[16px] md:text-[13px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent" />
               <Btn size="md" disabled={!cmd.trim()} onClick={() => { void editObject(activeObj || menuObj || undefined, cmd.trim()); setCmd(""); }}>
                 <Wand2 size={14} /> Применить
               </Btn>
@@ -807,7 +820,7 @@ function ShoppingStep() {
         const o = variant.objects.find((x) => x.id === menuObj);
         if (!o) return null;
         return (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-cream border border-line rounded-[16px] shadow-xl px-4 py-3 flex items-center gap-3 max-w-[92vw]">
+          <div className="floating-bottom fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-cream border border-line rounded-[16px] shadow-xl px-4 py-3 flex items-center gap-3 max-w-[92vw]">
             <span className="text-[12.5px] font-semibold text-ink">{o.label}</span>
             <button onClick={() => { setActiveObj(o.id); setMenuObj(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
               className="text-[12px] text-accent-deep hover:underline cursor-pointer">Товар и замена ↑</button>

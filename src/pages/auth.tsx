@@ -119,7 +119,7 @@ export function AuthPage() {
           {tab === "sms" ? (
             <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4">
               <Field label="Номер телефона" required>
-                <input className="field" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 (___) ___-__-__" inputMode="tel" />
+                <input className="field" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 (___) ___-__-__" inputMode="tel" autoComplete="tel" />
               </Field>
               {codeSent && (
                 <Field label="Код из SMS" hint="Демо-код: 4242" required className="fade-up">
@@ -135,10 +135,10 @@ export function AuthPage() {
           ) : (
             <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4">
               <Field label="Email" required>
-                <input className="field" type="email" value={emailForm.email} onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })} placeholder="anna@mail.ru" />
+                <input className="field" type="email" autoComplete="email" inputMode="email" value={emailForm.email} onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })} placeholder="anna@mail.ru" />
               </Field>
               <Field label="Пароль" required>
-                <PasswordInput value={emailForm.password} onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })} placeholder="••••••" />
+                <PasswordInput autoComplete="current-password" value={emailForm.password} onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })} placeholder="••••••" />
               </Field>
               {error && <p className="text-[13px] font-semibold text-error fade-up">{error}</p>}
               <Btn size="lg" className="w-full" disabled={busy} onClick={emailLogin}>{busy ? "Входим…" : "Войти"}</Btn>
@@ -182,9 +182,9 @@ export function AuthPage() {
                 <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4">
                   <h1 className="font-display font-bold text-[24px] text-ink">Создайте аккаунт</h1>
                   <Field label="Имя" required><input className="field" value={reg.name} onChange={(e) => setReg({ ...reg, name: e.target.value })} placeholder="Анна" /></Field>
-                  <Field label="Email" required><input className="field" type="email" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
+                  <Field label="Email" required><input className="field" type="email" autoComplete="email" inputMode="email" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
                   <Field label="Телефон"><input className="field" value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} placeholder="+7 (___) ___-__-__" /></Field>
-                  <Field label="Пароль" required hint="Минимум 6 символов"><PasswordInput value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} placeholder="••••••" /></Field>
+                  <Field label="Пароль" required hint="Минимум 6 символов"><PasswordInput autoComplete="new-password" value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} placeholder="••••••" /></Field>
                   <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
                     <input type="checkbox" checked={reg.tos} onChange={(e) => setReg({ ...reg, tos: e.target.checked })} className="mt-0.5" />
                     <span className="text-[13px] text-ink-soft leading-relaxed">

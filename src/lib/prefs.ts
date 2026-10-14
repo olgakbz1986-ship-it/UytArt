@@ -48,4 +48,19 @@ export function applyTheme(theme: ThemeId) {
     theme === "dark" ||
     (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  // синхронизируем цвет статус-бара/панели браузера на мобильных (iOS Safari, Android Chrome)
+  try {
+    if ("colorScheme" in document.documentElement.style) {
+      document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    }
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+    }
+    meta.content = dark ? "#141a16" : "#F6F3EB";
+  } catch {
+    /* не критично для старых WebView */
+  }
 }
