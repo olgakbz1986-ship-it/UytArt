@@ -213,14 +213,14 @@ function SmartSearch() {
   const go = (to: string) => { setOpen(false); setQ(""); inputRef.current?.blur(); nav(to); };
 
   return (
-    <div className="relative flex-1 max-w-xl min-w-0 hidden sm:block">
-      <div className={`flex items-center gap-2.5 h-[46px] px-4 rounded-full border bg-surface transition-all duration-300 ease-out ${open ? "border-dark shadow-card" : "border-line hover:border-ink-mute"}`}>
+    <div className="relative w-full sm:flex-1 sm:max-w-xl min-w-0">
+      <div className={`flex items-center gap-2 sm:gap-2.5 h-[46px] px-3 sm:px-4 rounded-full border bg-surface transition-all duration-300 ease-out ${open ? "border-dark shadow-card" : "border-line hover:border-ink-mute"}`}>
         <Search size={17} className={`shrink-0 transition-colors duration-200 ${open ? "text-accent-deep" : "text-ink-mute"}`} />
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 min-w-0">
           <button onClick={() => setCityOpen((v) => !v)} aria-label="Город просмотра"
-            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg hover:bg-line-soft transition-colors cursor-pointer text-[12.5px] font-semibold text-ink-soft whitespace-nowrap">
-            <MapPin size={13} className="text-accent-deep" />
-            {viewerCity || defaultCity || "Город"}
+            className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg hover:bg-line-soft transition-colors cursor-pointer text-[12.5px] font-semibold text-ink-soft max-w-[92px] sm:max-w-none whitespace-nowrap overflow-hidden">
+            <MapPin size={13} className="text-accent-deep shrink-0" />
+            <span className="truncate">{viewerCity || defaultCity || "Город"}</span>
           </button>
           {cityOpen && (
             <div className="absolute left-0 top-9 z-50 w-[250px] bg-surface rounded-xl shadow-lift border border-line p-3">
@@ -248,7 +248,7 @@ function SmartSearch() {
           }}
           placeholder="Найти вазу, куртку, крепёж…"
           aria-label="Поиск по товарам"
-          className="flex-1 min-w-0 bg-transparent outline-none text-[14px] text-ink placeholder:text-ink-mute"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[16px] sm:text-[14px] text-ink placeholder:text-ink-mute"
         />
         {q ? (
           <button onMouseDown={(e) => e.preventDefault()} onClick={() => { setQ(""); inputRef.current?.focus(); }} aria-label="Очистить"
@@ -336,16 +336,38 @@ export function Header() {
   return (
     <>
       <header className="sticky top-0 z-[90] bg-cream/90 backdrop-blur-md border-b border-line">
-        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-[68px] flex items-center gap-3 sm:gap-5">
-          <button onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))} aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"} aria-expanded={menuOpen} className={`burger shrink-0 ${menuOpen ? "is-open" : ""}`}>
-            <span className="burger-box">
-              <span className="burger-line" /><span className="burger-line" /><span className="burger-line" />
-              <span className="burger-cross" />
-            </span>
-          </button>
-          <Logo />
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5 py-2.5 sm:py-0 sm:h-[68px]">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))} aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"} aria-expanded={menuOpen} className={`burger shrink-0 ${menuOpen ? "is-open" : ""}`}>
+              <span className="burger-box">
+                <span className="burger-line" /><span className="burger-line" /><span className="burger-line" />
+                <span className="burger-cross" />
+              </span>
+            </button>
+            <Logo />
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto sm:hidden">
+              <NotifyBell />
+              <Link to="/cart" aria-label={`Корзина, товаров: ${cartCount}`} className="relative w-11 h-11 rounded-[10px] flex items-center justify-center text-ink hover:bg-line-soft transition-colors">
+                <ShoppingBag size={21} />
+                {cartCount > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{cartCount}</span>}
+              </Link>
+              {session ? (
+                <Link to={sellerReg.status === "active" && session.role === "seller" ? "/seller/dashboard" : "/profile"} aria-label="Личный кабинет" className="w-11 h-11 rounded-[10px] flex items-center justify-center shrink-0">
+                  {(session.avatar || (sellerReg.status === "active" && session.role === "seller" ? (sellerReg.shopLogo || sellerReg.masterAvatar) : "")) ? (
+                    <img src={(session.avatar || (sellerReg.status === "active" && session.role === "seller" ? (sellerReg.shopLogo || sellerReg.masterAvatar) : "")) as string} alt="" className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <span className="w-9 h-9 rounded-full bg-dark text-accent flex items-center justify-center font-display font-bold text-[13px]">{((sellerReg.status === "active" && session.role === "seller" ? sellerReg.shopName : session.name.split(" ")[0])[0] || "?").toUpperCase()}</span>
+                  )}
+                </Link>
+              ) : (
+                <Link to="/auth" aria-label="Войти" className="w-11 h-11 rounded-[10px] bg-dark text-cream flex items-center justify-center hover:bg-dark-deep transition-colors">
+                  <User size={18} />
+                </Link>
+              )}
+            </div>
+          </div>
           <SmartSearch />
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <div className="hidden sm:flex items-center gap-2 shrink-0 sm:ml-auto">
             <NotifyBell />
             <Link to="/cart" aria-label={`Корзина, товаров: ${cartCount}`} className="relative w-11 h-11 rounded-[10px] flex items-center justify-center text-ink hover:bg-line-soft transition-colors">
               <ShoppingBag size={21} />
@@ -374,7 +396,7 @@ export function Header() {
                           {(displayName[0] || "?").toUpperCase()}
                         </span>
                       )}
-                      <span className="max-w-[120px] sm:max-w-[160px] truncate">{displayName}</span>
+                      <span className="hidden sm:inline max-w-[160px] truncate">{displayName}</span>
                     </Link>
                     <button onClick={() => { logout(); nav("/"); }} aria-label="Выйти" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft transition-colors cursor-pointer">
                       <LogOut size={18} />

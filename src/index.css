@@ -28,7 +28,16 @@
   --color-premium: #d4a574;
   --color-premium-soft: #f3e7d8;
 
+  /* ---- семантические токены (AI-дизайнер и статусы) ---- */
+  --color-honey: #f9ebd2;
+  --color-pale: #eef3ef;
+  --color-warning: #b98a2f;
+
   /* ---- шрифты ---- */
+  /* ---- брейкпоинты (ТЗ 2.1): xs..3xl ---- */
+  --breakpoint-xs: 480px;
+  --breakpoint-3xl: 1920px;
+
   --font-display: "Unbounded", "Manrope", sans-serif;
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-quote: "Cormorant Garamond", Georgia, serif;
@@ -41,7 +50,11 @@
 html {
   scroll-behavior: smooth;
   overflow-x: clip;
-  padding-top: env(safe-area-inset-top);
+  /* iOS Safari (17+) не поддерживает padding с env() на <html> — используем safe-area insets */
+  padding-top: env(safe-area-inset-top, 0px);
+  /* подстройка размера шрифта: запрещаем автоувеличение текста в ландшафте iOS/Android */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -51,9 +64,69 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   position: relative;
+  /* растягиваем фон под «чёлку» и нижнюю панель iOS без изменения макета */
+  margin: 0;
+  min-height: 100%;
 }
 footer {
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+/* sticky-шапка: не залезает под вырез/статус-бар на iPhone и Android */
+@supports (top: env(safe-area-inset-top)) {
+  header.sticky { top: max(0px, calc(env(safe-area-inset-top) * 0)); }
+}
+
+/* нижние плавающие панели (toast AI-дизайнера и т.п.) поднимаем над home-indicator iOS */
+.floating-bottom {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* touch-friendly: все кликабельные элементы — не меньше 44×44 px на устройствах с касанием */
+@media (pointer: coarse) {
+  button:not(.burger):not([class*="w-7"]):not([class*="w-8"]):not([class*="h-7"]):not([class*="h-8"]),
+  a.btn-touch {
+    min-height: 44px;
+  }
+  /* shoppable-маркеры AI-дизайнера: визуально 28px, область нажатия расширена до 44px (ТЗ 8.5) */
+  .ai-marker::before {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    border-radius: 9999px;
+  }
+  input.field, select.field, textarea.field {
+    font-size: 16px; /* предотвращает автозум клавиатуры в iOS Safari */
+  }
+  /* нативные input/textarea/select без класса .field — тоже 16px (ТЗ 2.4) */
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: max(16px, inherit);
+  }
+}
+
+/* проблема 100vh в iOS Safari (ТЗ 4.4): десктопные значения остаются нетронутыми */
+@supports (height: 100dvh) {
+  @media (max-width: 767px) {
+    .min-h-screen { min-height: 100dvh; }
+    .h-screen { height: 100dvh; }
+  }
+}
+@supports not (height: 100dvh) {
+  @media (max-width: 767px) {
+    .min-h-screen { min-height: -webkit-fill-available; }
+  }
+}
+
+/* отключаем hover-«приподнимание» карточек на тач-устройствах (иначе «залипает») */
+@media (hover: none) {
+  .shadow-card:hover { transform: none; box-shadow: 0 1px 2px rgba(24,38,30,.05), 0 10px 30px -6px rgba(24,38,30,.12), 0 30px 60px -18px rgba(24,38,30,.16); }
+  .group:hover .house-mark { transform: none; }
+  .group:hover .logo-q { transform: none; }
+}
+
+/* Windows High Contrast / принудительный контраст */
+@media (forced-colors: active) {
+  .bg-accent, .bg-dark, .bg-surface { border: 1px solid CanvasText; }
 }
 
 /* тонкая фактура бумаги — чистый CSS, без data-URI */
@@ -301,6 +374,10 @@ input[type="checkbox"], input[type="radio"] {
 
   --color-premium: #d4a574;
   --color-premium-soft: #37301f;
+
+  --color-honey: #3a2f1c;
+  --color-pale: #20302a;
+  --color-warning: #e0a14a;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 24px -18px rgba(0, 0, 0, 0.55);
   --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 38px -16px rgba(0, 0, 0, 0.6);

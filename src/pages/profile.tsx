@@ -339,7 +339,7 @@ export default function ProfilePage() {
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-6 items-start">
         {/* Вертикальная навигация */}
-        <nav className="flex flex-col gap-2 fade-up">
+        <nav className="flex flex-col lg:grid gap-2 fade-up">
           {TABS.map((t) => (
             <button key={t.id} onClick={() => {
                 if (t.locked) {
@@ -348,6 +348,7 @@ export default function ProfilePage() {
                 }
                 setTab(t.id);
               }}
+              aria-current={tab === t.id ? "page" : undefined}
               className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all ${t.locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
               <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
             </button>

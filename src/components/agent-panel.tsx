@@ -25,6 +25,7 @@ export default function AgentPanel() {
   const exportAll = useAgentStore((s) => s.exportAll);
   const [searchQ, setSearchQ] = useState("");
   const [sidebarQ, setSidebarQ] = useState("");
+  const [listOpen, setListOpen] = useState(false); // мобильный drawer списка чатов (ТЗ 8.1)
   const current = sessions.find(s => s.id === currentSessionId);
   const dialog = current?.messages || [];
   const say = useAgentStore((s) => s.say);
@@ -97,7 +98,7 @@ export default function AgentPanel() {
   const done = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <section className="bg-surface rounded-2xl shadow-card border border-line-soft overflow-hidden">
+    <section className="relative bg-surface rounded-2xl shadow-card border border-line-soft overflow-hidden">
       <header className="px-5 py-4 bg-dark text-cream flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="w-9 h-9 rounded-[10px] bg-accent flex items-center justify-center">
@@ -111,9 +112,10 @@ export default function AgentPanel() {
         <Sparkles size={16} className="text-accent" />
       </header>
 
-      <div className="flex" style={{height: "380px"}}>
-        {/* Сайдбар: список сессий */}
-        <aside className="w-[220px] shrink-0 border-r border-line-soft bg-cream/30 flex flex-col">
+      <div className="flex h-[56dvh] min-h-[420px] max-h-[560px] sm:h-[460px] md:h-[380px]">
+        {/* Сайдбар: список сессий — на мобильных выезжает поверх чата (drawer), на десктопе статичен */}
+        {listOpen && <button aria-label="Закрыть список чатов" onClick={() => setListOpen(false)} className="md:hidden absolute inset-0 z-20 bg-dark/40 cursor-pointer" />}
+        <aside className={`absolute md:static z-30 top-0 bottom-0 left-0 w-[260px] max-w-[85vw] shrink-0 border-r border-line-soft bg-cream transition-transform duration-200 ease-out flex flex-col ${listOpen ? "translate-x-0 shadow-lift" : "-translate-x-full md:translate-x-0"}`}>
           <div className="p-3 border-b border-line-soft flex gap-2">
             <button onClick={newSession} className="flex-1 h-9 rounded-[8px] bg-dark text-cream text-[12px] font-bold flex items-center justify-center gap-1.5 hover:bg-dark-deep cursor-pointer"><Plus size={14} /> Новый чат</button>
           </div>
@@ -125,7 +127,7 @@ export default function AgentPanel() {
           </div>
           <div className="flex-1 overflow-auto px-2 py-1 space-y-1">
             {sessions.filter(s => !sidebarQ || s.title.toLowerCase().includes(sidebarQ.toLowerCase())).map(s => (
-              <div key={s.id} className={`group flex items-center gap-1.5 px-2.5 py-2 rounded-[8px] cursor-pointer text-[12px] ${s.id === currentSessionId ? "bg-accent-soft text-ink" : "text-ink-soft hover:bg-line-soft"}`} onClick={() => switchSession(s.id)}>
+              <div key={s.id} className={`group flex items-center gap-1.5 px-2.5 py-2 rounded-[8px] cursor-pointer text-[12px] ${s.id === currentSessionId ? "bg-accent-soft text-ink" : "text-ink-soft hover:bg-line-soft"}`} onClick={() => { switchSession(s.id); setListOpen(false); }}>
                 <MessageSquare size={13} className="shrink-0" />
                 <span className="flex-1 truncate">{s.title}</span>
                 <button onClick={(e) => { e.stopPropagation(); if (confirm("Удалить чат «" + s.title + "»?")) deleteSession(s.id); }} className="opacity-0 group-hover:opacity-100 text-ink-mute hover:text-error cursor-pointer"><Trash2 size={12} /></button>
@@ -141,7 +143,8 @@ export default function AgentPanel() {
         {/* Контент: поиск + сообщения */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="px-4 py-2 border-b border-line-soft bg-surface flex items-center gap-2">
-            <Search size={13} className="text-ink-mute" />
+            <button onClick={() => setListOpen(true)} aria-label="Список чатов" className="md:hidden w-9 h-9 -ml-1 shrink-0 rounded-[8px] flex items-center justify-center text-ink-soft hover:bg-line-soft cursor-pointer"><MessageSquare size={16} /></button>
+            <Search size={13} className="text-ink-mute shrink-0" />
             <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Поиск в текущем чате…" className="flex-1 h-7 bg-transparent text-[12px] outline-none placeholder:text-ink-mute" />
             {searchQ && <button onClick={() => setSearchQ("")} className="text-ink-mute hover:text-error cursor-pointer"><X size={13} /></button>}
           </div>
@@ -207,7 +210,7 @@ export default function AgentPanel() {
       <div className="px-5 py-3 bg-surface border-t border-line-soft">
         <div className="flex gap-2 mb-3 flex-wrap">
           {quick.map((q) => (
-            <button key={q.label} onClick={() => setInput(q.text)} className="h-8 px-3 rounded-[8px] bg-line-soft text-ink-soft text-[12px] font-semibold hover:bg-line cursor-pointer">{q.label}</button>
+            <button key={q.label} onClick={() => setInput(q.text)} className="min-h-[44px] px-3 py-1.5 rounded-[8px] bg-line-soft text-ink-soft text-[12px] font-semibold hover:bg-line cursor-pointer">{q.label}</button>
           ))}
         </div>
         {photo && (
