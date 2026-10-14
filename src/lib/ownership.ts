@@ -70,3 +70,60 @@ export function isOwnerOf(ownerId: string | null | undefined, userId: string): b
 export function denyUnlessOwner(ownerId?: string | null): boolean {
   return !canMutate(ownerId);
 }
+
+/* ============================================================
+   ДОСТУП К ЦИФРОВЫМ ПРОДУКТАМ (ТЗ «Цифровые товары» §3)
+
+   hasDigitalAccess — вторая фундаментальная проверка наравне с
+   canMutate. Источником истины о праве доступа является запись
+   о покупке (DigitalPurchase) для пары userId+productId, либо
+   активная подписка, включающая продукт. Владелец продукта
+   всегда имеет доступ к своему продукту (управление/превью).
+   ============================================================ */
+import { useDigitalStore } from "./digital";
+
+/** Есть ли у пользователя купенный/подписочный доступ к продукту. */
+export function hasDigitalAccess(userId: string, productId: string): boolean {
+  if (!userId || !productId) return false;
+  const st = useDigitalStore.getState();
+  /* покупатель платил за продукт? */
+  if (st.purchases.some((p) => p.userId === userId && p.productId === productId)) return true;
+  /* владелец продукта (для управления и предпросмотра) */
+  const prod = st.products.find((x) => x.id === productId);
+  if (prod && prod.ownerId === userId) return true;
+  /* активная подписка, включающая продукт */
+  const now = Date.now();
+  for (const sub of st.subscriptions) {
+    if (sub.userId !== userId) continue;
+    if (sub.status !== "active" && sub.status !== "past_due") continue;
+    if (new Date(sub.currentPeriodEnd).getTime() < now) continue;
+    const plan = st.plans.find((pl) => pl.id === sub.planId);
+    if (plan?.includedProducts.includes(productId)) return true;
+    /* pro/enterprise дают доступ ко всему каталогу подписки */
+    if (plan && (plan.tier === "pro" || plan.tier === "enterprise")) return true;
+  }
+  return false;
+}
+
+/** Реактивная версия hasDigitalAccess (перерисовка при изменении покупок). */
+export function useHasDigitalAccess(productId?: string | null): boolean {
+  const uid = useAppStore((s) => s.session?.userId || "");
+  const purchases = useDigitalStore((s) => s.purchases);
+  const products = useDigitalStore((s) => s.products);
+  const subscriptions = useDigitalStore((s) => s.subscriptions);
+  const plans = useDigitalStore((s) => s.plans);
+  if (!uid || !productId) return false;
+  if (purchases.some((p) => p.userId === uid && p.productId === productId)) return true;
+  const prod = products.find((x) => x.id === productId);
+  if (prod && prod.ownerId === uid) return true;
+  const now = Date.now();
+  for (const sub of subscriptions) {
+    if (sub.userId !== uid) continue;
+    if (sub.status !== "active" && sub.status !== "past_due") continue;
+    if (new Date(sub.currentPeriodEnd).getTime() < now) continue;
+    const plan = plans.find((pl) => pl.id === sub.planId);
+    if (plan?.includedProducts.includes(productId)) return true;
+    if (plan && (plan.tier === "pro" || plan.tier === "enterprise")) return true;
+  }
+  return false;
+}

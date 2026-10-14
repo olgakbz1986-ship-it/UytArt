@@ -1,5 +1,3 @@
-import { StudioSEO } from "./StudioSEO";
-import { StudioCanvas } from "./StudioCanvas";
 import {  useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
@@ -38,8 +36,6 @@ const empty: Draft = {
 
 export function ProductWizard({ open, onClose, editId, initialData }: { open: boolean; onClose: () => void; editId?: string | null; initialData?: { name?: string; description?: string; category?: string; photo?: string; tags?: string[] } }) {
   const [step, setStep] = useState(1);
-  const [studioOpen, setStudioOpen] = useState(false);
-  const [seoOpen, setSeoOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -189,7 +185,6 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
             <div>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
                 <h3 className="font-display font-bold text-[18px] text-ink">Загрузите фото и видео</h3>
-                <button type="button" onClick={() => setStudioOpen(true)} className="h-9 px-3 rounded-[8px] bg-dark text-cream text-[11.5px] font-bold hover:bg-accent-deep transition-colors cursor-pointer flex items-center gap-1.5">🎨 Создать в Студии</button>
               </div>
               <p className="text-[13px] text-ink-soft mb-4">До 10 файлов. Первое фото станет обложкой. Видео повышает конверсию на 30%.</p>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4">
@@ -547,9 +542,6 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
           </div>
         </div>
       </div>
-      <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} initialName={draft.name} initialCategory={draft.category}
-        onApply={(data) => setDraft({ ...draft, name: data.name, description: data.description, tags: data.tags })} />
-      <StudioCanvas open={studioOpen} onClose={() => setStudioOpen(false)} />
     </Modal>
   );
 }
