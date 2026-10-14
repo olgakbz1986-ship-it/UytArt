@@ -856,7 +856,7 @@ export default function AiDesignerPage() {
 
   return (
     <div className="pb-16">
-      {status === "idle" && !project && <IdleScreen />}
+      {(!project || status === "idle") && <IdleScreen />}
       {(status === "uploading" || status === "error" && !useDesignerStore.getState().error) && <UploadStep />}
       {status === "error" && <ErrorStep />}
       {status === "analyzing" && <BusyScreen label={busyLabel || "Анализируем фото…"} />}

@@ -21,3 +21,9 @@ yarn-error.log*
 *.swo
 .vscode/
 .idea/
+
+# Временные файлы, cookies и локальная БД разработки
+patch.json
+qf.txt
+server/agent-worker.js
+server/dev-db.json
