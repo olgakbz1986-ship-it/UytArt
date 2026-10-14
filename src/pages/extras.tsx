@@ -499,9 +499,25 @@ export function MarketPage() {
         )}
       </Modal>
 
+      {/* Модальное окно детальной карточки: роль наблюдателя определяет доступный функционал
+          (владелец — отклики/статусы/предоплата; чужой мастер — только отклик; гость — публичные данные) */}
+      {detailOrder && (
+        <MarketOrderDetail
+          order={detailOrder}
+          role={!user ? "guest" : isMine(detailOrder) ? "owner" : "other"}
+          onClose={() => setDetailOrderId(null)}
+          onStatusChange={(id, status) => patchOrder(id, { status })}
+        />
+      )}
+
       {/* Модальное окно отклика мастера */}
       {respondOrder && (
-        <MarketOrderDetail order={respondOrder} onClose={() => setRespondOrderId(null)} />
+        <MarketOrderDetail
+          order={respondOrder}
+          role={!user ? "guest" : isMine(respondOrder) ? "owner" : "other"}
+          onClose={() => setRespondOrderId(null)}
+          onStatusChange={(id, status) => patchOrder(id, { status })}
+        />
       )}
 
       {/* AI-визард */}
@@ -1189,8 +1205,27 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
   const nav = useNavigate();
+  /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
+  const [myResponses, setMyResponses] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (tab !== "responses") return;
+    fetch("/api/my-responses", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { ok: false, responses: [] })
+      .then((d) => setMyResponses(d.responses || []))
+      .catch(() => setMyResponses([]));
+  }, [tab]);
+  const withdrawMyResponse = async (id: string) => {
+    const res = await fetch(`/api/orders/${(myResponses || []).find((r) => r.id === id)?.order_id}/responses/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ status: "withdrawn" }),
+    });
+    if (res.status === 409) { alert("Отозвать отклик можно только до решения заказчика"); return; }
+    if (!res.ok) { alert("Не удалось отозвать отклик"); return; }
+    setMyResponses((prev) => (prev || []).map((r) => (r.id === id ? { ...r, status: "withdrawn" } : r)));
+  };
+
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -1339,6 +1374,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "products" as const, label: "Товары", icon: Boxes },
     { id: "agent" as const, label: "Агент", icon: Bot },
     { id: "orders" as const, label: "Заказы", icon: FileText },
+    { id: "responses" as const, label: "Мои отклики", icon: Send },
     { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag, external: true },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
@@ -1548,6 +1584,37 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* МОИ ОТКЛИКИ (мастер → чужие заказы) */}
+      {tab === "responses" && (
+        <div className="space-y-3 fade-up">
+          {myResponses === null && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center text-[13px] text-ink-mute">Загрузка откликов…</div>
+          )}
+          {myResponses !== null && myResponses.length === 0 && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">📨</p>
+              <p className="font-bold text-[15px] text-ink">Откликов пока нет</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Откликайтесь на заказы биржевого рынка — здесь появится список ваших предложений со статусами.</p>
+            </div>
+          )}
+          {(myResponses || []).map((r) => (
+            <div key={r.id} className="bg-surface rounded-2xl shadow-card p-5 flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <p className="font-bold text-[14px] text-ink">{r.order_title}</p>
+                <p className="text-[12px] text-ink-mute mt-0.5 line-clamp-2">{r.comment}</p>
+                <p className="text-[12px] text-ink-soft mt-1">Ваше предложение: <strong>{Number(r.price).toLocaleString("ru-RU")} ₽</strong> · срок {r.deadline_days} дн. · {fmtDate(r.created_at)}</p>
+              </div>
+              <Badge tone={r.status === "accepted" ? "success" : r.status === "pending" ? "honey" : "neutral"}>
+                {r.status === "accepted" ? "Принят" : r.status === "pending" ? "Отправлен" : r.status === "withdrawn" ? "Отозван" : "Отклонён"}
+              </Badge>
+              {r.status === "pending" && (
+                <button onClick={() => withdrawMyResponse(r.id)} className="h-[44px] px-4 rounded-xl border border-line text-ink-soft text-[12px] font-bold hover:bg-line-soft transition-colors cursor-pointer">Отозвать</button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

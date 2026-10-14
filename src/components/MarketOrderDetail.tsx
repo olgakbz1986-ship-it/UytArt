@@ -1,14 +1,32 @@
 import { useState, useEffect, useRef } from "react";
-import { X, CheckCircle2, Clock, MessageSquare, Send, Paperclip, Star } from "lucide-react";
+import { X, CheckCircle2, Clock, MessageSquare, Send, Paperclip, Star, Users, ShieldCheck } from "lucide-react";
 import { MarketOrder } from "../pages/extras";
+import { useCurrentUserId } from "../lib/ownership";
 
 interface MarketOrderDetailProps {
   order: MarketOrder;
   onClose: () => void;
+  /** Роль наблюдателя относительно этого заказа (правило владения). */
+  role?: "guest" | "owner" | "other";
+  /** Колбэк изменения статуса заказа владельцем (активен/в работе/завершён/отменён). */
+  onStatusChange?: (id: string, status: string) => void;
 }
 
-export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailProps) {
+const fmtRub = (n: number) => (Number(n) || 0).toLocaleString("ru-RU");
+const RESP_STATUS_RU: Record<string, string> = {
+  pending: "Отправлен", accepted: "Принят", rejected: "Отклонён", withdrawn: "Отозван",
+};
+
+export default function MarketOrderDetail({ order, onClose, role = "other", onStatusChange }: MarketOrderDetailProps) {
+  const myUid = useCurrentUserId(); /* реальный userId вместо заглушки dev-user-1 */
+  const isOwner = role === "owner";
+  const isGuest = role === "guest";
   const [messages, setMessages] = useState<any[]>([]);
+  const [responses, setResponses] = useState<any[]>([]);
+  const [deal, setDeal] = useState<any>(null);
+  const [dealContacts, setDealContacts] = useState<any>(null);
+  const [paying, setPaying] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -48,6 +66,24 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
             setMilestones(mileData.milestones || []);
           }
         }
+        /* Отклики: сервер сам решает, что видеть (владелец — все, остальные — свой). */
+        try {
+          const rRes = await fetch(`/api/orders/${order.id}/responses`, { credentials: "include" });
+          if (rRes.ok) {
+            const rData = await rRes.json();
+            if (rData.ok) setResponses(rData.responses || []);
+          }
+        } catch {}
+        /* Сделка и контакты — только участникам (сервер вернёт 403 гостю/чужому). */
+        if (!isGuest) {
+          try {
+            const dRes = await fetch(`/api/orders/${order.id}/deal`, { credentials: "include" });
+            if (dRes.ok) {
+              const dData = await dRes.json();
+              if (dData.ok) { setDeal(dData.deal); setDealContacts(dData.contacts); }
+            }
+          } catch {}
+        }
       } catch (e) {
         console.error("Ошибка загрузки данных заказа", e);
       } finally {
@@ -55,7 +91,114 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
       }
     };
     loadData();
-  }, [order.id, order.status]);
+  }, [order.id, order.status, role]);
+
+  /* ===== Действия владельца: принять / отклонить отклик ===== */
+  const setResponseStatus = async (rid: string, status: "accepted" | "rejected") => {
+    try {
+      const res = await fetch(`/api/orders/${order.id}/responses/${rid}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (res.status === 403) { alert("Управлять откликами может только владелец заказа"); return; }
+      if (!res.ok) { alert("Не удалось обновить статус отклика"); return; }
+      /* Принятие одного отклика автоматически отклоняет остальные (правило на сервере) —
+         перечитываем список, чтобы отразить актуальные статусы. */
+      const rRes = await fetch(`/api/orders/${order.id}/responses`, { credentials: "include" });
+      const rData = await rRes.json();
+      if (rData.ok) setResponses(rData.responses || []);
+      if (status === "accepted") {
+        setOrderStatusLocal("in_progress");
+        onStatusChange?.(order.id, "in_progress");
+        try {
+          const dRes = await fetch(`/api/orders/${order.id}/deal`, { credentials: "include" });
+          const dData = await dRes.json();
+          if (dData.ok) setDeal(dData.deal);
+        } catch {}
+      }
+    } catch (e) {
+      console.error("Ошибка обновления отклика", e);
+      alert("Не удалось обновить статус отклика");
+    }
+  };
+
+  /* ===== Отзыв мастером своего отклика (только пока статус «отправлен») ===== */
+  const withdrawResponse = async (rid: string) => {
+    setWithdrawing(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/responses/${rid}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: "withdrawn" }),
+      });
+      if (res.status === 409) { alert("Отозвать отклик можно только до решения заказчика"); return; }
+      if (!res.ok) { alert("Не удалось отозвать отклик"); return; }
+      setResponses((prev) => prev.map((r) => (r.id === rid ? { ...r, status: "withdrawn" } : r)));
+    } catch (e) {
+      console.error("Ошибка отзыва", e);
+      alert("Не удалось отозвать отклик");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  /* ===== Предоплата по безопасной сделке (раскрывает контакты) ===== */
+  const payPrepay = async () => {
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/deal/prepay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setDeal(data.deal);
+        const cRes = await fetch(`/api/orders/${order.id}/deal`, { credentials: "include" });
+        const cData = await cRes.json();
+        if (cData.ok) { setDeal(cData.deal); setDealContacts(cData.contacts); }
+      } else if (data.error === "no_accepted_response") {
+        alert("Сначала примите отклик мастера");
+      } else if (res.status === 403) {
+        alert("Внести предоплату может только заказчик — владелец заказа");
+      } else {
+        alert("Платёж не прошёл. Попробуйте ещё раз.");
+      }
+    } catch (e) {
+      console.error("Ошибка предоплаты", e);
+      alert("Платёж не прошёл. Попробуйте ещё раз.");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  /* ===== Смена статуса заказа владельцем ===== */
+  const setOrderStatusLocal = (status: string) => {
+    import("../pages/extras").then(({ useMarketStore }) => {
+      useMarketStore.setState((st: any) => ({ orders: st.orders.map((o: any) => (o.id === order.id ? { ...o, status } : o)) }));
+    });
+  };
+  const changeOrderStatus = async (status: string) => {
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (res.status === 403) { alert("Менять статус может только владелец заказа"); return; }
+      if (!res.ok) { alert("Не удалось изменить статус"); return; }
+      setOrderStatusLocal(status);
+      onStatusChange?.(order.id, status);
+    } catch (e) {
+      console.error("Ошибка смены статуса", e);
+      alert("Не удалось изменить статус");
+    }
+  };
 
   const createDefaultMilestones = async () => {
     const defaults = [
@@ -80,7 +223,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     e.preventDefault();
     if (!newMessage.trim()) return;
     
-    const msgData = { sender_id: "dev-user-1", message: newMessage.trim() };
+    const msgData = { message: newMessage.trim() }; /* sender_id сервер берёт из JWT-токена */
     try {
       const res = await fetch(`/api/orders/${order.id}/messages`, {
         method: 'POST',
@@ -112,7 +255,6 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          master_id: "dev-master-1", // В реальности ID текущего пользователя-мастера
           price: Number(responsePrice),
           deadline_days: Number(responseDeadline),
           comment: responseComment.trim()
@@ -125,6 +267,12 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
         setResponsePrice("");
         setResponseDeadline("");
         setResponseComment("");
+      } else if (res.status === 409 || data.error === "already_responded") {
+        alert("Вы уже откликнулись на этот заказ");
+      } else if (res.status === 403 || data.error === "own_order") {
+        alert("Нельзя откликнуться на собственный заказ");
+      } else if (res.status === 401) {
+        alert("Войдите в аккаунт, чтобы откликнуться");
       }
     } catch (e) {
       console.error("Ошибка отправки отклика", e);
@@ -140,13 +288,16 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
       return;
     }
     setSubmittingReview(true);
+    /* Реальные участники: reviewer — текущий пользователь, reviewee — мастер из принятого отклика */
+    const acceptedResp = responses.find((r) => r.status === "accepted");
     try {
       const res = await fetch(`/api/market/orders/${order.id}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          reviewer_id: "dev-user-1",
-          reviewee_id: "dev-master-1", // В реальности берем из принятого отклика
+          reviewer_id: myUid || "dev-user-1",
+          reviewee_id: (acceptedResp && acceptedResp.master_id) || deal?.master_id || "dev-master-1",
           rating: reviewRating,
           text: reviewText.trim()
         })
@@ -167,27 +318,23 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
     }
   };
 
-  // Загрузка рейтинга мастера при загрузке откликов
+  // Загрузка рейтинга мастера: берём master_id из принятого отклика (без заглушки)
+  const acceptedMasterId = responses.find((r) => r.status === "accepted")?.master_id || deal?.master_id || "";
   useEffect(() => {
     const fetchRatings = async () => {
+      if (!acceptedMasterId) return;
       const ratingsMap: Record<string, any> = {};
-      for (const m of milestones) {
-        // Заглушка: в реальности берем master_id из принятого отклика
-        const masterId = "dev-master-1"; 
-        if (!ratingsMap[masterId]) {
-          try {
-            const res = await fetch(`/api/market/users/${masterId}/reviews`);
-            const data = await res.json();
-            if (data.ok) ratingsMap[masterId] = data;
-          } catch (e) {
-            console.error("Ошибка загрузки рейтинга", e);
-          }
-        }
+      try {
+        const res = await fetch(`/api/market/users/${acceptedMasterId}/reviews`);
+        const data = await res.json();
+        if (data.ok) ratingsMap[acceptedMasterId] = data;
+      } catch (e) {
+        console.error("Ошибка загрузки рейтинга", e);
       }
       setMasterRatings(ratingsMap);
     };
-    if (milestones.length > 0) fetchRatings();
-  }, [milestones]);
+    if (milestones.length > 0 || acceptedMasterId) fetchRatings();
+  }, [milestones, acceptedMasterId]);
 
   const completedCount = milestones.filter(m => m.status === 'completed').length;
   const progress = milestones.length > 0 ? (completedCount / milestones.length) * 100 : 0;
@@ -200,31 +347,41 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
           <div>
             <h2 className="font-display font-bold text-[20px] text-ink">{order.title}</h2>
             <p className="text-[13px] text-ink-mute mt-1">{order.type} · {order.region} · {order.budget.toLocaleString('ru-RU')} ₽</p>
-            {masterRatings["dev-master-1"] && (
+            {acceptedMasterId && masterRatings[acceptedMasterId] && (
               <div className="flex items-center gap-1.5 mt-2">
                 <Star size={14} className="text-accent-deep" fill="#d98e32" color="#d98e32" />
-                <span className="text-[13px] font-bold text-ink">{masterRatings["dev-master-1"].avgRating.toFixed(1)}</span>
-                <span className="text-[12px] text-ink-soft">({masterRatings["dev-master-1"].count} отзывов)</span>
+                <span className="text-[13px] font-bold text-ink">{masterRatings[acceptedMasterId].avgRating.toFixed(1)}</span>
+                <span className="text-[12px] text-ink-soft">({masterRatings[acceptedMasterId].count} отзывов)</span>
               </div>
             )}
           </div>
           
-          {/* Кнопка отклика для опубликованных заказов */}
-          {order.status === 'published' && !showResponseForm && (
+          {/* Правило владения: гость — только публичная информация; владелец — управление;
+              чужой авторизованный мастер — только кнопка отклика. */}
+          {isOwner ? (
+            <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+              {order.status === "in_progress" && (
+                <button onClick={() => changeOrderStatus("completed")} className="h-[44px] px-4 rounded-xl bg-success text-white font-bold text-[13px] hover:opacity-90 transition-opacity cursor-pointer">Заказ завершён</button>
+              )}
+              {(order.status === "published" || order.status === "in_progress") && (
+                <button onClick={() => changeOrderStatus("cancelled")} className="h-[44px] px-4 rounded-xl border border-error/40 text-error font-bold text-[13px] hover:bg-error/10 transition-colors cursor-pointer">Отменить заказ</button>
+              )}
+            </div>
+          ) : !isGuest && order.status === 'published' && !showResponseForm ? (
             <button
               onClick={() => setShowResponseForm(true)}
               className="h-[44px] px-6 rounded-xl bg-accent text-ink font-bold text-[14px] hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-2 shrink-0"
             >
               <Send size={16} /> Откликнуться на заказ
             </button>
-          )}
+          ) : null}
           <button onClick={onClose} className="p-2 rounded-full hover:bg-line-soft transition-colors cursor-pointer">
             <X size={20} className="text-ink-soft" />
           </button>
         </div>
 
-        {/* Форма отклика мастера */}
-        {showResponseForm && order.status === 'published' && (
+        {/* Форма отклика мастера (только чужому авторизованному мастеру) */}
+        {showResponseForm && !isOwner && !isGuest && order.status === 'published' && (
           <div className="p-6 bg-cream/30 border-b border-line-soft">
             <h3 className="font-bold text-[16px] text-ink mb-4">Ваше предложение</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -274,6 +431,88 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
                 Отмена
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ===== Отклики (правило владения) =====
+           Владелец заказа — полный список откликов с принятием/отклонением.
+           Мастер — только собственный отклик с возможностью отозвать (пока pending).
+           Гость — блок скрыт полностью. */}
+        {isOwner && responses.length > 0 && (
+          <div className="border-t border-line-soft p-5 bg-surface shrink-0 max-h-[34vh] overflow-y-auto">
+            <h3 className="font-bold text-[15px] text-ink mb-3 flex items-center gap-2">
+              <Users size={16} className="text-accent-deep" /> Отклики на заказ ({responses.length})
+            </h3>
+            <div className="space-y-3">
+              {responses.map((r) => (
+                <div key={r.id} className="rounded-xl border border-line-soft p-4 flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-[180px]">
+                    <p className="text-[13px] font-bold text-ink">{r.master_name || "Мастер " + String(r.master_id).slice(-4)}</p>
+                    <p className="text-[12px] text-ink-soft mt-0.5 line-clamp-2">{r.comment}</p>
+                    <p className="text-[11px] text-ink-mute mt-1">{new Date(r.created_at).toLocaleDateString("ru-RU")}</p>
+                  </div>
+                  <div className="text-right mr-2">
+                    <p className="text-[14px] font-bold text-ink">{fmtRub(r.price)} ₽</p>
+                    <p className="text-[11px] text-ink-mute">{r.deadline_days} дн.</p>
+                  </div>
+                  {r.status === "pending" ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => setResponseStatus(r.id, "accepted")} disabled={withdrawing} className="h-[44px] px-4 rounded-xl bg-success text-white text-[12px] font-bold hover:opacity-90 transition-opacity cursor-pointer">Принять</button>
+                      <button onClick={() => setResponseStatus(r.id, "rejected")} disabled={withdrawing} className="h-[44px] px-4 rounded-xl border border-line text-ink-soft text-[12px] font-bold hover:bg-line-soft transition-colors cursor-pointer">Отклонить</button>
+                    </div>
+                  ) : (
+                    <span className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${r.status === "accepted" ? "bg-success/10 text-success" : r.status === "withdrawn" ? "bg-line-soft text-ink-mute" : "bg-error/10 text-error"}`}>{RESP_STATUS_RU[r.status] || r.status}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!isOwner && !isGuest && responses.some((r) => r.master_id === myUid) && (() => {
+          const mine = responses.find((r) => r.master_id === myUid);
+          return (
+            <div className="border-t border-line-soft p-4 bg-cream/30 shrink-0 flex flex-wrap items-center gap-3">
+              <span className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${mine.status === "accepted" ? "bg-success/10 text-success" : mine.status === "pending" ? "bg-accent-soft text-accent-deep" : "bg-error/10 text-error"}`}>Ваш отклик: {RESP_STATUS_RU[mine.status] || mine.status}</span>
+              <span className="text-[12px] text-ink-soft">{fmtRub(mine.price)} ₽ · {mine.deadline_days} дн.</span>
+              {mine.status === "pending" && (
+                <button onClick={() => withdrawResponse(mine.id)} disabled={withdrawing} className="h-[44px] ml-auto px-4 rounded-xl border border-line text-ink-soft text-[12px] font-bold hover:bg-line-soft transition-colors cursor-pointer">
+                  {withdrawing ? "Отозвать..." : "Отозвать отклик"}
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ===== Безопасная сделка: предоплата раскрывает контакты ===== */}
+        {!isGuest && deal && deal.status !== "none" && (
+          <div className="border-t border-line-soft p-4 bg-surface shrink-0">
+            <h3 className="font-bold text-[13px] text-ink mb-2 flex items-center gap-2"><ShieldCheck size={15} className="text-accent-deep" /> Безопасная сделка</h3>
+            {deal.status === "awaiting_prepay" && (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[12px] text-ink-soft flex-1 min-w-[200px]">Отклик принят. Внесите предоплату, чтобы открыть чат-контакты мастера. Без предоплаты в течение 7 дней сделка автоматически отменяется.</p>
+                {isOwner && (
+                  <button onClick={payPrepay} disabled={paying} className="h-[44px] px-5 rounded-xl bg-accent text-ink font-bold text-[13px] hover:bg-accent-deep hover:text-cream disabled:opacity-50 transition-colors cursor-pointer">
+                    {paying ? "Обработка платежа..." : "Внести предоплату"}
+                  </button>
+                )}
+              </div>
+            )}
+            {deal.status === "prepaid" && (
+              <div className="space-y-2">
+                <p className="text-[12px] text-success font-bold">✓ Предоплата {fmtRub(deal.prepay_amount)} ₽ внесена — контакты раскрыты обеим сторонам</p>
+                {dealContacts && (dealContacts.phone || dealContacts.telegram) ? (
+                  <div className="flex flex-wrap gap-4 text-[13px] text-ink">
+                    {dealContacts.phone && <span>📞 <a href={"tel:" + dealContacts.phone} className="underline">{dealContacts.phone}</a></span>}
+                    {dealContacts.telegram && <span>✈️ <a href={dealContacts.telegram} target="_blank" rel="noreferrer" className="underline">{dealContacts.telegram}</a></span>}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-ink-mute">У второй стороны не заполнены контакты.</p>
+                )}
+              </div>
+            )}
+            {deal.status === "cancelled_auto" && (
+              <p className="text-[12px] text-error font-bold">Сделка отменена: предоплата не была внесена в течение 7 дней. Заказ снова открыт для откликов.</p>
+            )}
           </div>
         )}
 
@@ -346,7 +585,7 @@ export default function MarketOrderDetail({ order, onClose }: MarketOrderDetailP
                 </div>
               ) : (
                 messages.map((msg) => {
-                  const isMe = msg.sender_id === "dev-user-1"; // Заглушка для текущего пользователя
+                  const isMe = !!myUid && msg.sender_id === myUid; /* свои сообщения — по реальному userId */
                   return (
                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${

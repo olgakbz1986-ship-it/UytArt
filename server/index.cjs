@@ -352,6 +352,104 @@ app.get("/api/orders/:id/responses", guard, async (req, res) => {
   }
 });
 
+/* Список ВСЕХ откликов текущего мастера (кабинет «Мои отклики»). */
+app.get("/api/my-responses", guard, async (req, res) => {
+  try {
+    let myResponses = [];
+    if (String(db.mode).indexOf("json-dev") !== -1) {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [], custom_orders: [] };
+      myResponses = (d.order_responses || [])
+        .filter(r => r.master_id === req.userId)
+        .map(r => {
+          const ord = (d.custom_orders || []).find(o => o.id === r.order_id);
+          return Object.assign({}, r, {
+            order_title: ord ? ord.title : "Профиль удалён", /* edge case: заказ удалён */
+            order_status: ord ? ord.status : "deleted",
+          });
+        })
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    }
+    res.json({ ok: true, responses: myResponses });
+  } catch (e) {
+    console.error("[MY-RESPONSES API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+/* Сделка безопасной сделки: предоплата раскрывает контакты обеих сторон.
+   Статусы: awaiting_prepay → prepaid → completed/cancelled. */
+app.post("/api/orders/:id/deal/prepay", guard, async (req, res) => {
+  try {
+    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [], order_responses: [] };
+    const ord = (d.custom_orders || []).find(o => o.id === req.params.id);
+    if (!ord) return res.status(404).json({ error: "not_found" });
+    const accepted = (d.order_responses || []).find(r => r.order_id === ord.id && r.status === "accepted");
+    if (!accepted) return res.status(409).json({ error: "no_accepted_response" });
+    /* Внести предоплату может только владелец заказа */
+    if (ord.user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
+    const amount = Math.round(Number(req.body.amount || accepted.price * 0.3));
+    ord.deal = {
+      status: "prepaid",
+      prepay_amount: amount,
+      master_id: accepted.master_id,
+      paid_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      contacts_revealed: true, /* контакты раскрыты обеим сторонам после оплаты */
+    };
+    ord.updated_at = new Date().toISOString();
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    createNotification(accepted.master_id, "prepay", "Предоплата внесена", `Заказчик внёс предоплату ${amount} ₽. Контакты теперь доступны обеим сторонам.`, `/market?focus=${ord.id}`);
+    createNotification(ord.user_id, "prepay", "Сделка активна", `Предоплата ${amount} ₽ внесена. Контакты мастера раскрыты.`, `/market?focus=${ord.id}`);
+    res.json({ ok: true, deal: ord.deal });
+  } catch (e) {
+    console.error("[DEAL PREPAY ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+/* GET состояние сделки + контакты (только участникам и только после предоплаты). */
+app.get("/api/orders/:id/deal", guard, async (req, res) => {
+  try {
+    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [], order_responses: [], users: [] };
+    const ord = (d.custom_orders || []).find(o => o.id === req.params.id);
+    if (!ord) return res.status(404).json({ error: "not_found" });
+    const accepted = (d.order_responses || []).find(r => r.order_id === ord.id && r.status === "accepted");
+    const isParty = (ord.user_id === req.userId) || (accepted && accepted.master_id === req.userId);
+    if (!isParty) return res.status(403).json({ error: "not_party" });
+    const deal = ord.deal || (accepted ? { status: "awaiting_prepay" } : null);
+    const revealed = deal && deal.status === "prepaid";
+    /* Автотмена сделки спустя 7 дней без предоплаты */
+    if (deal && deal.status === "awaiting_prepay" && accepted) {
+      const respAge = Date.now() - new Date(accepted.created_at).getTime();
+      if (respAge > 7 * 24 * 3600 * 1000) {
+        accepted.status = "rejected";
+        ord.status = "published";
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+        createNotification(accepted.master_id, "deal_expired", "Сделка отменена", "Предоплата не была внесена в течение 7 дней. Заказ снова открыт для откликов.", `/market?focus=${ord.id}`);
+        return res.json({ ok: true, deal: { status: "cancelled_auto" }, contacts: null });
+      }
+    }
+    let contacts = null;
+    if (revealed) {
+      const otherId = req.userId === ord.user_id ? accepted.master_id : ord.user_id;
+      const other = (d.users || []).find(u => u.id === otherId);
+      contacts = other ? { name: other.name || "", phone: other.phone || "", telegram: other.telegram || "" } : { name: "", phone: "", telegram: "" };
+    }
+    res.json({ ok: true, deal: deal || { status: "none" }, contacts });
+  } catch (e) {
+    console.error("[DEAL GET ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.post("/api/orders/:id/responses", guard, async (req, res) => {
   try {
     const { id } = req.params;
@@ -536,6 +634,18 @@ app.delete("/api/orders/:id", guard, async (req, res) => {
       if (idx === -1) return res.status(404).json({ error: "not_found" });
       /* Правило владения: удалять заказ может только его владелец */
       if (arr[idx].user_id && arr[idx].user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
+      const removed = arr[idx];
+      /* Edge case: удаление заказа после принятия отклика — активные отклики
+         автоматически отклоняются, мастера получают уведомление. */
+      const pendOrAcc = (d.order_responses || []).filter(r => r.order_id === removed.id && (r.status === "pending" || r.status === "accepted"));
+      pendOrAcc.forEach(r => {
+        r.status = "rejected";
+        createNotification(r.master_id, "order_cancelled", "Заказ отменён заказчиком", "Ваш отклик по заказу «" + (removed.title || "") + "» отклонён: заказ удалён.", "/market");
+      });
+      /* Если предоплата была внесена — инициируем возврат средств (в mock-режиме фиксируем событие). */
+      if (removed.deal && removed.deal.status === "prepaid") {
+        console.log("[REFUND] инициирован возврат предоплаты по заказу " + removed.id + " (sum=" + (removed.deal.prepay_amount || 0) + " ₽)");
+      }
       arr.splice(idx, 1);
       d.custom_orders = arr;
       fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
