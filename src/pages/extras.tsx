@@ -1,11 +1,9 @@
-import { StudioCanvas } from "../components/StudioCanvas";
-import { StudioLibrary } from "../components/StudioLibrary";
-import { StudioSEO } from "../components/StudioSEO";
-import { StudioPhoto } from "../components/StudioPhoto";
-import { StudioVideo } from "../components/StudioVideo";
-import { StudioAgent } from "../components/StudioAgent";
 import { ProductWizard_v2 } from "../components/ProductWizard_v2";
+import { DigitalProductWizard, DigitalVersionForm, DigitalAnalyticsModal } from "../components/DigitalProductWizard";
 import { useNotifyStore } from "../lib/notify";
+import { useDigitalStore } from "../lib/digital";
+import type { DigitalProduct } from "../types/digital";
+import { DIGITAL_TYPE_META } from "../types/digital";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
@@ -1207,7 +1205,7 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "my-orders">("products");
   const nav = useNavigate();
   /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
   const [myResponses, setMyResponses] = useState<any[] | null>(null);
@@ -1228,17 +1226,16 @@ export function SellerDashboardPage() {
     setMyResponses((prev) => (prev || []).map((r) => (r.id === id ? { ...r, status: "withdrawn" } : r)));
   };
 
-  const [canvasOpen, setCanvasOpen] = useState(false);
-  const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [seoOpen, setSeoOpen] = useState(false);
-  const [photoOpen, setPhotoOpen] = useState(false);
-  const [videoOpen, setVideoOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
+  /* Цифровые товары: мастер создания/редактирования + аналитика */
+  const [digitalWizardOpen, setDigitalWizardOpen] = useState(false);
+  const [digitalEditId, setDigitalEditId] = useState<string | null>(null);
+  const [digitalAnalyticsId, setDigitalAnalyticsId] = useState<string | null>(null);
+  const [digitalVersionOpen, setDigitalVersionOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardPrefill, setWizardPrefill] = useState<any>(null);
-  const [studioInfo, setStudioInfo] = useState<null | { name: string; desc: string; eta: string; bullets: string[] }>(null);
-  const [waitlist, setWaitlist] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("qf_studio_waitlist") || "[]"); } catch { return []; } });
+  const digitalProducts = useDigitalStore((s) => s.products.filter((p) => p.ownerId === user?.userId));
+  const digitalPurchasesAll = useDigitalStore((s) => s.purchases);
+  const archiveDigitalProduct = useDigitalStore((s) => s.archiveProduct);
   const allOrders = useAppStore((s) => s.orders);
   const advanceStatus = useAppStore((s) => s.advanceStatus);
   const myOrders = allOrders.filter((o) => o.items.some((i) => i.productId.startsWith("sp-")));
@@ -1392,7 +1389,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
     { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
-    { id: "studio" as const, label: "Студия Quantiform", icon: Sparkles },
+    { id: "digital" as const, label: "Цифровые товары", icon: Sparkles },
     { id: "settings" as const, label: "Настройки", icon: UserPlus },
   ];
 
@@ -2056,75 +2053,121 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             </div></div>
       )}
 
-      {tab === "studio" && (
+      {/* ============================================================
+          ЦИФРОВЫЕ ТОВАРЫ — раздел продавца (ТЗ §9)
+          Дашборд метрик + список продуктов + мастер создания.
+          ============================================================ */}
+      {tab === "digital" && (
         <div className="fade-up">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-5 flex-wrap">
             <span className="w-11 h-11 rounded-2xl bg-dark text-cream flex items-center justify-center"><Sparkles size={20} /></span>
-            <div>
-              <h2 className="font-display font-bold text-[24px] text-ink">Студия Quantiform</h2>
-              <p className="text-[13px] text-ink-soft">Инструментарий продавца: карточки, фотосессии, SEO, видео, агенты и модели — в одном месте.</p>
+            <div className="flex-1 min-w-[200px]">
+              <h2 className="font-display font-bold text-[24px] text-ink">Цифровые товары</h2>
+              <p className="text-[13px] text-ink-soft">Сайты и шаблоны, промты, скиллы, ИИ-агенты и подписки — с защитой файлов и автоматической выдачей доступа.</p>
             </div>
-          </div>
-          <p className="text-[12px] text-ink-mute mb-5">Лимиты вашего тарифа: генераций в месяц — {[5, 50, 300, "без лимита"][lvl]}; хранилище работ — {[10, 100, 1000, "без лимита"][lvl]}. Нажмите на модуль, чтобы открыть его.</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {([
-              ["📚", "Мои работы", "Библиотека карточек, видео, промтов и агентов: папки, версии, брендбук.", "done", "", ["Папки и версии работ", "Брендбук: цвета, шрифты, логотип", "Быстрый повтор прошлых карточек"]],
-              ["", "ИИ-фотосессия", "Фото товара → сцены, удаление фона, апскейл, серии ракурсов без студии.", "done", "", ["Генерация сцен из одного фото", "Удаление фона и апскейл", "Серии ракурсов в едином стиле"]],
-              ["🤖", "Конструктор агентов", "Скиллы, промты и агенты с тест-прогоном и публикацией в «Цифровых товарах».", "done", "", ["Шаблоны агентов и скиллов", "Тест-прогон перед публикацией", "Продажа в категории «Цифровые товары»"]]
-            ] as [string, string, string, string, string, string[]][]).map(([em, name, desc, st, eta, bullets]) => (
-              <button type="button" key={name}
-                onClick={() => st === "done" ? (name === "Конструктор карточек" ? (setCanvasWorkId(undefined), setCanvasOpen(true)) : name === "Мои работы" ? setLibraryOpen(true) : name === "SEO-копирайтер" ? (setSeoOpen(true), setStudioInfo(null)) : name === "ИИ-фотосессия" ? (setPhotoOpen(true), setStudioInfo(null)) : name === "Видеостудия" ? (setVideoOpen(true), setStudioInfo(null)) : name === "Конструктор агентов" ? (setAgentOpen(true), setStudioInfo(null)) : name === "Модели" ? (setTab("settings"), setTimeout(() => { document.getElementById("settings-models")?.scrollIntoView({ behavior: "smooth" }); }, 100)) : setTab("products")) : setStudioInfo({ name, desc, eta, bullets })}
-                className="text-left bg-surface rounded-2xl shadow-card p-5 border border-line-soft transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lift">
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-[26px]">{em}</span>
-                  {st !== "done" && <span className="text-[10.5px] font-bold px-2 py-1 rounded-full bg-line-soft text-ink-mute">🔜 {eta}</span>}
-                </div>
-                <p className="font-display font-bold text-[15px] text-ink mb-1">{name}</p>
-                <p className="text-[12px] text-ink-soft">{desc}</p>
-                <p className="text-[11px] text-ink-mute mt-2">{st === "done" ? "Открыть редактор →" : waitlist.includes(name) ? "🔔 Вы в листе ожидания · подробнее →" : "Подробнее о модуле →"}</p>
-              </button>
-            ))}
+            <Btn variant="primary" onClick={() => { setDigitalEditId(null); setDigitalWizardOpen(true); }}>+ Создать цифровой товар</Btn>
           </div>
 
-          {studioInfo && (
-            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setStudioInfo(null)}>
-              <div className="bg-surface rounded-2xl shadow-lift max-w-[520px] w-full p-7" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-start justify-between mb-3 gap-3">
-                  <h3 className="font-display font-bold text-[20px] text-ink">{studioInfo.name}</h3>
-                  <button type="button" className="w-8 h-8 shrink-0 rounded-full bg-line-soft text-ink-mute hover:bg-error hover:text-white cursor-pointer" onClick={() => setStudioInfo(null)}>×</button>
+          {/* дашборд: 4 метрики (§9) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            {(() => {
+              const monthKey = new Date().toISOString().slice(0, 7);
+              const myPur = digitalPurchasesAll.filter((pu) => digitalProducts.some((d) => d.id === pu.productId));
+              const revenue = digitalProducts.reduce((a, d) => a + d.stats.revenue, 0);
+              const monthSales = myPur.filter((pu) => pu.purchasedAt.slice(0, 7) === monthKey).length;
+              const downloads = digitalProducts.reduce((a, d) => a + d.stats.downloads, 0);
+              const rated = digitalProducts.filter((d) => d.stats.rating > 0);
+              const avgRating = rated.length ? (rated.reduce((a, d) => a + d.stats.rating, 0) / rated.length) : 0;
+              const cards = [
+                ["Доход (всего)", fmt(revenue) + " ₽"],
+                ["Продажи за месяц", String(monthSales)],
+                ["Скачиваний", String(downloads)],
+                ["Средний рейтинг", avgRating ? avgRating.toFixed(1) + " ★" : "—"],
+              ];
+              return cards.map(([l, v]) => (
+                <div key={l} className="bg-surface border border-line-soft rounded-2xl shadow-card p-4">
+                  <p className="text-[11px] font-bold text-ink-mute uppercase mb-1">{l}</p>
+                  <p className="font-display font-bold text-[20px] text-ink">{v}</p>
                 </div>
-                <p className="text-[13px] text-ink-soft mb-4">{studioInfo.desc}</p>
-                <p className="text-[11px] font-bold text-ink-mute mb-2">ЧТО ВОЙДЁТ ({studioInfo.eta}):</p>
-                <ul className="space-y-1.5 mb-5">
-                  {studioInfo.bullets.map((b) => <li key={b} className="text-[12.5px] text-ink-soft flex gap-2"><span className="text-success">✓</span>{b}</li>)}
-                </ul>
-                <button type="button" className="h-11 w-full rounded-[10px] bg-dark text-cream font-bold hover:bg-accent-deep transition-colors cursor-pointer"
-                  onClick={() => {
-                    const key = "qf_studio_waitlist";
-                    const wl = JSON.parse(localStorage.getItem(key) || "[]") as string[];
-                    const next = wl.includes(studioInfo.name) ? wl.filter((x) => x !== studioInfo.name) : [...wl, studioInfo.name];
-                    localStorage.setItem(key, JSON.stringify(next));
-                    setWaitlist(next);
-                  }}>
-                  {waitlist.includes(studioInfo.name) ? "✅ Вы в листе ожидания — снять" : "🔔 В лист ожидания"}
-                </button>
-              </div>
+              ));
+            })()}
+          </div>
+
+          {digitalProducts.length === 0 ? (
+            <div className="bg-surface border border-dashed border-line rounded-2xl p-10 text-center">
+              <p className="text-[40px] mb-2">📦</p>
+              <p className="font-display font-bold text-[18px] text-ink mb-1">Пока нет цифровых продуктов</p>
+              <p className="text-[13px] text-ink-soft mb-5">Создайте первый продукт: файл хранится в защищённом хранилище и выдаётся покупателю только после оплаты.</p>
+              <Btn variant="primary" onClick={() => { setDigitalEditId(null); setDigitalWizardOpen(true); }}>Создать цифровой товар</Btn>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {digitalProducts.map((d) => {
+                const meta = DIGITAL_TYPE_META[d.type];
+                const buyers = digitalPurchasesAll.filter((pu) => pu.productId === d.id);
+                return (
+                  <div key={d.id} className={`bg-surface border rounded-2xl shadow-card p-4 flex gap-4 flex-wrap sm:flex-nowrap items-start ${d.status === "archived" ? "border-line opacity-70" : "border-line-soft"}`}>
+                    <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-line-soft flex items-center justify-center text-[26px]">
+                      {d.previewUrl ? <img src={d.previewUrl} alt="" className="w-full h-full object-cover" /> : meta.icon}
+                    </div>
+                    <div className="flex-1 min-w-[220px]">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full ${meta.accentClass}`}>{meta.icon} {meta.label}</span>
+                        <span className="text-[11px] text-ink-mute">v{d.version}</span>
+                        {d.status === "archived" && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-line-soft text-ink-mute">Снят с продажи</span>}
+                      </div>
+                      <p className="font-display font-bold text-[15px] text-ink leading-snug break-words">{d.title}</p>
+                      <p className="text-[12px] text-ink-mute mt-1">
+                        {fmt(d.price)} ₽ · продаж: {d.stats.salesCount} · скачиваний: {d.stats.downloads} · доход: {fmt(d.stats.revenue)} ₽{d.stats.rating ? ` · ${d.stats.rating.toFixed(1)}★` : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-wrap items-start w-full sm:w-auto">
+                      <Btn size="sm" variant="outline" onClick={() => { setDigitalEditId(d.id); setDigitalWizardOpen(true); }}>Редактировать</Btn>
+                      <Btn size="sm" variant="outline" onClick={() => { setDigitalEditId(d.id); setDigitalVersionOpen(true); }}>Новая версия</Btn>
+                      {d.status === "published" && (
+                        <Btn size="sm" variant="ghost" onClick={() => { if (confirm("Снять продукт с продажи? Покупатели сохранят доступ к уже купленным версиям.")) archiveDigitalProduct(d.id); }}>Снять с продажи</Btn>
+                      )}
+                      <Btn size="sm" variant="ghost" onClick={() => setDigitalAnalyticsId(d.id)}>Аналитика</Btn>
+                    </div>
+                    {buyers.length > 0 && (
+                      <div className="w-full border-t border-line-soft pt-2 text-[11px] text-ink-mute">
+                        Последние покупки: {buyers.slice(0, 3).map((b) => new Date(b.purchasedAt).toLocaleDateString("ru-RU")).join(", ")}{buyers.length > 3 ? ` и ещё ${buyers.length - 3}` : ""}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
+
+          <DigitalProductWizard open={digitalWizardOpen} editId={digitalEditId}
+            onClose={(createdId) => {
+              setDigitalWizardOpen(false); setDigitalEditId(null);
+              if (createdId) { useNotifyStore.getState().push({ kind: "report", title: "Цифровой товар опубликован", text: "Продукт появился в каталоге «Цифровые товары».", deepLink: "#/catalog" }); }
+            }} />
+
+          {/* упрощённая форма новой версии (§9, §11) */}
+          {digitalVersionOpen && (() => {
+            const d = digitalProducts.find((x) => x.id === digitalEditId);
+            if (!d) return null;
+            return (
+              <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setDigitalVersionOpen(false)}>
+                <div className="bg-surface rounded-t-2xl sm:rounded-2xl shadow-lift w-full sm:max-w-[440px] p-6" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-display font-bold text-[18px] text-ink mb-1">Новая версия: {d.title}</h3>
+                  <p className="text-[12px] text-ink-mute mb-4">Текущая версия — {d.version}. Все покупатели получат уведомление и бесплатный доступ к обновлению.</p>
+                  <DigitalVersionForm product={d} onDone={() => { setDigitalVersionOpen(false); setDigitalEditId(null); }} />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* аналитика продукта + CSV (§9) */}
+          {digitalAnalyticsId && <DigitalAnalyticsModal productId={digitalAnalyticsId} onClose={() => setDigitalAnalyticsId(null)} />}
         </div>
       )}
 
-      
-          <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} />
-          <ProductWizard_v2 open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
-          <StudioCanvas open={canvasOpen} onClose={() => setCanvasOpen(false)} initialWorkId={canvasWorkId} />
-          <StudioLibrary open={libraryOpen} onClose={() => setLibraryOpen(false)}
-            onOpenWork={(id) => { setCanvasWorkId(id); setLibraryOpen(false); setCanvasOpen(true); }}
-            onPublish={(w) => { setWizardPrefill({ name: w.data?.title || w.name, description: w.data?.desc || "", photo: w.data?.photo || w.preview, tags: w.data?.tags || [] }); setLibraryOpen(false); setWizardOpen(true); }} />
-          <StudioPhoto open={photoOpen} onClose={() => setPhotoOpen(false)} />
-          <StudioVideo open={videoOpen} onClose={() => setVideoOpen(false)} />
-          <StudioAgent open={agentOpen} onClose={() => setAgentOpen(false)} />
-{tab === "settings" && (
+                <ProductWizard_v2 open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
+                                                  {tab === "settings" && (
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 

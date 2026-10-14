@@ -10,9 +10,6 @@ import { QualityScore, calculateQualityScore } from "../components/QualityScore"
 import { ProductViewCore } from "../components/ProductViewCore";
 import { CATEGORIES } from "../data/seed";
 import { Btn, Field } from "../components/ui";
-import { StudioCanvas } from "../components/StudioCanvas";
-import { StudioPhoto } from "../components/StudioPhoto";
-import { StudioSEO } from "../components/StudioSEO";
 
 type Media = { type: "image" | "video"; url: string; name: string };
 
@@ -82,9 +79,6 @@ export function ProductEditorPage() {
   const [descTouched, setDescTouched] = useState(false);
   const [descChecked, setDescChecked] = useState(false);
   const draftRef = useRef<Draft>(empty);
-  const [studioOpen, setStudioOpen] = useState(false);
-  const [photoOpen, setPhotoOpen] = useState(false);
-  const [seoOpen, setSeoOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [savedDraft, setSavedDraft] = useState(false);
   const [published, setPublished] = useState(false);
@@ -1172,10 +1166,7 @@ export function ProductEditorPage() {
         </div>
       </div>
 
-      {/* Модальные окна Студии */}
-      <StudioCanvas open={studioOpen} onClose={() => setStudioOpen(false)} />
-      <StudioPhoto open={photoOpen} onClose={() => setPhotoOpen(false)} onApply={(photo) => { setDraft({ ...draft, media: [...draft.media, { type: "image", url: photo, name: "from-photo-studio.jpg" }] }); setPhotoOpen(false); }} />
-      <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} initialName={draft.name} initialCategory={draft.category} onApply={(data) => { setDraft({ ...draft, name: data.name, description: data.description }); setSeoOpen(false); }} />
+      
     </div>
   );
 }

@@ -4,9 +4,6 @@ import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller
 import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
 import { Modal, Btn, Field, Badge } from "./ui";
-import { StudioCanvas } from "./StudioCanvas";
-import { StudioPhoto } from "./StudioPhoto";
-import { StudioSEO } from "./StudioSEO";
 
 type Media = { type: "image" | "video"; url: string; name: string };
 
@@ -76,9 +73,6 @@ interface Props {
 export function ProductWizard_v2({ open, onClose, editId, initialData }: Props) {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(empty);
-  const [studioOpen, setStudioOpen] = useState(false);
-  const [photoOpen, setPhotoOpen] = useState(false);
-  const [seoOpen, setSeoOpen] = useState(false);
   
   const acc = useSellerAccount();
   const sellerReg = useSellerReg();
@@ -247,8 +241,6 @@ export function ProductWizard_v2({ open, onClose, editId, initialData }: Props) 
             <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
               <h3 className="font-display font-bold text-[18px] text-ink">📸 Фото и видео товара</h3>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setPhotoOpen(true)} className="h-9 px-3 rounded-[8px] bg-accent text-ink text-[11px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer flex items-center gap-1.5"> ИИ-фотосессия</button>
-                <button type="button" onClick={() => setStudioOpen(true)} className="h-9 px-3 rounded-[8px] bg-dark text-cream text-[11px] font-bold hover:bg-accent-deep transition-colors cursor-pointer flex items-center gap-1.5">🎨 Конструктор карточек</button>
               </div>
             </div>
             <p className="text-[13px] text-ink-soft mb-4">Загрузите до 10 файлов. Первое фото станет обложкой. Видео повышает конверсию на 30%.</p>
@@ -433,10 +425,7 @@ export function ProductWizard_v2({ open, onClose, editId, initialData }: Props) 
 
       </div>
 
-      {/* Модальные окна Студии */}
-      <StudioCanvas open={studioOpen} onClose={() => setStudioOpen(false)} />
-      <StudioPhoto open={photoOpen} onClose={() => setPhotoOpen(false)} onApply={(photo) => { setDraft({ ...draft, media: [...draft.media, { type: "image", url: photo, name: "from-photo-studio.jpg" }] }); setPhotoOpen(false); }} />
-      <StudioSEO open={seoOpen} onClose={() => setSeoOpen(false)} initialName={draft.name} initialCategory={draft.category} onApply={(data) => { setDraft({ ...draft, name: data.name, description: data.description }); setSeoOpen(false); }} />
+      
     </Modal>
   );
 }
