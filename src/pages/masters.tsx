@@ -54,7 +54,7 @@ export function MastersPage() {
   const [region, setRegion] = useState("all");
   const [serverMasters, setServerMasters] = useState<any[]>([]);
 
-  // Загрузка мастеров с сервера при монтировании
+  // Загрузка мастеров с сервера при монтировании (с защитой от бесконечного цикла)
   useEffect(() => {
     const syncMaster = () => {
       const state = useSellerReg.getState();
@@ -69,9 +69,15 @@ export function MastersPage() {
     };
     
     syncMaster();
-    const unsub = useSellerReg.subscribe(syncMaster);
+    // Подписываемся только на изменения, которые действительно важны
+    const unsub = useSellerReg.subscribe((state) => {
+      // Синхронизируем только при критических изменениях статуса
+      if (state.status === "active" && state.shopName && state.isMaster) {
+        syncMaster();
+      }
+    });
     return unsub;
-  }, [session?.userId]);
+  }, [session?.userId]); // Зависимости указаны корректно
 
   const marketAll = useMarketProducts();
   const localMaster = buildRealMaster(useSellerReg.getState(), session?.userId, marketAll);
