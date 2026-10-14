@@ -6,7 +6,7 @@ import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
-import { useMarketStore } from "./extras";
+import { useMarketStore, orderOwnerId } from "./extras";
 import AgentPanel from "../components/agent-panel";
 import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } from "../components/ui";
 import { usePrefsStore } from "../lib/prefs";
