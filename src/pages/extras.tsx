@@ -48,6 +48,9 @@ export interface MarketOrder {
   budget: number; term: string; region: string; refName?: string; refType?: "image" | "video"; coverImage?: string; images?: string[]; moderationIssues?: string[]; moderationWarnings?: string[];
   date: string; status: "draft" | "moderation" | "published" | "in_progress" | "completed" | "cancelled";
   responses: number; myOwn?: boolean;
+  /* Владелец заказа (userId автора). Правило владения: только владелец
+     может редактировать/удалять заказ и видеть список откликов. */
+  ownerId?: string;
   agentPhoto?: string | null; agentItems?: string[]; agentDraft?: boolean;
   // Поля из API
   user_id?: string;
@@ -63,8 +66,12 @@ export interface MarketOrder {
 interface MarketState {
   orders: MarketOrder[];
   responded: string[];
-  addOrder: (o: Omit<MarketOrder, "id" | "date" | "status" | "responses" | "myOwn">) => void;
+  addOrder: (o: Omit<MarketOrder, "id" | "date" | "status" | "responses" | "myOwn" | "ownerId">) => void;
   respond: (id: string) => void;
+}
+/* Единый признак владельца заказа: ownerId (новый формат) или user_id (серверный формат). */
+export function orderOwnerId(o: MarketOrder): string | undefined {
+  return o.ownerId || o.user_id || undefined;
 }
 export const useMarketStore = create<MarketState>()(
   persist(
@@ -72,8 +79,11 @@ export const useMarketStore = create<MarketState>()(
       orders: [],
       responded: [],
       addOrder: async (o) => {
+        /* Правило владения: владелец записывается в момент создания —
+           активный авторизованный пользователь. Гость создать заказ не может. */
+        const uid = useAppStore.getState().session?.userId || "";
         const verdict = moderateOrder(o);
-        const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: (verdict.issues.length ? "moderation" : "published") as any, responses: 0, myOwn: true, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings };
+        const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: (verdict.issues.length ? "moderation" : "published") as any, responses: 0, myOwn: !!uid, ownerId: uid || undefined, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings };
         set((s) => ({ orders: [newOrder, ...s.orders] }));
         useNotifyStore.getState().push(verdict.issues.length ? { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + verdict.issues.length + ". " + verdict.issues.join(" ") + " Исправьте и отправьте снова." } : { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (verdict.warnings.length ? " Рекомендации: " + verdict.warnings.join(" ") : "") });
         
@@ -151,9 +161,12 @@ export function MarketPage() {
               agentDraft: !!o.agentDraft,
               agentPhoto: o.agentPhoto || null,
               user_id: o.user_id,
+              ownerId: o.user_id || o.ownerId || undefined,
               moderationIssues: Array.isArray(o.moderationIssues) ? o.moderationIssues : [],
               moderationWarnings: Array.isArray(o.moderationWarnings) ? o.moderationWarnings : [],
-              myOwn: o.user_id === 'dev-user-1',
+              /* myOwn вычисляется динамически по владельцу (см. isMyOrder),
+                 захардкоженный 'dev-user-1' удалён */
+              myOwn: false,
               attachments: o.attachments || []
             }));
           if (newOrders.length > 0) {
@@ -190,8 +203,21 @@ export function MarketPage() {
   const respond = useMarketStore((s) => s.respond);
   const sellerActive = useSellerReg((s) => s.status === "active");
 
+  /* ===== Правило владения (ТЗ «Фундаментальный принцип») =====
+     isMine(o) — текущий пользователь является владельцем заказа.
+     Гость (user === null) → false: только публичная информация,
+     без кнопок редактирования/удаления и без чужих откликов. */
+  const uid = user?.userId || "";
+  const isMine = (o: MarketOrder) => {
+    const owner = orderOwnerId(o);
+    return !!uid && !!owner && owner === uid;
+  };
 
   const patchOrder = async (id: string, patch: any) => {
+    /* Правило владения: чужой заказ не мутируется локально;
+       сервер дополнительно проверит JWT (403 not_owner). */
+    const target = useMarketStore.getState().orders.find((o) => o.id === id);
+    if (!target || !isMine(target)) return;
     useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
     const updated = useMarketStore.getState().orders.find((o) => o.id === id);
     try {
@@ -220,10 +246,13 @@ export function MarketPage() {
     }
   };
   const removeOrder = async (id: string) => {
+    /* Правило владения: удалять заказ может только владелец */
+    const target = useMarketStore.getState().orders.find((o) => o.id === id);
+    if (!target || !isMine(target)) return;
     useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
     try { await fetch('/api/orders/' + id, { method: 'DELETE' }); } catch (e) { console.error('[sync DELETE]', e); }
   };
-  const startEdit = (o: any) => { setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); const photos: Array<{ name: string; type: "image" | "video"; url: string }> = []; if (o.images && o.images.length > 0) { o.images.forEach((url: string, idx: number) => photos.push({ name: o.refName || "Фото " + (idx+1), type: "image", url })); } else if (o.coverImage) { photos.push({ name: "Обложка", type: "image", url: o.coverImage }); } else if (o.agentPhoto) { photos.push({ name: "Фото агента", type: "image", url: o.agentPhoto }); } setRefs(photos); setSelectedCoverImage(o.coverImage || photos[0]?.url || null); setFErr(""); setWizardOpen(true); };
+  const startEdit = (o: any) => { if (!isMine(o)) return; setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); const photos: Array<{ name: string; type: "image" | "video"; url: string }> = []; if (o.images && o.images.length > 0) { o.images.forEach((url: string, idx: number) => photos.push({ name: o.refName || "Фото " + (idx+1), type: "image", url })); } else if (o.coverImage) { photos.push({ name: "Обложка", type: "image", url: o.coverImage }); } else if (o.agentPhoto) { photos.push({ name: "Фото агента", type: "image", url: o.agentPhoto }); } setRefs(photos); setSelectedCoverImage(o.coverImage || photos[0]?.url || null); setFErr(""); setWizardOpen(true); };
   const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
   const cancelEdit = () => { setEditingDraft(null); };
   const sendDraft = (id: string) => {
@@ -273,7 +302,7 @@ export function MarketPage() {
   
   const REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
 
-  const myActive = orders.filter((o) => o.myOwn && o.status === "published").length;
+  const myActive = orders.filter((o) => isMine(o) && o.status === "published").length;
   const overLimit = myActive >= lim.marketOrders;
 
   const TYPES = [
@@ -291,7 +320,9 @@ export function MarketPage() {
   "Переплетное дело", "Ремонт обуви", "Ремонт одежды", "Кастомизация одежды"
 ];
   const visible = orders
-    .filter((o) => o.status === "published" || o.myOwn)
+    /* Публичный список: опубликованные заказы + собственные (любое состояние).
+       Черновики и заказы на модерации других пользователей не видны никому. */
+    .filter((o) => o.status === "published" || isMine(o))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const detailOrder = visible.find((o: any) => o.id === detailOrderId);
   const respondOrder = visible.find((o: any) => o.id === respondOrderId);
@@ -354,7 +385,7 @@ export function MarketPage() {
               <div className="absolute top-3 right-3 flex gap-2">
                 {o.status === "moderation" ? <Badge tone="honey">На модерации{(o as any).moderationIssues?.length ? " · " + (o as any).moderationIssues.length : ""}</Badge>
                 : (o as any).agentDraft ? <Badge tone="ai">Черновик</Badge>
-                : o.myOwn ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
+                : isMine(o) ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
               </div>
             </div>
             <div className="p-5">
@@ -368,22 +399,35 @@ export function MarketPage() {
                 <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Регион</span><span className="font-semibold text-ink truncate" title={o.region}>{o.region}</span></div>
               </div>
               <div className="flex items-center justify-between pt-4 border-t border-line-soft gap-2 flex-wrap">
-                <span className="text-[11px] text-ink-mute">{fmtDate(o.date)} · <strong className="text-ink">{o.responses + (responded.includes(o.id) ? 1 : 0)}</strong> откликов</span>
-                <div className="flex gap-2">
-                  {o.myOwn && (
+                <span className="text-[11px] text-ink-mute">{fmtDate(o.date)} · {isMine(o) || o.status !== "published" ? <><strong className="text-ink">{o.responses + (responded.includes(o.id) ? 1 : 0)}</strong> откликов</> : "отклики скрыты"}</span>
+                <div className="flex gap-2 flex-wrap">
+                  {/* Управление заказом — ТОЛЬКО владельцу (правило владения, без исключений).
+                      Гость и чужие пользователи этих кнопок не видят. */}
+                  {isMine(o) && (
                     <>
-                      <button onClick={() => setDetailOrderId(o.id)} className="h-8 px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Eye size={12} /> Подробнее</button>
-                      <button onClick={() => startEdit(o)} className="h-8 px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Edit3 size={12} /> Изменить</button>
+                      <button onClick={() => setDetailOrderId(o.id)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Eye size={12} /> Подробнее</button>
+                      <button onClick={() => startEdit(o)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Edit3 size={12} /> Изменить</button>
                       {(o as any).agentDraft && o.status === "draft" && (
-                        <button onClick={() => sendDraft(o.id)} className="h-8 px-3 rounded-lg bg-accent text-ink text-[12px] font-bold hover:bg-accent-deep cursor-pointer flex items-center gap-1 transition-colors"><Send size={12} /> Отправить</button>
+                        <button onClick={() => sendDraft(o.id)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-accent text-ink text-[12px] font-bold hover:bg-accent-deep cursor-pointer flex items-center gap-1 transition-colors"><Send size={12} /> Отправить</button>
                       )}
-                      <button onClick={() => deleteDraft(o.id)} className="h-8 px-3 rounded-lg bg-error/10 text-error text-[12px] font-bold hover:bg-error/20 cursor-pointer flex items-center gap-1 transition-colors" title="Удалить"><Trash2 size={12} /></button>
+                      <button onClick={() => deleteDraft(o.id)} className="h-9 xs:h-8 min-h-[36px] w-9 px-0 rounded-lg bg-error/10 text-error text-[12px] font-bold hover:bg-error/20 cursor-pointer flex items-center justify-center transition-colors" title="Удалить" aria-label="Удалить заказ"><Trash2 size={12} /></button>
                     </>
                   )}
-                  {sellerActive && !o.myOwn && o.status === "published" && (
-                    responded.includes(o.id)
-                      ? <span className="h-8 px-3 rounded-lg bg-success/10 text-success text-[12px] font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Отклик отправлен</span>
-                      : <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn><Btn size="sm" onClick={() => setRespondOrderId(o.id)}>Откликнуться</Btn></div>
+                  {/* Откликнуться: авторизованный мастер, не владелец, опубликованный заказ.
+                      Гостю показывается мягкий призыв войти вместо формы. */}
+                  {!isMine(o) && o.status === "published" && (
+                    !user ? (
+                      <Link to="/auth" className="h-9 min-h-[36px] px-3 rounded-lg border border-line text-ink text-[12px] font-bold hover:bg-line-soft flex items-center gap-1 transition-colors">Войдите, чтобы откликнуться</Link>
+                    ) : sellerActive ? (
+                      responded.includes(o.id)
+                        ? <span className="h-9 min-h-[36px] px-3 rounded-lg bg-success/10 text-success text-[12px] font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Отклик отправлен</span>
+                        : <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn><Btn size="sm" onClick={() => setRespondOrderId(o.id)}>Откликнуться</Btn></div>
+                    ) : (
+                      <Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn>
+                    )
+                  )}
+                  {!isMine(o) && o.status !== "published" && (
+                    <button onClick={() => setDetailOrderId(o.id)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Eye size={12} /> Подробнее</button>
                   )}
                 </div>
               </div>
@@ -436,12 +480,20 @@ export function MarketPage() {
                 </div>
               </div>
             )}
-            {sellerActive && !detailOrder.myOwn && detailOrder.status === "published" && (
+            {/* Кнопка отклика: только авторизованному не-владельцу опубликованного заказа.
+                Гостю — призыв войти; владельцу — ничего (управление в карточке). */}
+            {!isMine(detailOrder) && detailOrder.status === "published" && (
               <div className="pt-4 border-t border-line-soft">
-                {responded.includes(detailOrder.id) ? (
-                  <p className="text-center text-success font-semibold flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Вы уже откликнулись на этот заказ</p>
+                {!user ? (
+                  <Link to="/auth" className="block w-full h-[44px] leading-[44px] text-center rounded-xl border border-line font-bold text-[14px] text-ink hover:bg-line-soft transition-colors">Войдите, чтобы откликнуться</Link>
+                ) : sellerActive ? (
+                  responded.includes(detailOrder.id) ? (
+                    <p className="text-center text-success font-semibold flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Вы уже откликнулись на этот заказ</p>
+                  ) : (
+                    <Btn size="lg" className="w-full" onClick={() => { setDetailOrderId(null); setRespondOrderId(detailOrder.id); }}>Откликнуться на заказ</Btn>
+                  )
                 ) : (
-                  <Btn size="lg" className="w-full" onClick={() => { setDetailOrderId(null); setRespondOrderId(detailOrder.id); }}>Откликнуться на заказ</Btn>
+                  <p className="text-center text-[13px] text-ink-soft">Откликаться могут мастера с подтверждённым профилем.</p>
                 )}
               </div>
             )}
@@ -449,9 +501,25 @@ export function MarketPage() {
         )}
       </Modal>
 
+      {/* Модальное окно детальной карточки: роль наблюдателя определяет доступный функционал
+          (владелец — отклики/статусы/предоплата; чужой мастер — только отклик; гость — публичные данные) */}
+      {detailOrder && (
+        <MarketOrderDetail
+          order={detailOrder}
+          role={!user ? "guest" : isMine(detailOrder) ? "owner" : "other"}
+          onClose={() => setDetailOrderId(null)}
+          onStatusChange={(id, status) => patchOrder(id, { status })}
+        />
+      )}
+
       {/* Модальное окно отклика мастера */}
       {respondOrder && (
-        <MarketOrderDetail order={respondOrder} onClose={() => setRespondOrderId(null)} />
+        <MarketOrderDetail
+          order={respondOrder}
+          role={!user ? "guest" : isMine(respondOrder) ? "owner" : "other"}
+          onClose={() => setRespondOrderId(null)}
+          onStatusChange={(id, status) => patchOrder(id, { status })}
+        />
       )}
 
       {/* AI-визард */}
@@ -1139,8 +1207,27 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "studio" | "settings" | "my-orders">("products");
   const nav = useNavigate();
+  /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
+  const [myResponses, setMyResponses] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (tab !== "responses") return;
+    fetch("/api/my-responses", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { ok: false, responses: [] })
+      .then((d) => setMyResponses(d.responses || []))
+      .catch(() => setMyResponses([]));
+  }, [tab]);
+  const withdrawMyResponse = async (id: string) => {
+    const res = await fetch(`/api/orders/${(myResponses || []).find((r) => r.id === id)?.order_id}/responses/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ status: "withdrawn" }),
+    });
+    if (res.status === 409) { alert("Отозвать отклик можно только до решения заказчика"); return; }
+    if (!res.ok) { alert("Не удалось отозвать отклик"); return; }
+    setMyResponses((prev) => (prev || []).map((r) => (r.id === id ? { ...r, status: "withdrawn" } : r)));
+  };
+
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasWorkId, setCanvasWorkId] = useState<string | undefined>(undefined);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -1300,6 +1387,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "products" as const, label: "Товары", icon: Boxes },
     { id: "agent" as const, label: "Агент", icon: Bot },
     { id: "orders" as const, label: "Заказы", icon: FileText },
+    { id: "responses" as const, label: "Мои отклики", icon: Send },
     { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag, external: true },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
@@ -1509,6 +1597,37 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* МОИ ОТКЛИКИ (мастер → чужие заказы) */}
+      {tab === "responses" && (
+        <div className="space-y-3 fade-up">
+          {myResponses === null && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center text-[13px] text-ink-mute">Загрузка откликов…</div>
+          )}
+          {myResponses !== null && myResponses.length === 0 && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">📨</p>
+              <p className="font-bold text-[15px] text-ink">Откликов пока нет</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Откликайтесь на заказы биржевого рынка — здесь появится список ваших предложений со статусами.</p>
+            </div>
+          )}
+          {(myResponses || []).map((r) => (
+            <div key={r.id} className="bg-surface rounded-2xl shadow-card p-5 flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <p className="font-bold text-[14px] text-ink">{r.order_title}</p>
+                <p className="text-[12px] text-ink-mute mt-0.5 line-clamp-2">{r.comment}</p>
+                <p className="text-[12px] text-ink-soft mt-1">Ваше предложение: <strong>{Number(r.price).toLocaleString("ru-RU")} ₽</strong> · срок {r.deadline_days} дн. · {fmtDate(r.created_at)}</p>
+              </div>
+              <Badge tone={r.status === "accepted" ? "success" : r.status === "pending" ? "honey" : "neutral"}>
+                {r.status === "accepted" ? "Принят" : r.status === "pending" ? "Отправлен" : r.status === "withdrawn" ? "Отозван" : "Отклонён"}
+              </Badge>
+              {r.status === "pending" && (
+                <button onClick={() => withdrawMyResponse(r.id)} className="h-[44px] px-4 rounded-xl border border-line text-ink-soft text-[12px] font-bold hover:bg-line-soft transition-colors cursor-pointer">Отозвать</button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

@@ -54,6 +54,13 @@ function guard(req, res, next) {
   if (!t) return res.status(401).json({ error: "no_session" });
   try { req.userId = jwt.verify(t, JWT_SECRET).sub; next(); } catch { res.status(401).json({ error: "bad_session" }); }
 }
+/* Мягкая авторизация: если токен есть — заполняет req.userId, иначе продолжает как гость.
+   Нужен для эндпоинтов с ролевой моделью доступа (владелец/чужой/гость). */
+function softGuard(req, _res, next) {
+  const t = req.cookies ? req.cookies[COOKIE] : null;
+  if (t) { try { req.userId = jwt.verify(t, JWT_SECRET).sub; } catch {} }
+  next();
+}
 async function sendConfirm(email, name, token) {
   const link = API_URL + "/api/auth/confirm?token=" + token;
   if (mail) { await mail.sendMail({ from: MAIL_FROM, to: email, subject: "Подтвердите email — Quantiform", html: "<p>Здравствуйте, " + name + "!</p><p><a href=\"" + link + "\">Подтвердить email</a></p><p>Ссылка действует 24 часа.</p>" }); return null; }
@@ -251,14 +258,16 @@ app.post("/api/agent/negotiate", async (req, res) => {
 // ==========================================
 // API БИРЖИ ЗАКАЗОВ (Phase 1)
 // ==========================================
-app.post("/api/orders", async (req, res) => {
+app.post("/api/orders", guard, async (req, res) => {
   try {
     const b = req.body || {};
     const now = new Date().toISOString();
     const images = Array.isArray(b.images) ? b.images : Array.isArray(b.attachments) ? b.attachments : [];
     const newOrder = {
       id: crypto.randomUUID(),
-      user_id: b.user_id || "dev-user-1",
+      /* Правило владения: владелец заказа — авторизованный создатель (JWT sub).
+         Гостям создание заказа запрещено; чужой user_id из тела игнорируется. */
+      user_id: req.userId,
       title: b.title || "",
       description: b.desc || b.description || "",
       desc: b.desc || b.description || "",
@@ -321,15 +330,20 @@ app.get("/api/orders", async (req, res) => {
 // ==========================================
 // API ОТКЛИКОВ НА ЗАКАЗЫ (Phase 6)
 // ==========================================
-app.get("/api/orders/:id/responses", async (req, res) => {
+app.get("/api/orders/:id/responses", guard, async (req, res) => {
   try {
     const { id } = req.params;
     let responses = [];
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [] };
-      responses = (d.order_responses || []).filter(r => r.order_id === id);
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [], custom_orders: [] };
+      const allResp = (d.order_responses || []).filter(r => r.order_id === id);
+      const ordG = (d.custom_orders || []).find(o => o.id === id);
+      const isOrderOwner = ordG && ordG.user_id === req.userId;
+      /* Приватность: чужие отклики видит только владелец заказа;
+         остальные — только собственный отклик. */
+      responses = isOrderOwner ? allResp : allResp.filter(r => r.master_id === req.userId);
     }
     res.json({ ok: true, responses });
   } catch (e) {
@@ -338,15 +352,128 @@ app.get("/api/orders/:id/responses", async (req, res) => {
   }
 });
 
-app.post("/api/orders/:id/responses", async (req, res) => {
+/* Список ВСЕХ откликов текущего мастера (кабинет «Мои отклики»). */
+app.get("/api/my-responses", guard, async (req, res) => {
+  try {
+    let myResponses = [];
+    if (String(db.mode).indexOf("json-dev") !== -1) {
+      const FILE = require("path").resolve(__dirname, "dev-db.json");
+      const fs = require("fs");
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [], custom_orders: [] };
+      myResponses = (d.order_responses || [])
+        .filter(r => r.master_id === req.userId)
+        .map(r => {
+          const ord = (d.custom_orders || []).find(o => o.id === r.order_id);
+          return Object.assign({}, r, {
+            order_title: ord ? ord.title : "Профиль удалён", /* edge case: заказ удалён */
+            order_status: ord ? ord.status : "deleted",
+          });
+        })
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    }
+    res.json({ ok: true, responses: myResponses });
+  } catch (e) {
+    console.error("[MY-RESPONSES API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+/* Сделка безопасной сделки: предоплата раскрывает контакты обеих сторон.
+   Статусы: awaiting_prepay → prepaid → completed/cancelled. */
+app.post("/api/orders/:id/deal/prepay", guard, async (req, res) => {
+  try {
+    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [], order_responses: [] };
+    const ord = (d.custom_orders || []).find(o => o.id === req.params.id);
+    if (!ord) return res.status(404).json({ error: "not_found" });
+    const accepted = (d.order_responses || []).find(r => r.order_id === ord.id && r.status === "accepted");
+    if (!accepted) return res.status(409).json({ error: "no_accepted_response" });
+    /* Внести предоплату может только владелец заказа */
+    if (ord.user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
+    const amount = Math.round(Number(req.body.amount || accepted.price * 0.3));
+    ord.deal = {
+      status: "prepaid",
+      prepay_amount: amount,
+      master_id: accepted.master_id,
+      paid_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      contacts_revealed: true, /* контакты раскрыты обеим сторонам после оплаты */
+    };
+    ord.updated_at = new Date().toISOString();
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    createNotification(accepted.master_id, "prepay", "Предоплата внесена", `Заказчик внёс предоплату ${amount} ₽. Контакты теперь доступны обеим сторонам.`, `/market?focus=${ord.id}`);
+    createNotification(ord.user_id, "prepay", "Сделка активна", `Предоплата ${amount} ₽ внесена. Контакты мастера раскрыты.`, `/market?focus=${ord.id}`);
+    res.json({ ok: true, deal: ord.deal });
+  } catch (e) {
+    console.error("[DEAL PREPAY ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+/* GET состояние сделки + контакты (только участникам и только после предоплаты). */
+app.get("/api/orders/:id/deal", guard, async (req, res) => {
+  try {
+    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [], order_responses: [], users: [] };
+    const ord = (d.custom_orders || []).find(o => o.id === req.params.id);
+    if (!ord) return res.status(404).json({ error: "not_found" });
+    const accepted = (d.order_responses || []).find(r => r.order_id === ord.id && r.status === "accepted");
+    const isParty = (ord.user_id === req.userId) || (accepted && accepted.master_id === req.userId);
+    if (!isParty) return res.status(403).json({ error: "not_party" });
+    const deal = ord.deal || (accepted ? { status: "awaiting_prepay" } : null);
+    const revealed = deal && deal.status === "prepaid";
+    /* Автотмена сделки спустя 7 дней без предоплаты */
+    if (deal && deal.status === "awaiting_prepay" && accepted) {
+      const respAge = Date.now() - new Date(accepted.created_at).getTime();
+      if (respAge > 7 * 24 * 3600 * 1000) {
+        accepted.status = "rejected";
+        ord.status = "published";
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+        createNotification(accepted.master_id, "deal_expired", "Сделка отменена", "Предоплата не была внесена в течение 7 дней. Заказ снова открыт для откликов.", `/market?focus=${ord.id}`);
+        return res.json({ ok: true, deal: { status: "cancelled_auto" }, contacts: null });
+      }
+    }
+    let contacts = null;
+    if (revealed) {
+      const otherId = req.userId === ord.user_id ? accepted.master_id : ord.user_id;
+      const other = (d.users || []).find(u => u.id === otherId);
+      contacts = other ? { name: other.name || "", phone: other.phone || "", telegram: other.telegram || "" } : { name: "", phone: "", telegram: "" };
+    }
+    res.json({ ok: true, deal: deal || { status: "none" }, contacts });
+  } catch (e) {
+    console.error("[DEAL GET ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+app.post("/api/orders/:id/responses", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    const { master_id, price, deadline_days, comment } = req.body;
+    const { price, deadline_days, comment } = req.body;
+    
+    /* Правило владения и логика откликов:
+       - откликаться может только авторизованный мастер (не гость);
+       - мастер не может откликнуться на СОБСТВЕННЫЙ заказ;
+       - один мастер — один отклик на заказ (дубликат отклоняется). */
+    if (String(db.mode).indexOf("json-dev") !== -1) {
+      const FILE0 = require("path").resolve(__dirname, "dev-db.json");
+      const fs0 = require("fs");
+      const d0 = fs0.existsSync(FILE0) ? JSON.parse(fs0.readFileSync(FILE0, "utf8")) : { custom_orders: [], order_responses: [] };
+      const ord0 = (d0.custom_orders || []).find(o => o.id === id);
+      if (!ord0) return res.status(404).json({ error: "not_found" });
+      if (ord0.user_id === req.userId) return res.status(403).json({ error: "own_order" });
+      const dup = (d0.order_responses || []).find(r => r.order_id === id && r.master_id === req.userId);
+      if (dup) return res.status(409).json({ error: "already_responded" });
+    }
     
     const newResponse = {
       id: require("crypto").randomUUID(),
       order_id: id,
-      master_id: master_id || "dev-master-1",
+      master_id: req.userId,
       price: Number(price),
       deadline_days: Number(deadline_days),
       comment: comment || "",
@@ -372,7 +499,15 @@ app.post("/api/orders/:id/responses", async (req, res) => {
       fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
     }
 
-    createNotification("dev-user-1", "response", "Новый отклик на заказ", `Мастер предложил цену ${newResponse.price} ₽`, `/market?focus=${id}`);
+    let ownerUid = "dev-user-1";
+    try {
+      const FILEN = require("path").resolve(__dirname, "dev-db.json");
+      const fsn = require("fs");
+      const dd = fsn.existsSync(FILEN) ? JSON.parse(fsn.readFileSync(FILEN, "utf8")) : {};
+      const ordN = (dd.custom_orders || []).find(o => o.id === id);
+      if (ordN && ordN.user_id) ownerUid = ordN.user_id;
+    } catch {}
+    createNotification(ownerUid, "response", "Новый отклик на заказ", `Мастер предложил цену ${newResponse.price} ₽`, `/market?focus=${id}`);
     res.json({ ok: true, response: newResponse });
   } catch (e) {
     console.error("[RESPONSES API ERROR]", e);
@@ -380,7 +515,7 @@ app.post("/api/orders/:id/responses", async (req, res) => {
   }
 });
 
-app.put("/api/orders/:id/responses/:rid", async (req, res) => {
+app.put("/api/orders/:id/responses/:rid", guard, async (req, res) => {
   try {
     const { id, rid } = req.params;
     const { status } = req.body; // 'accepted' or 'rejected'
@@ -390,7 +525,23 @@ app.put("/api/orders/:id/responses/:rid", async (req, res) => {
       const fs = require("fs");
       const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_responses: [], custom_orders: [] };
       
+      const ordP = (d.custom_orders || []).find(o => o.id === id);
       const resp = (d.order_responses || []).find(r => r.id === rid);
+      if (!resp) return res.status(404).json({ error: "not_found" });
+      /* Принимать/отклонять отклики может только владелец заказа.
+         Мастер может ОТОЗВАТЬ свой отклик, только пока он "pending". */
+      const isOrderOwnerPut = !!(ordP && ordP.user_id === req.userId);
+      const isMasterSelf = resp.master_id === req.userId;
+      if (status === "withdrawn") {
+        if (!isMasterSelf) return res.status(403).json({ error: "not_owner" });
+        if (resp.status !== "pending") return res.status(409).json({ error: "cannot_withdraw" });
+      } else if (!isOrderOwnerPut) {
+        return res.status(403).json({ error: "not_owner" });
+      }
+      /* Принятие одного отклика автоматически отклоняет все остальные */
+      if (status === "accepted") {
+        (d.order_responses || []).forEach(r => { if (r.order_id === id && r.id !== rid && r.status === "pending") r.status = "rejected"; });
+      }
       if (resp) {
         resp.status = status;
         
@@ -405,11 +556,22 @@ app.put("/api/orders/:id/responses/:rid", async (req, res) => {
         fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
       }
     }
-    if (status === "accepted") {
-        const resp = (d.order_responses || []).find(r => r.id === rid);
-        if (resp) createNotification(resp.master_id, "accepted", "Ваш отклик принят!", "Заказчик выбрал вас исполнителем.", `/market?focus=${id}`);
+    /* FIX: уведомление о принятии — внутри json-dev блока (переменная d там же),
+       раньше обращалась к внеобластной переменной → ReferenceError при каждом accept. */
+    if (db.mode === "json-dev (бесплатно)") {
+      const FILE2 = require("path").resolve(__dirname, "dev-db.json");
+      const fs2 = require("fs");
+      const d2 = fs2.existsSync(FILE2) ? JSON.parse(fs2.readFileSync(FILE2, "utf8")) : { order_responses: [] };
+      if (status === "accepted") {
+        const respA = (d2.order_responses || []).find(r => r.id === rid);
+        if (respA) createNotification(respA.master_id, "accepted", "Ваш отклик принят!", "Заказчик выбрал вас исполнителем.", `/market?focus=${id}`);
       }
-      res.json({ ok: true });
+      if (status === "rejected") {
+        const respR = (d2.order_responses || []).find(r => r.id === rid);
+        if (respR) createNotification(respR.master_id, "rejected", "Отклик отклонён", `По заказу принято другое предложение.`, `/market?focus=${id}`);
+      }
+    }
+    res.json({ ok: true });
   } catch (e) {
     console.error("[RESPONSES UPDATE API ERROR]", e);
     res.status(500).json({ error: "server" });
@@ -420,7 +582,7 @@ app.put("/api/orders/:id/responses/:rid", async (req, res) => {
 // ==========================================
 // API ЭТАПА 7: ДЕТАЛЬНАЯ КАРТОЧКА, ЧАТ И ЭТАПЫ
 // ==========================================
-app.put("/api/orders/:id", async (req, res) => {
+app.put("/api/orders/:id", guard, async (req, res) => {
   try {
     const patch = req.body || {};
     let saved = null;
@@ -431,6 +593,8 @@ app.put("/api/orders/:id", async (req, res) => {
       const arr = d.custom_orders || [];
       const idx = arr.findIndex(function(o){ return o.id === req.params.id; });
       if (idx === -1) return res.status(404).json({ error: "not_found" });
+      /* Правило владения: редактировать заказ может только его владелец */
+      if (arr[idx].user_id && arr[idx].user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
       const prev = arr[idx];
       const next = Object.assign({}, prev, patch, { id: prev.id, updated_at: new Date().toISOString() });
 
@@ -459,7 +623,7 @@ app.put("/api/orders/:id", async (req, res) => {
   }
 });
 
-app.delete("/api/orders/:id", async (req, res) => {
+app.delete("/api/orders/:id", guard, async (req, res) => {
   try {
     if (String(db.mode).indexOf("json-dev") !== -1) {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
@@ -468,6 +632,20 @@ app.delete("/api/orders/:id", async (req, res) => {
       const arr = d.custom_orders || [];
       const idx = arr.findIndex(function(o){ return o.id === req.params.id; });
       if (idx === -1) return res.status(404).json({ error: "not_found" });
+      /* Правило владения: удалять заказ может только его владелец */
+      if (arr[idx].user_id && arr[idx].user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
+      const removed = arr[idx];
+      /* Edge case: удаление заказа после принятия отклика — активные отклики
+         автоматически отклоняются, мастера получают уведомление. */
+      const pendOrAcc = (d.order_responses || []).filter(r => r.order_id === removed.id && (r.status === "pending" || r.status === "accepted"));
+      pendOrAcc.forEach(r => {
+        r.status = "rejected";
+        createNotification(r.master_id, "order_cancelled", "Заказ отменён заказчиком", "Ваш отклик по заказу «" + (removed.title || "") + "» отклонён: заказ удалён.", "/market");
+      });
+      /* Если предоплата была внесена — инициируем возврат средств (в mock-режиме фиксируем событие). */
+      if (removed.deal && removed.deal.status === "prepaid") {
+        console.log("[REFUND] инициирован возврат предоплаты по заказу " + removed.id + " (sum=" + (removed.deal.prepay_amount || 0) + " ₽)");
+      }
       arr.splice(idx, 1);
       d.custom_orders = arr;
       fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
@@ -496,14 +674,19 @@ app.get("/api/orders/:id", async (req, res) => {
   }
 });
 
-app.get("/api/orders/:id/messages", async (req, res) => {
+app.get("/api/orders/:id/messages", softGuard, async (req, res) => {
   try {
     const { id } = req.params;
     let messages = [];
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_messages: [] };
+      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_messages: [], custom_orders: [] };
+      /* Ролевая модель чата: сообщения видят только владелец заказа и принятый мастер. */
+      const ordM = (d.custom_orders || []).find(o => o.id === id);
+      const accepted = (d.order_responses || []).find(r => r.order_id === id && r.status === "accepted");
+      const party = req.userId && ((ordM && ordM.user_id === req.userId) || (accepted && accepted.master_id === req.userId));
+      if (!party) return res.status(403).json({ error: "not_participant" });
       messages = (d.order_messages || []).filter(m => m.order_id === id).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
     }
     res.json({ ok: true, messages });
@@ -513,28 +696,38 @@ app.get("/api/orders/:id/messages", async (req, res) => {
   }
 });
 
-app.post("/api/orders/:id/messages", async (req, res) => {
+app.post("/api/orders/:id/messages", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    const { sender_id, message, attachment_url } = req.body;
-    const newMsg = {
-      id: require("crypto").randomUUID(),
-      order_id: id,
-      sender_id: sender_id || "dev-user-1",
-      message,
-      attachment_url: attachment_url || null,
-      created_at: new Date().toISOString()
-    };
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_messages: [] };
-      if (!d.order_messages) d.order_messages = [];
-      d.order_messages.push(newMsg);
-      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    const { message, attachment_url } = req.body;
+    if (!message || !String(message).trim()) return res.status(422).json({ error: "empty_message" });
+    /* Отправить сообщение могут только стороны сделки: владелец заказа или принятый мастер.
+       sender_id всегда берётся из токена — подставить чужой identity невозможно. */
+    if (String(db.mode).indexOf("json-dev") !== -1) {
+      const FILEC = require("path").resolve(__dirname, "dev-db.json");
+      const fsc = require("fs");
+      const dc = fsc.existsSync(FILEC) ? JSON.parse(fsc.readFileSync(FILEC, "utf8")) : {};
+      const ordC = (dc.custom_orders || []).find(o => o.id === id);
+      if (!ordC) return res.status(404).json({ error: "not_found" });
+      const accC = (dc.order_responses || []).find(r => r.order_id === id && r.status === "accepted");
+      const isParty = ordC.user_id === req.userId || (accC && accC.master_id === req.userId);
+      if (!isParty) return res.status(403).json({ error: "not_participant" });
+      const otherUid = ordC.user_id === req.userId ? (accC ? accC.master_id : null) : ordC.user_id;
+      const newMsg = {
+        id: require("crypto").randomUUID(),
+        order_id: id,
+        sender_id: req.userId,
+        message: String(message),
+        attachment_url: attachment_url || null,
+        created_at: new Date().toISOString()
+      };
+      if (!dc.order_messages) dc.order_messages = [];
+      dc.order_messages.push(newMsg);
+      fsc.writeFileSync(FILEC, JSON.stringify(dc, null, 2));
+      if (otherUid) createNotification(otherUid, "message", "Новое сообщение в чате", "Получено новое сообщение по заказу", `/profile`);
+      return res.json({ ok: true, message: newMsg });
     }
-    createNotification("dev-user-1", "message", "Новое сообщение в чате", "Получено новое сообщение по заказу", `/profile`);
-    res.json({ ok: true, message: newMsg });
+    res.json({ ok: false, error: "unsupported_db" });
   } catch (e) {
     console.error("[SEND MESSAGE API ERROR]", e);
     res.status(500).json({ error: "server" });
@@ -614,16 +807,17 @@ app.put("/api/orders/:id/milestones/:mid", async (req, res) => {
 // ==========================================
 // API ЭТАПА 9: УВЕДОМЛЕНИЯ
 // ==========================================
-app.get("/api/notifications", async (req, res) => {
+app.get("/api/notifications", softGuard, async (req, res) => {
   try {
-    // В демо-режиме возвращаем все уведомления, в продакшене фильтровали бы по user_id
+    /* Приватность: пользователь видит только СВОИ уведомления.
+       Гость получает пустой список; legacy-записи без user_id не раскрываются. */
     let notifications = [];
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
       const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
-      // Сортируем от новых к старым
-      notifications = (d.notifications || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const all = (d.notifications || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      notifications = req.userId ? all.filter(n => n.user_id === req.userId) : [];
     }
     res.json({ ok: true, notifications });
   } catch (e) {
@@ -632,7 +826,7 @@ app.get("/api/notifications", async (req, res) => {
   }
 });
 
-app.put("/api/notifications/:id/read", async (req, res) => {
+app.put("/api/notifications/:id/read", guard, async (req, res) => {
   try {
     const { id } = req.params;
     if (db.mode === "json-dev (бесплатно)") {
@@ -640,7 +834,8 @@ app.put("/api/notifications/:id/read", async (req, res) => {
       const fs = require("fs");
       const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
       const n = (d.notifications || []).find(x => x.id === id);
-      if (n) {
+      /* Отметить можно только своё уведомление. */
+      if (n && n.user_id === req.userId) {
         n.read = true;
         fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
       }
@@ -652,14 +847,14 @@ app.put("/api/notifications/:id/read", async (req, res) => {
   }
 });
 
-app.put("/api/notifications/read-all", async (req, res) => {
+app.put("/api/notifications/read-all", guard, async (req, res) => {
   try {
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
       const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
       if (d.notifications) {
-        d.notifications.forEach(n => n.read = true);
+        d.notifications.forEach(n => { if (n.user_id === req.userId) n.read = true; });
         fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
       }
     }
@@ -720,26 +915,37 @@ app.get("/api/masters", (_q, r) => {
   catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/masters", (req, r) => {
+app.post("/api/masters", guard, (req, r) => {
   try {
     const m = req.body || {};
-    console.log("[MASTERS POST] received:", m.id, m.name);
     if (!m.id) return r.status(400).json({ error: "no_id" });
+    /* Правило владения: карточку мастера можно создавать/обновлять только от своего имени. */
+    if (String(m.id) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
     const { FILE, fs, d } = devDbRead();
-    console.log("[MASTERS POST] FILE:", FILE, "masters count:", (d.masters||[]).length);
     if (!d.masters) d.masters = [];
     const idx = d.masters.findIndex((x) => x.id === m.id);
     if (idx >= 0) {
       d.masters[idx] = Object.assign({}, d.masters[idx], m, { updated_at: new Date().toISOString() });
-      console.log("[MASTERS POST] updated existing master at index", idx);
     } else {
-      d.masters.push(Object.assign({}, m, { created_at: new Date().toISOString() }));
-      console.log("[MASTERS POST] added new master");
+      d.masters.push(Object.assign({}, m, { owner_id: req.userId, created_at: new Date().toISOString() }));
     }
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    console.log("[MASTERS POST] saved, total masters:", d.masters.length);
     r.json({ ok: true });
   } catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+/* Удаление карточки мастера — только владельцем. */
+app.delete("/api/masters/:id", guard, (req, r) => {
+  try {
+    if (String(req.params.id) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
+    const { FILE, fs, d } = devDbRead();
+    const arr = d.masters || [];
+    const idx = arr.findIndex((x) => x.id === req.params.id);
+    if (idx === -1) return r.status(404).json({ error: "not_found" });
+    arr.splice(idx, 1); d.masters = arr;
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    r.json({ ok: true });
+  } catch (e) { console.error("[MASTERS DELETE ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
 app.get("/api/products", (_q, r) => {
@@ -747,26 +953,37 @@ app.get("/api/products", (_q, r) => {
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/products", (req, r) => {
+app.post("/api/products", guard, (req, r) => {
   try {
     const p = req.body || {};
     if (!p.id) return r.status(400).json({ error: "no_id" });
+    /* Правило владения товара: ownerId всегда берётся из токена сессии.
+       Клиент не может присвоить товар другому пользователю или создать анонимный товар. */
     const { FILE, fs, d } = devDbRead();
     if (!d.products) d.products = [];
     const idx = d.products.findIndex((x) => x.id === p.id);
-    if (idx >= 0) d.products[idx] = Object.assign({}, d.products[idx], p, { updated_at: new Date().toISOString() });
-    else d.products.push(Object.assign({}, p, { created_at: new Date().toISOString() }));
+    if (idx >= 0) {
+      /* Обновлять товар может только его владелец (существующий ownerId) либо создатель. */
+      const curOwner = d.products[idx].ownerId || d.products[idx].owner_id;
+      if (curOwner && String(curOwner) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
+      d.products[idx] = Object.assign({}, d.products[idx], p, { ownerId: req.userId, updated_at: new Date().toISOString() });
+    } else {
+      d.products.push(Object.assign({}, p, { ownerId: req.userId, created_at: new Date().toISOString() }));
+    }
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
     r.json({ ok: true });
   } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.delete("/api/products/:id", (req, r) => {
+app.delete("/api/products/:id", guard, (req, r) => {
   try {
     const { FILE, fs, d } = devDbRead();
     const arr = d.products || [];
     const idx = arr.findIndex((x) => x.id === req.params.id);
     if (idx === -1) return r.status(404).json({ error: "not_found" });
+    /* Удалять товар может только его владелец. */
+    const owner = arr[idx].ownerId || arr[idx].owner_id;
+    if (owner && String(owner) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
     arr.splice(idx, 1); d.products = arr;
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
     r.json({ ok: true });

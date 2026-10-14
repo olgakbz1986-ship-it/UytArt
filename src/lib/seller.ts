@@ -543,6 +543,8 @@ id: string;
 export interface WorkItem {
   id: string;
   type: "card" | "photo" | "seo" | "video" | "agent";
+  /* Владелец работы — id аккаунта, создавшего её (Правило владения) */
+  ownerId?: string;
   name: string;
   folder: string;
   spec: "qf" | "wb" | "ozon";
@@ -596,6 +598,8 @@ interface SellerAccountState {
    зеркало актуального профиля.
    ============================================================ */
 import { useAppStore } from "./store";
+/* Правило владения: единая проверка «только владелец может мутировать» */
+import { canMutate } from "./ownership";
 
 const activeUserId = (): string => {
   try { return useAppStore.getState().session?.userId || ""; } catch { return ""; }
@@ -643,11 +647,12 @@ export const useSellerAccount = create<SellerAccountState>()(
       saveWork: (w) => {
         const id = "w" + Date.now().toString(36);
         const now = new Date().toISOString();
-        set((s) => ({ works: [{ ...w, id, createdAt: now, updatedAt: now }, ...s.works] }));
+        /* Правило владения: работа создаётся от имени активного аккаунта */
+        set((s) => ({ works: [{ ...w, ownerId: activeUserId() || undefined, id, createdAt: now, updatedAt: now }, ...s.works] }));
         return id;
       },
-      updateWork: (id, patch) => set((s) => ({ works: s.works.map((w) => w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w) })),
-      deleteWork: (id) => set((s) => ({ works: s.works.filter((w) => w.id !== id) })),
+      updateWork: (id, patch) => set((s) => ({ works: s.works.map((w) => (w.id === id && canMutate(w.ownerId) ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w)) })),
+      deleteWork: (id) => set((s) => ({ works: s.works.filter((w) => !(w.id === id && canMutate(w.ownerId))) })),
       planIdsByAccount: {},
       setPlan: (accountId, t, id) => set((s) => {
         const current = s.planIdsByAccount[accountId] || { self_employed: "free", ip: "free", ooo: "free" };
@@ -675,14 +680,15 @@ export const useSellerAccount = create<SellerAccountState>()(
           products: [{ ...p, ownerId: p.ownerId || uid || undefined, id: p.id || "sp-" + Date.now(), createdAt: p.createdAt || new Date().toISOString() }, ...s.products],
         }));
       },
-      removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
+      removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => !(p.id === id && canMutate(p.ownerId))) })),
       toggleArchive: (id) =>
-        set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, archived: !p.archived } : p)) })),
+        set((s) => ({ products: s.products.map((p) => (p.id === id && canMutate(p.ownerId) ? { ...p, archived: !p.archived } : p)) })),
       updateProduct: (id, patch) => {
         /* Защита: ownerId нельзя «перевесить» на другой аккаунт */
         const { ownerId: _ignored, ...safe } = patch as Partial<SellerProductItem>;
         void _ignored;
-        set((s) => ({ products: s.products.map((p) => (p.id === id ? { ...p, ...safe } : p)) }));
+        /* Правило владения: редактировать товар может только его владелец */
+        set((s) => ({ products: s.products.map((p) => (p.id === id && canMutate(p.ownerId) ? { ...p, ...safe } : p)) }));
       },
       migrateOwnerlessProducts: (uid) =>
         set((s) => ({ products: s.products.map((p) => (!p.ownerId && uid ? { ...p, ownerId: uid } : p)) })),
