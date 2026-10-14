@@ -35,7 +35,7 @@
 
   /* ---- шрифты ---- */
   /* ---- брейкпоинты (ТЗ 2.1): xs..3xl ---- */
-  --breakpoint-xs: 480px;
+  --breakpoint-xs: 360px;
   --breakpoint-3xl: 1920px;
 
   --font-display: "Unbounded", "Manrope", sans-serif;

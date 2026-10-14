@@ -46,8 +46,9 @@ export function CartPage() {
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-7">Корзина</h1>
       <div className="space-y-3.5">
         {rows.map((r) => (
-          <div key={r.productId} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-4">
-            <Link to={`/product/${r.p!.slug}`} className="w-[84px] h-[72px] rounded-[10px] overflow-hidden shrink-0 group">
+          /* ТЗ 10.3: на мобильных товар занимает всю ширину, итог и кнопка — sticky внизу */
+          <div key={r.productId} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-3 sm:gap-4">
+            <Link to={`/product/${r.p!.slug}`} className="w-[64px] h-[56px] xs:w-[84px] xs:h-[72px] rounded-[10px] overflow-hidden shrink-0 group">
               <ProductImg p={r.p!} />
             </Link>
             <div className="flex-1 min-w-0">
@@ -56,17 +57,17 @@ export function CartPage() {
               {r.p!.is_non_returnable && <Badge tone="error" className="mt-1.5">На заказ · без возврата</Badge>}
             </div>
             <div className="flex items-center border border-line rounded-[10px] bg-surface overflow-hidden shrink-0">
-              <button onClick={() => setQty(r.productId, r.qty - 1)} aria-label="Меньше" className="w-10 h-10 flex items-center justify-center text-ink-soft hover:bg-line-soft cursor-pointer transition-colors"><Minus size={14} /></button>
+              <button onClick={() => setQty(r.productId, r.qty - 1)} aria-label="Меньше" className="w-11 h-11 flex items-center justify-center text-ink-soft active:bg-line-soft cursor-pointer transition-colors"><Minus size={14} /></button>
               <span className="w-9 text-center font-bold text-[14px] text-ink">{r.qty}</span>
-              <button onClick={() => setQty(r.productId, r.qty + 1)} aria-label="Больше" className="w-10 h-10 flex items-center justify-center text-ink-soft hover:bg-line-soft cursor-pointer transition-colors"><Plus size={14} /></button>
+              <button onClick={() => setQty(r.productId, r.qty + 1)} aria-label="Больше" className="w-11 h-11 flex items-center justify-center text-ink-soft active:bg-line-soft cursor-pointer transition-colors"><Plus size={14} /></button>
             </div>
-            <span className="font-display font-bold text-[16px] text-ink w-[90px] text-right shrink-0">{fmt(r.p!.price * r.qty)}</span>
-            <button onClick={() => removeFromCart(r.productId)} aria-label="Удалить" className="w-10 h-10 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft cursor-pointer transition-colors shrink-0"><Trash2 size={16} /></button>
+            <span className="hidden xs:block font-display font-bold text-[16px] text-ink w-[90px] text-right shrink-0">{fmt(r.p!.price * r.qty)}</span>
+            <button onClick={() => removeFromCart(r.productId)} aria-label="Удалить" className="w-11 h-11 rounded-[10px] flex items-center justify-center text-ink-mute active:text-error active:bg-error-soft cursor-pointer transition-colors shrink-0"><Trash2 size={16} /></button>
           </div>
         ))}
       </div>
 
-      <div className="mt-7 bg-surface rounded-2xl shadow-card p-6 max-w-[420px] ml-auto">
+      <div className="mt-7 bg-surface rounded-2xl shadow-card p-6 md:max-w-[420px] md:ml-auto">
         {lim.discountPct > 0 && discount > 0 && (
           <p className="flex justify-between text-[13.5px] mb-2 text-[#4d7327] font-semibold">
             <span>Скидка тарифа {lim.discountPct}%</span><span>−{fmt(discount)}</span>
@@ -81,10 +82,24 @@ export function CartPage() {
         {hasCustom && (
           <p className="text-[12px] text-error font-semibold mt-3">В корзине есть товар на заказ — он не подлежит возврату.</p>
         )}
-        <Link to="/checkout" className="mt-4 w-full h-[52px] rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors flex items-center justify-center gap-2">
+        <Link to="/checkout" className="hidden md:flex mt-4 w-full h-[52px] rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors items-center justify-center gap-2">
           <ShoppingBag size={18} /> Оформить заказ
         </Link>
       </div>
+
+      {/* мобильная sticky-панель итога (ТЗ 10.3) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[80] bg-cream/95 backdrop-blur-md border-t border-line px-4 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-lift">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wide text-ink-mute font-bold">Итого</p>
+            <p className="font-display font-extrabold text-[20px] text-ink leading-tight">{fmt(subtotal - discount)}</p>
+          </div>
+          <Link to="/checkout" className="flex-1 h-12 rounded-[10px] bg-accent text-ink font-semibold active:bg-accent-deep active:text-cream transition-colors flex items-center justify-center gap-2">
+            <ShoppingBag size={18} /> Оформить заказ
+          </Link>
+        </div>
+      </div>
+      <div className="md:hidden h-[92px]" aria-hidden="true" />
     </div>
   );
 }

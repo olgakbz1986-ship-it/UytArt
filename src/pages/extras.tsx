@@ -358,7 +358,8 @@ export function MarketPage() {
             <div className="p-5">
               <h2 className="font-bold text-[17px] text-ink leading-tight mb-2 line-clamp-2">{o.title}</h2>
               <p className="text-[13px] text-ink-soft leading-relaxed mb-4 line-clamp-3">{o.desc}</p>
-              <div className="grid grid-cols-2 gap-y-3 text-[12.5px] mb-4">
+              {/* ТЗ 11.2: на мобильных сетки перестраиваются в одну колонку */}
+              <div className="grid xs:grid-cols-2 gap-y-3 text-[12.5px] mb-4">
                 <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Бюджет</span><span className="font-bold text-ink text-[14px]">до {fmt(o.budget)}</span></div>
                 <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Срок</span><span className="font-semibold text-ink">{o.term}</span></div>
                 <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Материал</span><span className="font-semibold text-ink">{o.material || "Не указан"}</span></div>
@@ -409,7 +410,7 @@ export function MarketPage() {
               <h3 className="font-bold text-[20px] text-ink mb-2">{detailOrder.title}</h3>
               <p className="text-[14px] text-ink-soft leading-relaxed">{detailOrder.desc}</p>
             </div>
-            <div className="grid grid-cols-2 gap-4 bg-cream/50 rounded-xl p-4">
+            <div className="grid xs:grid-cols-2 gap-4 bg-cream/50 rounded-xl p-4">
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Бюджет</span><span className="font-bold text-[16px] text-ink">до {fmt(detailOrder.budget)}</span></div>
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Срок</span><span className="font-semibold text-ink">{detailOrder.term}</span></div>
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Материал</span><span className="font-semibold text-ink">{detailOrder.material || "Не указан"}</span></div>
@@ -2000,7 +2001,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <SettingsSection title="Профиль и юридические данные" icon={<Settings size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
             {/* юридические данные (из регистрации, только чтение) */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-5">
-              <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
+              <p><span className="text-ink-mute block">Продавец</span><span className="font-semibold text-ink break-words">{s.legalName || sellerTypeInfo(lt)?.label}</span></p>
               <p><span className="text-ink-mute block">Форма</span><span className="font-semibold text-ink">{sellerTypeInfo(lt)?.short}</span></p>
               <p><span className="text-ink-mute block">ИНН</span><span className="font-semibold text-ink">{s.inn || "—"}</span></p>
               <p><span className="text-ink-mute block">Регион производства</span><span className="font-semibold text-ink">{s.city || s.production_region}</span></p>
@@ -2137,7 +2138,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         )}
         <div className="border-t border-line-soft pt-4">
           <p className="text-[11.5px] font-bold uppercase tracking-wide text-ink-mute mb-2">Добавить способ</p>
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid xs:grid-cols-2 gap-2 mb-3">
             {(Object.keys(PAYOUT_METHOD_META) as PayoutMethodType[]).map((t) => (
               <button key={t} onClick={() => setNewMethodType(t)} className={`text-left rounded-lg border p-2.5 cursor-pointer transition-colors ${newMethodType === t ? "border-accent-deep bg-cream" : "border-line hover:border-accent"}`}>
                 <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">{PAYOUT_METHOD_META[t].icon} {PAYOUT_METHOD_META[t].title}</p>

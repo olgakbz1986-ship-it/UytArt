@@ -665,10 +665,10 @@ export default function ProfilePage() {
           <div className="bg-surface rounded-2xl shadow-card p-6">
             <h2 className="font-display font-bold text-[18px] text-ink mb-4">Новый адрес</h2>
             <div className="space-y-3.5">
-              <Field label="Название"><input className="field" value={addr.label} onChange={(e) => setAddr({ ...addr, label: e.target.value })} placeholder="Дом / Работа / Дача" /></Field>
-              <Field label="Город"><input className="field" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} placeholder="Москва" /></Field>
-              <Field label="Улица, дом"><input className="field" value={addr.street} onChange={(e) => setAddr({ ...addr, street: e.target.value })} placeholder="ул. Пятницкая, 18" /></Field>
-              <Field label="Индекс" hint="6 цифр"><input className="field" value={addr.zip} onChange={(e) => setAddr({ ...addr, zip: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="115035" /></Field>
+              <Field label="Название"><input className="field" value={addr.label} onChange={(e) => setAddr({ ...addr, label: e.target.value })} placeholder="Дом / Работа / Дача" autoComplete="off" /></Field>
+              <Field label="Город"><input className="field" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} placeholder="Москва" autoComplete="address-level2" /></Field>
+              <Field label="Улица, дом"><input className="field" value={addr.street} onChange={(e) => setAddr({ ...addr, street: e.target.value })} placeholder="ул. Пятницкая, 18" autoComplete="street-address" /></Field>
+              <Field label="Индекс" hint="6 цифр"><input className="field" inputMode="numeric" autoComplete="postal-code" value={addr.zip} onChange={(e) => setAddr({ ...addr, zip: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="115035" /></Field>
               <Btn className="w-full" disabled={!addr.city.trim() || !addr.street.trim() || addr.zip.length !== 6} onClick={() => { addAddress(addr); setAddr({ label: "Дом", city: "", street: "", zip: "" }); }}>Сохранить адрес</Btn>
             </div>
           </div>
@@ -792,10 +792,10 @@ export default function ProfilePage() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
-              <Field label="Имя и фамилия"><input className="field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Анна Смирнова" /></Field>
-              <Field label="Email"><input className="field" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
-              <Field label="Телефон"><input className="field" placeholder="+7 (___) ___-__-__" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></Field>
-              <Field label="Город"><input className="field" value={profile.city} onChange={(e) => setProfile({ ...profile, city: e.target.value })} placeholder="Москва" /></Field>
+              <Field label="Имя и фамилия"><input className="field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Анна Смирнова" autoComplete="name" /></Field>
+              <Field label="Email"><input className="field" type="email" inputMode="email" autoComplete="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
+              <Field label="Телефон"><input className="field" type="tel" inputMode="tel" autoComplete="tel" placeholder="+7 (___) ___-__-__" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></Field>
+              <Field label="Город"><input className="field" value={profile.city} onChange={(e) => setProfile({ ...profile, city: e.target.value })} placeholder="Москва" autoComplete="address-level2" /></Field>
               <Field label="Дата рождения"><input className="field" type="date" value={profile.birth} onChange={(e) => setProfile({ ...profile, birth: e.target.value })} /></Field>
               <div className="sm:col-span-2">
                 <Field label="О себе"><textarea className="field" rows={3} value={profile.about} onChange={(e) => setProfile({ ...profile, about: e.target.value })} placeholder="Пара слов о ваших вкусах — поможет мастерам и AI-подбору" /></Field>

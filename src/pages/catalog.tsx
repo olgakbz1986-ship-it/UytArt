@@ -380,7 +380,8 @@ export function ProductPage() {
               : <><span className="w-2 h-2 rounded-full bg-ink-mute" /><span className="text-ink-soft font-bold">Под заказ{p.production_time_days ? ` · изготовление ${p.production_time_days} дней` : ""}</span></>}
           </p>
 
-          <div className="flex items-center gap-3 mt-6 flex-wrap">
+          {/* ТЗ 10.2: на мобильных действия приклеиваются к низу экрана с учётом safe-area */}
+          <div className="hidden md:flex items-center gap-3 mt-6 flex-wrap">
             <div className="flex items-center border border-line rounded-[10px] bg-surface overflow-hidden">
               <button onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Меньше" className="w-11 h-[46px] flex items-center justify-center text-ink-soft hover:bg-line-soft cursor-pointer transition-colors"><Minus size={16} /></button>
               <span className="w-10 text-center font-bold text-[15px] text-ink">{qty}</span>
@@ -395,11 +396,35 @@ export function ProductPage() {
             </button>
           </div>
 
-          <div className="mt-3.5">
+          <div className="mt-3.5 hidden md:block">
             <Btn variant="outline" className="w-full" onClick={() => setChatOpen(true)}>
               <MessageSquare size={17} /> Написать продавцу
             </Btn>
           </div>
+
+          {/* мобильная sticky-панель действий (ТЗ 10.2) */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[80] bg-cream/95 backdrop-blur-md border-t border-line px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-lift">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center border border-line rounded-[10px] bg-surface overflow-hidden shrink-0">
+                <button onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Меньше" className="w-11 h-11 flex items-center justify-center text-ink-soft active:bg-line-soft cursor-pointer"><Minus size={16} /></button>
+                <span className="w-8 text-center font-bold text-[15px] text-ink">{qty}</span>
+                <button onClick={() => setQty(qty + 1)} aria-label="Больше" className="w-11 h-11 flex items-center justify-center text-ink-soft active:bg-line-soft cursor-pointer"><Plus size={16} /></button>
+              </div>
+              <Btn size="lg" className="flex-1 min-w-0" onClick={() => addToCart(p.id, qty)}>
+                <ShoppingBag size={18} /> В корзину · {fmt(p.price * qty)}
+              </Btn>
+              <button onClick={() => toggleFav(p.id)} aria-label="В избранное"
+                className={`w-11 h-11 shrink-0 rounded-[10px] flex items-center justify-center transition-colors cursor-pointer ${onFav ? "bg-error text-white" : "border border-line bg-surface text-ink-soft active:text-error"}`}>
+                <Heart size={20} fill={onFav ? "currentColor" : "none"} />
+              </button>
+            </div>
+            <button onClick={() => setChatOpen(true)}
+              className="mt-2 w-full h-11 flex items-center justify-center gap-2 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink active:bg-line-soft cursor-pointer">
+              <MessageSquare size={17} /> Написать продавцу
+            </button>
+          </div>
+          {/* компенсатор, чтобы липкая панель не перекрывала контент внизу страницы */}
+          <div className="md:hidden h-[132px]" aria-hidden="true" />
 
           {/* продавец — обязателен по ст. 12 ЗоЗПП */}
           <div className="mt-7 bg-surface rounded-2xl shadow-card p-5">
