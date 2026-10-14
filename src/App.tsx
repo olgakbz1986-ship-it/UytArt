@@ -3,20 +3,31 @@ import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { usePrefsStore, applyTheme } from "./lib/prefs";
 import { useAppStore } from "./lib/store";
-import { Header, Footer } from "./components/layout";
+import { Header, Footer, Toasts } from "./components/layout";
 import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
 import { CartPage, CheckoutPage } from "./pages/checkout";
 import { AuthPage } from "./pages/auth";
 import { MastersPage, ShopPage } from "./pages/masters";
-import AiPage from "./pages/ai";
-import AiDesignerPage from "./features/ai-designer/AiDesigner";
-import ProfilePage from "./pages/profile";
+
+/* ТЗ 14.2: code-splitting тяжёлых страниц — грузятся динамически при переходе */
+const AiPage = React.lazy(() => import("./pages/ai"));
+const AiDesignerPage = React.lazy(() => import("./features/ai-designer/AiDesigner"));
+const ProfilePage = React.lazy(() => import("./pages/profile"));
+const ProductEditorPage = React.lazy(() => import("./pages/ProductEditor").then((m) => ({ default: m.ProductEditorPage })));
+
+function PageFallback() {
+  return (
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-16">
+      <div className="h-4 w-40 rounded bg-line-soft animate-pulse mb-3" />
+      <div className="h-4 w-64 rounded bg-line-soft animate-pulse" />
+    </div>
+  );
+}
 import {
   PlansPage, MarketPage, SellerRegisterPage, SellerDashboardPage,
   AboutPage, LegalIndexPage, LegalPage, ContactsPage, NotFoundPage,
 } from "./pages/extras";
-import { ProductEditorPage } from "./pages/ProductEditor";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -80,7 +91,9 @@ export default function App() {
         <SessionRestore />
         <div className="min-h-screen flex flex-col">
           <Header />
+          <Toasts />
           <main className="flex-1">
+            <React.Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/catalog" element={<CatalogPage />} />
@@ -105,6 +118,7 @@ export default function App() {
               <Route path="/contacts" element={<ContactsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
+            </React.Suspense>
           </main>
           <Footer />
         </div>

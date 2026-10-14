@@ -12,6 +12,54 @@ import { GroupImg } from "./ui";
 /* ---------- контурный логотип-домик ---------- */
 import { useNotifyStore } from "../lib/notify";
 import { startAgentWorker } from "../lib/agent";
+import { createPortal } from "react-dom";
+
+/* ---------- глобальные тосты уведомлений (ТЗ 12.4): мобильные — низ экрана, десктоп — правый верх ---------- */
+const TOAST_DISMISS_MS = 6000;
+
+export function Toasts() {
+  const items = useNotifyStore((s) => s.items);
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
+  const seenRef = useRef<Set<string>>(new Set());
+
+  /* новые непрочитанные уведомления появляются как тосты один раз за сессию */
+  useEffect(() => {
+    const fresh = items.filter((i) => !i.read && !seenRef.current.has(i.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((i) => seenRef.current.add(i.id));
+    setVisibleIds((prev) => [...prev, ...fresh.map((i) => i.id)].slice(-3));
+  }, [items]);
+
+  /* автоскрытие самого старого тоста */
+  useEffect(() => {
+    if (visibleIds.length === 0) return;
+    const t = window.setTimeout(() => setVisibleIds((p) => p.slice(1)), TOAST_DISMISS_MS);
+    return () => clearTimeout(t);
+  }, [visibleIds]);
+
+  const shown = items.filter((i) => visibleIds.includes(i.id));
+  if (shown.length === 0) return null;
+  return createPortal(
+    <div className="fixed z-[200] right-3 bottom-3 pb-[env(safe-area-inset-bottom,0px)] md:right-5 md:top-[84px] md:bottom-auto w-[calc(100vw-24px)] md:w-[360px] flex flex-col gap-2 pointer-events-none">
+      {shown.map((i) => (
+        <div key={i.id} role="status" aria-live="polite"
+          className="pointer-events-auto bg-surface border border-line rounded-[14px] shadow-lift px-4 py-3 pop-in flex items-start gap-2">
+          <button onClick={() => { setVisibleIds((p) => p.filter((x) => x !== i.id)); useNotifyStore.getState().markRead(i.id); }}
+            aria-label="Скрыть уведомление"
+            className="shrink-0 -ml-1 w-7 h-7 -mt-0.5 rounded-full flex items-center justify-center hover:bg-line-soft text-ink-mute cursor-pointer">
+            <X size={14} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold text-ink mb-0.5 truncate">{i.title}</p>
+            {i.text && <p className="text-[12px] text-ink-soft line-clamp-2">{i.text}</p>}
+          </div>
+        </div>
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
 
 function NotifyBell() {
   const items = useNotifyStore((s) => s.items);

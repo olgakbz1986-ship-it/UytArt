@@ -440,7 +440,7 @@ function ClarifyStep() {
             placeholder={isInterior
               ? "Например: хочу больше света, тёплые оттенки и удобное место для чтения"
               : "Например: люблю спокойные тона, не ношу короткую длину, нужна удобная обувь"}
-            className="w-full bg-surface border border-line rounded-[12px] px-4 py-3 text-[13.5px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent resize-none"
+            className="w-full bg-surface border border-line rounded-[12px] px-4 py-3 text-[16px] md:text-[13.5px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-accent resize-none"
           />
         </div>
       </div>
@@ -576,7 +576,8 @@ function VariantsStep() {
           <Btn size="sm" variant="ghost" onClick={() => useDesignerStore.getState().saveProject()}><Save size={14} /> Сохранить проект</Btn>
         </div>
       </div>
-      <div className="grid md:grid-cols-3 gap-5">
+      {/* ТЗ 8.5/8.6: мобильные — 1 колонка, планшет — 2, десктоп — 3, 3xl+ — 4 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 3xl:grid-cols-4 gap-5">
         {project.variants.map((v) => <VariantCard key={v.id} v={v} selected={project.selectedVariantId === v.id} />)}
       </div>
       <ComparePanel />
