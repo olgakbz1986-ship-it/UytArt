@@ -1321,7 +1321,7 @@ export function SettingsScreen() {
           { key: "errors_24h", title: "Ошибок/24ч", right: true, render: (i: any) => i.errors_24h ? <span className="text-error font-bold">{i.errors_24h}</span> : "0" },
           { key: "limits", title: "Лимиты" }, { key: "keys_ok", title: "Ключи", render: (i: any) => i.keys_ok ? "✓" : "✗" },
           { key: "incidents", title: "Сбои", render: (i: any) => i.incidents.length ? i.incidents[i.incidents.length - 1].text : "—" },
-          { key: "_r", title: "", render: (i: any) => can("settings_write") ? <div onClick={(e) => e.stopPropagation()}><Btn size="sm" variant="ghost" onClick={async () => { await adminApi.integrationRetry(i.key); push("Health-check выполнен"); reload(); }}>Проверить</Btn></div> : null },
+          { key: "_r", title: "", render: (i: any) => can("settings_write") ? <div onClick={(e) => e.stopPropagation()}><Btn size="sm" variant="ghost" onClick={async () => { const r = await adminApi.integrationRetry(i.key, "ручной health-check интеграции из кабинета"); if (r?.ok) { push("Health-check выполнен", "ok"); } else push(mapErrLocal(r), "err"); reload(); }}>Проверить</Btn></div> : null },
         ]} />
       </Panel>
       <Panel title="Роли и доступы (RBAC на сервере)" sub="Минимальные привилегии; granular permissions; разделение полномочий; 2FA email-код сейчас, passkey/FIDO2 — следующая версия для Super Admin / Finance / AI Ops">
