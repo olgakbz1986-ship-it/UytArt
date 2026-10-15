@@ -5,10 +5,16 @@ import { Smartphone, Mail, CheckCircle2, Info, Sparkles, Store } from "lucide-re
 import { useAppStore } from "../lib/store";
 import { Btn, Field } from "../components/ui";
 import { SellerRegWizard } from "./extras";
+import { adminApi } from "../lib/admin-api";
 
 /* ============================================================
    /auth — вход (SMS / email) и регистрация с переключателем
    «Покупатель / Продавец» (самозанятый, ИП, ООО — внутри мастера)
+
+   Кабинет администратора: если в поле «Email или телефон» введён заранее
+   разрешённый служебный email, сервер переводит вход в OTP-поток (код на
+   почту, 5 минут, одноразовый, при каждом входе). Телефонный вход для
+   админских аккаунтов отключён. Публичных упоминаний кабинета нет.
    ============================================================ */
 export function AuthPage() {
   const [sp] = useSearchParams();
@@ -30,6 +36,38 @@ export function AuthPage() {
   const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, styles: [] as string[] });
   const [confirmInfo, setConfirmInfo] = useState<null | { email: string; devUrl?: string }>(null);
 
+  /* ── Кабинет: тихий OTP-поток для служебных email (публично не упоминается) ── */
+  const [adminStep, setAdminStep] = useState<"idle" | "code">("idle");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminCode, setAdminCode] = useState("");
+  const [adminHint, setAdminHint] = useState("");
+
+  const startAdminOtp = async (): Promise<boolean> => {
+    const email = emailForm.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    try {
+      const st = await adminApi.loginStart(email);
+      if (st && st.ok) {
+        setAdminEmail(email); setAdminStep("code"); setError("");
+        setAdminHint(st.devMode ? "Код отправлен на почту (dev-режим: код в консоли сервера). Действует 5 минут." : "На почту отправлен одноразовый код. Действует 5 минут.");
+        return true;
+      }
+    } catch { /* fallthrough */ }
+    return false;
+  };
+
+  const adminVerify = async () => {
+    setError(""); setBusy(true);
+    try {
+      const v = await adminApi.loginVerify(adminEmail, adminCode.replace(/\D/g, ""));
+      setBusy(false);
+      if (v && v.ok) { (window as any).__QF_ADMIN__ = v.profile; location.hash = "#/admin"; setTimeout(() => location.reload(), 60); return; }
+      if (v && v.error === "new_device") { setAdminHint(v.message || "Новое устройство — запрошен новый код. Проверьте почту."); setAdminCode(""); return; }
+      setAdminCode("");
+      setError("Не удалось выполнить вход"); /* одна нейтральная ошибка без раскрытия причины */
+    } catch { setBusy(false); setError("Не удалось выполнить вход"); }
+  };
+
   const sendCode = () => {
     if (phone.replace(/\D/g, "").length < 10) { setError("Введите номер полностью"); return; }
     setError("");
@@ -45,7 +83,10 @@ export function AuthPage() {
   };
 
   const emailLogin = async () => {
-    if (!emailForm.email.includes("@") || emailForm.password.length < 6) { setError("Проверьте email и пароль (минимум 6 символов)"); return; }
+    if (!emailForm.email.includes("@")) { setError("Проверьте email"); return; }
+    /* служебный email кабинета: пароль не спрашиваем — сервер шлёт одноразовый код */
+    if (await startAdminOtp()) return;
+    if (emailForm.password.length < 6) { setError("Введите пароль (минимум 6 символов)"); return; }
     setError("");
     setBusy(true);
     const r = await authLogin(emailForm.email.trim(), emailForm.password);
@@ -131,6 +172,16 @@ export function AuthPage() {
                 {busy ? "Входим…" : codeSent ? "Подтвердить код" : "Получить код"}
               </Btn>
               <p className="text-[12px] text-ink-mute text-center">Нажимая кнопку, вы принимаете условия Оферты и Политики конфиденциальности.</p>
+            </div>
+          ) : adminStep === "code" ? (
+            /* OTP-шаг служебного входа: нейтральный, без упоминания кабинета */
+            <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4 fade-up">
+              <Field label="Код подтверждения" required hint={adminHint}>
+                <input className="field tracking-[6px] text-center font-bold text-[20px]" value={adminCode} onChange={(e) => setAdminCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" inputMode="numeric" autoComplete="one-time-code" />
+              </Field>
+              {error && <p className="text-[13px] font-semibold text-error fade-up">{error}</p>}
+              <Btn size="lg" className="w-full" disabled={busy || adminCode.length !== 6} onClick={adminVerify}>{busy ? "Проверяем…" : "Подтвердить вход"}</Btn>
+              <button onClick={() => startAdminOtp()} className="block mx-auto text-[12.5px] font-semibold text-ink-mute hover:text-ink cursor-pointer">Не получили код — отправить снова</button>
             </div>
           ) : (
             <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4">

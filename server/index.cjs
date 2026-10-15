@@ -28,6 +28,8 @@ if (process.env.DATABASE_URL) {
     create: async (u) => { await pool.query("insert into users (id,email,password_hash,name,phone,role,legal_type,tier,avatar_url,email_confirmed,confirm_token,confirm_expires) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", [u.id,u.email,u.password_hash,u.name,u.phone,u.role,u.legal_type,u.tier,u.avatar_url,u.email_confirmed,u.confirm_token,u.confirm_expires]); return u; },
     update: async (id, p) => (await pool.query("update users set name=coalesce($2,name), phone=coalesce($3,phone), email_confirmed=coalesce($4,email_confirmed), confirm_token=coalesce($5,confirm_token), confirm_expires=coalesce($6,confirm_expires), updated_at=now() where id=$1 returning *", [id, p.name ?? null, p.phone ?? null, p.email_confirmed ?? null, p.confirm_token ?? null, p.confirm_expires ?? null])).rows[0],
     confirm: async (t) => (await pool.query("update users set email_confirmed=true, confirm_token=null, confirm_expires=null where confirm_token=$1 and confirm_expires > now() returning id", [t])).rowCount > 0,
+    allUsers: async () => (await pool.query("select id,email,name,phone,role,tier,created_at from users order by created_at desc limit 500")).rows,
+    allOrders: async () => (await pool.query("select * from market_orders order by created_at desc limit 300")).rows,
   };
 } else {
   const FILE = path.resolve(__dirname, "dev-db.json");
@@ -40,6 +42,8 @@ if (process.env.DATABASE_URL) {
     create: async (u) => { const d = load(); d.users.push(u); save(d); return u; },
     update: async (id, p) => { const d = load(); const u = d.users.find((x) => x.id === id); if (!u) return null; Object.assign(u, p); save(d); return u; },
     confirm: async (t) => { const d = load(); const u = d.users.find((x) => x.confirm_token === t && x.confirm_expires > Date.now()); if (!u) return false; u.email_confirmed = true; u.confirm_token = null; save(d); return true; },
+    allUsers: async () => load().users.slice(-500),
+    allOrders: async () => { try { const d = load(); return (d.orders || []).slice(-300); } catch { return []; } },
   };
 }
 
@@ -103,7 +107,10 @@ app.post("/api/auth/login", async (req, res) => {
     const u = await db.byEmail(String(req.body.email || "").trim().toLowerCase());
     if (!u || !(await bcrypt.compare(String(req.body.password || ""), u.password_hash))) return res.status(401).json({ error: "bad_credentials" });
     if (!u.email_confirmed && db.mode.startsWith("postgres")) return res.status(403).json({ error: "need_confirm" });
-    res.cookie(COOKIE, jwt.sign({ sub: u.id }, JWT_SECRET, { expiresIn: "7d" }), { httpOnly: true, sameSite: "lax", maxAge: 7 * DAY, secure: process.env.NODE_ENV === "production" });
+    /* Кабинет администратора не упоминается на публичном сайте: служебные email
+       получают только пользовательскую сессию. Вход в кабинет — через OTP-поток
+       /api/admin/login/* (одноразовый код на почту при каждом входе). */
+    res.cookie(COOKIE, jwt.sign({ sub: u.id, scope: "user" }, JWT_SECRET, { expiresIn: "7d" }), { httpOnly: true, sameSite: "lax", maxAge: 7 * DAY, secure: process.env.NODE_ENV === "production" });
     res.json({ ok: true, profile: profileOf(u) });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });
@@ -1068,5 +1075,9 @@ require("./ai-designer.cjs").mount(app, { guard, db });
 const digital = require("./digital.cjs");
 digital.setNotifySink(createNotification); // переиспользуем существующую систему уведомлений + email
 digital.mount(app, { guard, softGuard, db });
+
+/* Кабинет администратора (закрытая приватная зона): /api/admin/* — OTP-вход, RBAC,
+   Command Center, Agent Control Plane, Policy Engine, журналы. Никаких публичных ссылок. */
+require("./admin.cjs")(app, { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, path });
 
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));

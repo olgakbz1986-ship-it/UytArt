@@ -25,6 +25,9 @@ const LegalIndexPage = React.lazy(() => import("./pages/extras").then((m) => ({ 
 const LegalPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.LegalPage })));
 const ContactsPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.ContactsPage })));
 const NotFoundPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.NotFoundPage })));
+/* Кабинет администратора — закрытая приватная зона (hash-роутинг #/admin, серверные cookie-сессии).
+   На публичном сайте нет ни одной ссылки на кабинет и он не индексируется. */
+const Cabinet = React.lazy(() => import("./pages/cabinet/router"));
 const DigitalProductViewPage = React.lazy(() => import("./pages/DigitalProductView").then((m) => ({ default: m.DigitalProductView })));
 const DigitalPurchasesPage = React.lazy(() => import("./pages/DigitalPurchases").then((m) => ({ default: m.DigitalPurchasesPage })));
 
@@ -125,6 +128,8 @@ export default function App() {
               <Route path="/legal" element={<LegalIndexPage />} />
               <Route path="/legal/:type" element={<LegalPage />} />
               <Route path="/contacts" element={<ContactsPage />} />
+              <Route path="/admin" element={<Suspense fallback={<CenteredLoader />}><Cabinet /></Suspense>} />
+              <Route path="/admin/:seg" element={<Suspense fallback={<CenteredLoader />}><Cabinet /></Suspense>} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
             </React.Suspense>

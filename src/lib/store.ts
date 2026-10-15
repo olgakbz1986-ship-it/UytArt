@@ -150,7 +150,16 @@ export const useAppStore = create<AppState>()(
         if (!r.ok || !r.profile) return { ok: false, error: r.error };
         const pr = r.profile;
         useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
-        return { ok: true };
+        /* Тихая проверка админской сессии: если в cookie OTP-сессия кабинета —
+           открываем кабинет. На публичном сайте это нигде не отображается. */
+        try {
+          const m = await fetch("/api/admin/me", { credentials: "include" }).then((x) => x.json());
+          if (m && m.ok && m.profile) {
+            (window as any).__QF_ADMIN__ = m.profile;
+            if (!location.hash.startsWith("#/admin")) location.hash = "#/admin";
+          }
+        } catch { /* сервер недоступен */ }
+        return { ok: true } as { ok: true };
       },
       restoreSession: async () => {
         // Если мок-сессия уже активна — не стучимся на бэкенд (убирает 401 в консоли)
@@ -162,6 +171,14 @@ export const useAppStore = create<AppState>()(
             useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
           }
         } catch { /* сервер недоступен — остаёмся в демо-режиме */ }
+        /* тихая проверка сессии кабинета (приватная зона, никаких публичных следов) */
+        try {
+          const m = await fetch("/api/admin/me", { credentials: "include" }).then((x) => x.json());
+          if (m && m.ok && m.profile) {
+            (window as any).__QF_ADMIN__ = m.profile;
+            if (location.hash.startsWith("#/admin")) { /* уже в кабинете */ }
+          }
+        } catch { /* нет сервера — демо */ }
       },
 
       /* Переключение на другой аккаунт из реестра по email+role */
