@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Bot, ClipboardCheck, Users, Store, Package, ShoppingCart, Wallet,
-  Scale, LifeBuoy, Shield, Megaphone, ChartColumnBig, Rocket, Settings, ScrollText,
+  Scale, LifeBuoy, Shield, Megaphone, BarChart3, Rocket, Settings, ScrollText,
   Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, Sparkles, ChevronRight,
 } from "lucide-react";
 import { Btn, Badge, Field, Modal, Switch } from "../../components/ui";
@@ -233,7 +233,7 @@ export const NAV: { id: string; title: string; icon: any; subs?: { to: string; t
   { id: "support", title: "Поддержка", icon: LifeBuoy },
   { id: "security", title: "Безопасность", icon: Shield },
   { id: "content", title: "Контент", icon: Megaphone },
-  { id: "analytics", title: "Аналитика", icon: ChartColumnBig },
+  { id: "analytics", title: "Аналитика", icon: BarChart3 },
   { id: "releases", title: "Релизы", icon: Rocket },
   { id: "settings", title: "Настройки", icon: Settings },
   { id: "logs", title: "Журналы", icon: ScrollText },

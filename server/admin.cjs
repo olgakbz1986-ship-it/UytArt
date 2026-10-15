@@ -29,6 +29,19 @@ module.exports = function registerAdmin(app, ctx) {
   const { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, path } = ctx;
   void bcrypt; void PORT;
 
+  /* ---------- идемпотентность операций (защита от повторного нажатия) ------ */
+  const CLIENT_OP_TTL_MS = 10 * 60 * 1000; // окно идемпотентности — 10 минут
+  const clientOps = new Map(); // client_op_id -> { ts, response }
+  function idempotent(req, res, run) {
+    const key = String(req.body && req.body.client_op_id || "").slice(0, 64);
+    if (!key) return run();
+    const nowT = Date.now();
+    for (const [k, v] of clientOps) if (nowT - v.ts > CLIENT_OP_TTL_MS) clientOps.delete(k);
+    const hit = clientOps.get(key);
+    if (hit) { res.json(Object.assign({}, hit.response, { idempotent_replay: true })); return; }
+    return run((response) => { clientOps.set(key, { ts: nowT, response }); res.json(response); });
+  }
+
   /* ---------- risk policy helpers (shared with frontend via /bootstrap) ---- */
   const RISK_ORDER = { low: 0, medium: 1, high: 2, critical: 3 };
   const isCriticalRisk = (r) => r === "critical";
@@ -841,47 +854,112 @@ module.exports = function registerAdmin(app, ctx) {
   app.get("/api/admin/analytics", adminGuard, permGuard("view"), async (_q, res) => { const doc = await getStore(); res.json({ ok: true, ...doc.analytics, metrics: doc.metrics_history ? doc.metrics_history.series : [] }); });
 
   /* ---------- releases / flags / AB --------------------------------------------------- */
-  app.get("/api/admin/releases", adminGuard, permGuard("view"), async (_q, res) => { const doc = await getStore(); res.json({ ok: true, releases: doc.releases, flags: doc.flags, tests: doc.abtests, backlog: doc.hypotheses.filter((h) => ["backlog", "approved", "review"].includes(h.status)) }); });
+  const FLAG_SEGMENTS = ["all", "region:MSK", "region:СПБ", "region:ЕКБ", "region:НСО", "region:КЗН", "role:seller", "segment:vip"];
+  app.get("/api/admin/releases", adminGuard, permGuard("view"), async (_q, res) => { const doc = await getStore(); res.json({ ok: true, releases: doc.releases, flags: doc.flags, tests: doc.abtests, flag_segments: FLAG_SEGMENTS, backlog: doc.hypotheses.filter((h) => ["backlog", "approved", "review"].includes(h.status)) }); });
   app.post("/api/admin/releases/:id/items", adminGuard, permGuard("releases_manage"), async (req, res) => {
-    await mutate((doc) => { const r = doc.releases.find((x) => x.id === req.params.id); if (!r) return; r.items = req.body.items || r.items; r.log.push({ ts: Date.now(), by: req.adminId, text: "состав релиза обновлён" }); logAction(doc, { admin_id: req.adminId, type: "release.compose", object: r.id, reason: String(req.body.reason || "планирование"), risk: "medium" }); });
+    const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
+    await mutate((doc) => {
+      const r = doc.releases.find((x) => x.id === req.params.id); if (!r) return;
+      const prev = r.items.slice();
+      const items = Array.isArray(req.body.items) ? req.body.items : null;
+      if (items) {
+        const validHyp = new Set(doc.hypotheses.map((h) => h.id));
+        r.items = items.filter((it) => it && typeof it.hyp === "string" && validHyp.has(it.hyp))
+          .map((it) => ({ hyp: it.hyp, prio: ["must", "should", "could"].includes(it.prio) ? it.prio : "should", effort: ["S", "M", "L"].includes(it.effort) ? it.effort : "M" }));
+      }
+      r.log.push({ ts: Date.now(), by: req.adminId, text: "состав релиза обновлён" });
+      logAction(doc, { admin_id: req.adminId, type: "release.compose", object: r.id, prev_state: { items: prev }, state: { items: r.items }, reason, risk: "medium" });
+    });
     res.json({ ok: true });
   });
   app.post("/api/admin/flags/:id/toggle", adminGuard, permGuard("releases_manage"), async (req, res) => {
     const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
-    await mutate((doc) => {
-      const f = doc.flags.find((x) => x.id === req.params.id); if (!f) return;
-      const from = f.rollout_pct, to = Number(req.body.rollout_pct ?? (f.on ? 0 : 100));
-      f.on = to > 0; f.rollout_pct = to;
-      f.history.push({ ts: Date.now(), by: req.adminId, from, to, reason });
-      logAction(doc, { admin_id: req.adminId, type: "flag.toggle", object: f.id, prev_state: { rollout_pct: from }, state: { rollout_pct: to }, reason, risk: to === 100 ? "high" : "medium" });
+    await idempotent(req, res, async (done) => {
+      await mutate((doc) => {
+        const f = doc.flags.find((x) => x.id === req.params.id); if (!f) return;
+        const from = f.rollout_pct, to = Math.max(0, Math.min(100, Number(req.body.rollout_pct ?? (f.on ? 0 : 100))));
+        const prevSeg = f.segment;
+        f.on = to > 0; f.rollout_pct = to;
+        if (req.body.segment && FLAG_SEGMENTS.includes(req.body.segment)) f.segment = req.body.segment;
+        f.history.push({ ts: Date.now(), by: req.adminId, from, to, reason, segment: f.segment });
+        if (f.history.length > 50) f.history.shift();
+        logAction(doc, { admin_id: req.adminId, type: "flag.toggle", object: f.id, prev_state: { rollout_pct: from, segment: prevSeg }, state: { rollout_pct: to, segment: f.segment }, reason, risk: to === 100 ? "high" : "medium" });
+      });
+      done({ ok: true });
     });
-    res.json({ ok: true });
   });
   app.post("/api/admin/tests/:id/stop", adminGuard, permGuard("releases_manage"), async (req, res) => {
     const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
-    await mutate((doc) => { const t = doc.abtests.find((x) => x.id === req.params.id); if (t) { t.stopped = true; t.stop_reason = reason; } logAction(doc, { admin_id: req.adminId, type: "ab.stop", object: req.params.id, reason, risk: "medium" }); });
+    await mutate((doc) => { const t = doc.abtests.find((x) => x.id === req.params.id); if (t) { t.stopped = true; t.stop_reason = reason; t.stopped_by = req.adminId; t.stopped_at = Date.now(); } logAction(doc, { admin_id: req.adminId, type: "ab.stop", object: req.params.id, reason, risk: "medium" }); });
     res.json({ ok: true });
   });
 
   /* ---------- settings / integrations / environment ------------------------------------ */
-  app.get("/api/admin/settings", adminGuard, permGuard("view"), async (_q, res) => { const doc = await getStore(); res.json({ ok: true, settings: doc.settings, integrations: doc.integrations, roles: doc.roles, admins: doc.admins.map((a) => ({ id: a.id, email: a.email, name: a.name, role: a.role, passkey: a.passkey })) }); });
+  const SETTING_KEYS = ["registration", "publish", "reviews", "returns", "delivery", "disputes", "blocks", "commissions"];
+  const ENVIRONMENTS = ["production", "staging", "sandbox", "test"];
+  const PLATFORM_MODES = ["normal", "maintenance", "readonly", "degraded", "emergency"];
+
+  /* second confirm: критические изменения настроек не применяются сразу —
+     администратор подтверждает повторно; запись живёт 15 минут, одноразовая */
+  function findPendingConfirm(doc, key) { return (doc.pending_confirms || []).find((p) => p.key === key && !p.used_at && p.expires_at > Date.now()); }
+  function createPendingConfirm(doc, key, payload, reason, adminId, kind) {
+    doc.pending_confirms = (doc.pending_confirms || []).filter((p) => p.expires_at > Date.now() && !p.used_at);
+    const rec = { id: rid("pc"), key, payload, reason, created_by: adminId, created_at: Date.now(), expires_at: Date.now() + 15 * 60000, used_at: null };
+    doc.pending_confirms.unshift(rec);
+    if (doc.pending_confirms.length > 200) doc.pending_confirms.length = 200;
+    logAction(doc, { admin_id: adminId, type: "settings.second_confirm_requested", object: key, reason, risk: "critical", kind: kind || "settings" });
+    return rec;
+  }
+  function applySettingsPatch(doc, b, reason, adminId, viaSecond) {
+    const prev = JSON.parse(JSON.stringify(doc.settings));
+    if (b.platform_mode && PLATFORM_MODES.includes(b.platform_mode)) doc.settings.platform_mode = b.platform_mode;
+    if (b.maintenance_note !== undefined) doc.settings.maintenance_note = String(b.maintenance_note);
+    if (b.rules) for (const k of SETTING_KEYS) if (typeof b.rules[k] === "string" && b.rules[k].trim()) doc.settings.rules[k] = b.rules[k];
+    if (b.limits_cfg) for (const k of ["payout_confirm_threshold_rub", "hold_max_days", "refund_auto_limit_rub"]) if (Number.isFinite(Number(b.limits_cfg[k])) && Number(b.limits_cfg[k]) >= 0) doc.settings.limits_cfg[k] = Number(b.limits_cfg[k]);
+    if (b.env && ENVIRONMENTS.includes(b.env)) doc.settings.env = b.env;
+    logAction(doc, { admin_id: adminId, type: viaSecond ? "settings.apply_second_confirm" : "settings.update", object: "platform", prev_state: prev, state: JSON.parse(JSON.stringify(doc.settings)), reason, risk: b.platform_mode === "emergency" || b.env === "production" ? "critical" : "high" });
+  }
+
+  app.get("/api/admin/settings", adminGuard, permGuard("view"), async (_q, res) => {
+    const doc = await getStore();
+    const pending = (doc.pending_confirms || []).filter((p) => !p.used_at && p.expires_at > Date.now())
+      .map((p) => ({ id: p.id, key: p.key, reason: p.reason, created_by: p.created_by, created_at: p.created_at, expires_at: p.expires_at, summary: JSON.stringify(p.payload).slice(0, 160) }));
+    res.json({ ok: true, settings: doc.settings, integrations: doc.integrations, roles: doc.roles, environments: ENVIRONMENTS, platform_modes: PLATFORM_MODES, pending_confirms: pending, admins: doc.admins.map((a) => ({ id: a.id, email: a.email, name: a.name, role: a.role, passkey: a.passkey })) });
+  });
   app.patch("/api/admin/settings", adminGuard, permGuard("settings_write"), async (req, res) => {
     const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
-    await mutate((doc) => {
-      const prev = JSON.parse(JSON.stringify(doc.settings));
-      const b = req.body;
-      if (b.platform_mode && ["normal", "maintenance", "readonly", "degraded", "emergency"].includes(b.platform_mode)) doc.settings.platform_mode = b.platform_mode;
-      if (b.maintenance_note !== undefined) doc.settings.maintenance_note = String(b.maintenance_note);
-      if (b.rules) Object.assign(doc.settings.rules, b.rules);
-      if (b.limits_cfg) Object.assign(doc.settings.limits_cfg, b.limits_cfg);
-      if (b.env && ["production", "staging", "sandbox", "test"].includes(b.env)) doc.settings.env = b.env;
-      logAction(doc, { admin_id: req.adminId, type: "settings.update", object: "platform", prev_state: prev, state: doc.settings, reason, risk: b.platform_mode === "emergency" ? "critical" : "high" });
+    const b = req.body;
+    const dangerous = b.platform_mode === "emergency" || b.env === "production";
+    const result = await mutate((doc) => {
+      if (dangerous && !findPendingConfirm(doc, "platform")) {
+        const rec = createPendingConfirm(doc, "platform", { platform_mode: b.platform_mode, env: b.env, maintenance_note: b.maintenance_note }, reason, req.adminId);
+        return { second_confirm_required: true, pending_id: rec.id, hint: "Опасное изменение в production/аварийный режим: повторите подтверждение (POST /settings/confirm), причина обязательна" };
+      }
+      applySettingsPatch(doc, b, reason, req.adminId, false);
+      return {};
     });
+    if (result.second_confirm_required) return res.status(202).json({ ok: false, error: "second_confirm_required", pending_id: result.pending_id, hint: result.hint });
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/settings/confirm", adminGuard, permGuard("settings_write"), async (req, res) => {
+    const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
+    const out = await mutate((doc) => {
+      const p = findPendingConfirm(doc, "platform");
+      if (!p) return { error: "nothing_pending", status: 404 };
+      if (p.created_by !== req.adminId) return { error: "creator_mismatch", status: 403 };
+      p.used_at = Date.now();
+      applySettingsPatch(doc, p.payload, reason, req.adminId, true);
+      return {};
+    });
+    if (out.error) return res.status(out.status).json({ ok: false, error: out.error });
     res.json({ ok: true });
   });
   app.post("/api/admin/integrations/:key/retry", adminGuard, permGuard("settings_write"), async (req, res) => {
-    await mutate((doc) => { const i = doc.integrations.find((x) => x.key === req.params.key); if (i) { i.status = "ok"; i.incidents.push({ ts: Date.now(), text: "health-check прошёл" }); } logAction(doc, { admin_id: req.adminId, type: "integration.retry", object: req.params.key, reason: String(req.body.reason || "перепроверка"), risk: "low" }); });
-    res.json({ ok: true });
+    const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
+    await idempotent(req, res, async (done) => {
+      await mutate((doc) => { const i = doc.integrations.find((x) => x.key === req.params.key); if (i) { i.status = "ok"; i.errors_24h = 0; i.incidents.push({ ts: Date.now(), text: "health-check прошёл" }); } logAction(doc, { admin_id: req.adminId, type: "integration.retry", object: req.params.key, reason, risk: "low" }); });
+      done({ ok: true });
+    });
   });
 
   /* ---------- logs ---------------------------------------------------------------------- */
@@ -947,17 +1025,19 @@ module.exports = function registerAdmin(app, ctx) {
     res.json({ ok: true });
   });
   app.patch("/api/admin/hypotheses/:id", adminGuard, permGuard("view"), async (req, res) => {
-    await mutate((doc) => {
-      const h = doc.hypotheses.find((x) => x.id === req.params.id); if (!h) return;
-      const prev = { status: h.status, priority: h.priority, assignee: h.assignee };
-      if (req.body.status) h.status = req.body.status;
-      if (req.body.priority) h.priority = req.body.priority;
-      if (req.body.assignee !== undefined) h.assignee = req.body.assignee;
-      h.updated_at = Date.now();
-      h.history.push({ ts: Date.now(), by: req.adminId, patch: req.body });
-      logAction(doc, { admin_id: req.adminId, type: "hypothesis.update", object: h.id, prev_state: prev, state: { status: h.status, priority: h.priority, assignee: h.assignee }, reason: String(req.body.reason || "решение по гипотезе"), risk: req.body.status === "rejected" ? "medium" : "low" });
+    await idempotent(req, res, async (done) => {
+      await mutate((doc) => {
+        const h = doc.hypotheses.find((x) => x.id === req.params.id); if (!h) return;
+        const prev = { status: h.status, priority: h.priority, assignee: h.assignee };
+        if (req.body.status && ["review", "approved", "backlog", "in_progress", "validating", "released", "rejected"].includes(req.body.status)) h.status = req.body.status;
+        if (req.body.priority && ["P1", "P2", "P3"].includes(req.body.priority)) h.priority = req.body.priority;
+        if (req.body.assignee !== undefined && (req.body.assignee === null || doc.admins.some((a) => a.id === req.body.assignee))) h.assignee = req.body.assignee;
+        h.updated_at = Date.now();
+        h.history.push({ ts: Date.now(), by: req.adminId, patch: { status: h.status, priority: h.priority, assignee: h.assignee } });
+        logAction(doc, { admin_id: req.adminId, type: "hypothesis.update", object: h.id, prev_state: prev, state: { status: h.status, priority: h.priority, assignee: h.assignee }, reason: String(req.body.reason || "решение по гипотезе"), risk: req.body.status === "rejected" ? "medium" : "low" });
+      });
+      done({ ok: true });
     });
-    res.json({ ok: true });
   });
 
   /* диалог с агентом — через src/agent core (mock LLM), всегда с evidence pack */
@@ -1049,14 +1129,21 @@ module.exports = function registerAdmin(app, ctx) {
     const themes = { critical_fixes: [], conversion: [], complaints: [], search: [], delivery: [], security: [], sellers: [], support: [], new_features: [] };
     const themeOf = (h) => /безопас|фрод|сертиф/.test(h.title) ? "security" : /поиск|запрос/.test(h.title) ? "search" : /достав|задерж/.test(h.title) ? "delivery" : /конверси|оплат/.test(h.title) ? "conversion" : "complaints";
     doc.hypotheses.filter((h) => h.status !== "rejected").forEach((h) => { themes[themeOf(h)].push({ hyp_id: h.id, title: h.title, why: h.problem, who: h.segment, solution: h.solution, effect: h.expected_effect, effort: h.priority === "P1" ? "M" : "S", risks: h.risks, measure: h.validation, current: h.current_behavior, broken: h.problem.slice(0, 80) }); });
-    res.json({ ok: true, themes, release: doc.releases.find((r) => r.status === "planned") });
+    res.json({ ok: true, themes, release: doc.releases.find((r) => r.status === "planned"), all_hypotheses: doc.hypotheses.map((h) => ({ id: h.id, title: h.title, status: h.status, priority: h.priority })) });
   });
   app.post("/api/admin/release-plan/commit", adminGuard, permGuard("releases_manage"), async (req, res) => {
     const reason = String(req.body.reason || "").trim(); if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
     await mutate((doc) => {
       const r = doc.releases.find((x) => x.id === req.body.release_id || x.status === "planned"); if (!r) return;
-      r.items = (req.body.items || r.items); r.status = "committed"; r.log.push({ ts: Date.now(), by: req.adminId, text: "план отправлен в разработку" });
-      logAction(doc, { admin_id: req.adminId, type: "release.commit", object: r.id, reason, risk: "medium" });
+      if (Array.isArray(req.body.items)) {
+        const validHyp = new Set(doc.hypotheses.map((h) => h.id));
+        r.items = req.body.items.filter((it) => it && validHyp.has(it.hyp)).map((it) => ({ hyp: it.hyp, prio: ["must", "should", "could"].includes(it.prio) ? it.prio : "should", effort: ["S", "M", "L"].includes(it.effort) ? it.effort : "M" }));
+      }
+      const prev = { status: r.status };
+      r.status = "committed"; r.log.push({ ts: Date.now(), by: req.adminId, text: "план отправлен в разработку" });
+      /* одобренные гипотезы из состава переходят в работу */
+      doc.hypotheses.forEach((h) => { if (r.items.some((it) => it.hyp === h.id) && ["approved", "review"].includes(h.status)) { h.status = "in_progress"; h.updated_at = Date.now(); h.history.push({ ts: Date.now(), by: req.adminId, patch: { status: "in_progress" } }); } });
+      logAction(doc, { admin_id: req.adminId, type: "release.commit", object: r.id, prev_state: prev, state: { status: r.status, items: r.items.length }, reason, risk: "medium" });
     });
     res.json({ ok: true });
   });

@@ -23,6 +23,9 @@ const post = (p: string, body?: any) => req(p, { method: "POST", body: JSON.stri
 const put = (p: string, body?: any) => req(p, { method: "PUT", body: JSON.stringify(body || {}) });
 const patch = (p: string, body?: any) => req(p, { method: "PATCH", body: JSON.stringify(body || {}) });
 
+/* идемпотентный ключ операции — защита от двойного нажатия (сервер хранит ответ 10 мин) */
+export const opKey = () => "op-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
 export const adminApi = {
   loginStart: (email: string) => post("/login/start", { email }),
   loginVerify: (email: string, code: string) => post("/login/verify", { email, code }),
@@ -65,7 +68,8 @@ export const adminApi = {
   testStop: (id: string, reason: string) => post(`/tests/${id}/stop`, { reason }),
   settings: () => req("/settings"),
   settingsPatch: (body: any) => patch("/settings", body),
-  integrationRetry: (key: string) => post(`/integrations/${key}/retry`, {}),
+  settingsConfirm: (body: any) => post("/settings/confirm", body),
+  integrationRetry: (key: string, reason: string, client_op_id = opKey()) => post(`/integrations/${key}/retry`, { reason, client_op_id }),
   logsActions: (params: Record<string, string> = {}) => req("/logs/actions?" + new URLSearchParams(params).toString()),
   logsSecurity: () => req("/logs/security"),
   /* agent */
