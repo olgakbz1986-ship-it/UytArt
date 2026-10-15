@@ -1289,7 +1289,7 @@ export function SellerDashboardPage() {
   const [legalTarget, setLegalTarget] = useState<SellerLegalType | null>(null);
   const [legalPreview, setLegalPreview] = useState<LegalTypePreview | null>(null);
   const [legalErr, setLegalErr] = useState("");
-  const sellerUid = user?.userId || "";
+  const sellerUid = useMemo(() => user?.userId || "", [user?.userId]);
   const verificationStatus = useSellerReg((st) => (sellerUid ? st.profilesByAccount[sellerUid]?.verificationStatus : undefined));
   const [legalDraft, setLegalDraft] = useState({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress });
   const [legalSaved, setLegalSaved] = useState(false);
