@@ -31,7 +31,7 @@ if (process.env.DATABASE_URL) {
   };
 } else {
   const FILE = path.resolve(__dirname, "dev-db.json");
-  const load = () => (fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [] });
+  const load = () => { const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {}; if (!Array.isArray(d.users)) d.users = []; return d; };
   const save = (d) => fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
   db = {
     mode: "json-dev (бесплатно)",
@@ -1063,5 +1063,10 @@ app.get("/api/market/users/:id/reviews", async (req, res) => {
 
 /* Модуль «AI-дизайнер»: изолированные серверные маршруты (/api/ai-designer/*) */
 require("./ai-designer.cjs").mount(app, { guard, db });
+
+/* Цифровые продукты: /api/digital/* (загрузка, presigned-скачивание, покупки, подписки) */
+const digital = require("./digital.cjs");
+digital.setNotifySink(createNotification); // переиспользуем существующую систему уведомлений + email
+digital.mount(app, { guard, softGuard, db });
 
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
