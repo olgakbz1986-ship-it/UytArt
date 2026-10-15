@@ -507,7 +507,8 @@ function bumpMinor(v: string): string {
    ============================================================ */
 export function DigitalAnalyticsModal({ productId, onClose }: { productId: string; onClose: () => void }) {
   const product = useDigitalStore((s) => s.products.find((p) => p.id === productId));
-  const purchases = useDigitalStore((s) => s.purchases.filter((p) => p.productId === productId));
+  const allPurchases = useDigitalStore((s) => s.purchases);
+  const purchases = useMemo(() => allPurchases.filter((p) => p.productId === productId), [allPurchases, productId]);
   if (!product) return null;
 
   /* продажи по дням за 14 дней */

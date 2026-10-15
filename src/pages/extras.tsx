@@ -1233,7 +1233,8 @@ export function SellerDashboardPage() {
   const [digitalVersionOpen, setDigitalVersionOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardPrefill, setWizardPrefill] = useState<any>(null);
-  const digitalProducts = useDigitalStore((s) => s.products.filter((p) => p.ownerId === user?.userId));
+  const allDigitalProducts = useDigitalStore((s) => s.products);
+  const digitalProducts = useMemo(() => allDigitalProducts.filter((p) => p.ownerId === user?.userId), [allDigitalProducts, user?.userId]);
   const digitalPurchasesAll = useDigitalStore((s) => s.purchases);
   const archiveDigitalProduct = useDigitalStore((s) => s.archiveProduct);
   const allOrders = useAppStore((s) => s.orders);
