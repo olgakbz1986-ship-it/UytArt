@@ -35,16 +35,16 @@
   ],
   "codes": [
     {
-      "id": "code-7669e5a66c",
+      "id": "code-796357d40b",
       "admin_id": "adm-super",
       "email": "admin@starttechpro.ru",
-      "code_hash": "43f5fab9c9de6847",
-      "expires_at": 1792102804088,
-      "used": true,
+      "code_hash": "941756a4f0b64a08",
+      "expires_at": 1792103452803,
+      "used": false,
       "attempts": 0,
       "meta": {
         "ip": "::1",
-        "device": "Unknown/Unknown",
+        "device": "Windows/Chrome",
         "region": "local"
       }
     }
@@ -57,6 +57,14 @@
       "reason": "unknown_email",
       "ip": "::ffff:127.0.0.1",
       "device": "Unknown/Unknown"
+    },
+    {
+      "ts": 1792103236118,
+      "email": "kobzeva-1986@mail.ru",
+      "ok": false,
+      "reason": "unknown_email",
+      "ip": "::1",
+      "device": "Windows/Chrome"
     }
   ],
   "devices": [
@@ -98,6 +106,50 @@
     }
   ],
   "security_log": [
+    {
+      "id": "sec-39572fee27",
+      "ts": 1792103236119,
+      "result": "denied",
+      "admin_id": null,
+      "type": "login_attempt",
+      "ip": "::1",
+      "device_id": "Windows/Chrome",
+      "region": "local",
+      "detail": "email не в allowlist"
+    },
+    {
+      "id": "sec-cf50441bc3",
+      "ts": 1792103152803,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::1",
+      "device_id": "Windows/Chrome",
+      "region": "local",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-6dfdf99538",
+      "ts": 1792103138326,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::1",
+      "device_id": "Windows/Chrome",
+      "region": "local",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-3ecb1af04c",
+      "ts": 1792103129067,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::1",
+      "device_id": "Windows/Chrome",
+      "region": "local",
+      "detail": "OTP отправлен"
+    },
     {
       "id": "sec-85d9dd6571",
       "ts": 1792102504207,
