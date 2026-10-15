@@ -26,6 +26,7 @@ const LegalPage = React.lazy(() => import("./pages/extras").then((m) => ({ defau
 const ContactsPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.ContactsPage })));
 const NotFoundPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.NotFoundPage })));
 const DigitalProductViewPage = React.lazy(() => import("./pages/DigitalProductView").then((m) => ({ default: m.DigitalProductView })));
+const DigitalPurchasesPage = React.lazy(() => import("./pages/DigitalPurchases").then((m) => ({ default: m.DigitalPurchasesPage })));
 
 function PageFallback() {
   return (
@@ -105,6 +106,7 @@ export default function App() {
               <Route path="/catalog" element={<CatalogPage />} />
               <Route path="/product/:slug" element={<ProductPage />} />
               <Route path="/digital/:id" element={<DigitalProductViewPage />} />
+              <Route path="/digital-purchases" element={<DigitalPurchasesPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/auth" element={<AuthPage />} />
