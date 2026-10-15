@@ -7,7 +7,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { Activity, ArrowDownRight, ArrowUpRight, HeartPulse, Send, ShieldAlert, Sparkles, Zap, CircleSlash, ClipboardList, Play } from "lucide-react";
 import { Btn, Badge, Field, Switch } from "../../components/ui";
-import { adminApi } from "../../lib/admin-api";
+import { adminApi, opKey } from "../../lib/admin-api";
 import {
   cn, Panel, DataTable, Drawer, RiskTag, DangerConfirm, EmptyState, ErrorState, LoadingBlock,
   useCabinetData, useCabinet, useToast, fmtRub, fmtNum, timeAgo, dueIn, type Risk, type ConfirmSpec,
@@ -208,7 +208,7 @@ export function AgentScreen() {
             <p className="text-[12px] font-bold uppercase text-ink-mute mt-4 mb-1">Мониторинг в реальном времени</p>
             <div className="flex flex-wrap gap-2 text-[11.5px]">
               <Chip t={`${rt.runs_24h} запусков/24ч`} /><Chip t={`${rt.ok} ок / ${rt.fail} ошибок`} bad={rt.fail > 40} /><Chip t={`${rt.cost_rub} ₽/сут`} /><Chip t={`${Math.round(rt.human_share * 100)}% с человеком`} /><Chip t={`${rt.policy_blocks} блок политикой`} /><Chip t={`${rt.anomalies} аномалий`} bad={rt.anomalies > 0} />
-            </p>
+            </div>
           </div>
         </div>
       </Panel>
@@ -592,25 +592,60 @@ export function RoiScreen() {
 }
 
 /* ════════════════ РЕЛИЗ-ПЛАН ════════════════ */
+const HYP_STATUSES: [string, string][] = [["review", "на рассмотрении"], ["approved", "одобрена"], ["backlog", "в бэклоге"], ["in_progress", "в работе"], ["validating", "валидация"], ["released", "в релизе"], ["rejected", "отклонена"]];
+
 export function ReleasePlanScreen() {
   const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.releasePlan());
-  const { can } = useCabinet(); const { push } = useToast();
+  const { can, profile } = useCabinet(); const { push } = useToast();
   const [confirm, setConfirm] = useState<null | { spec: ConfirmSpec; run: (reason: string) => Promise<any> }>(null);
   const [busy, setBusy] = useState(false);
+  /* редактор состава релиза: draft — редактируемый список пунктов */
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<{ hyp: string; prio: string; effort: string }[]>([]);
+  const startEdit = () => { setDraft((data!.release?.items || []).map((it: any) => ({ ...it }))); setEditing(true); };
+  const saveItems = () => setConfirm({
+    spec: {
+      title: "Обновить состав релиза " + (data!.release?.name || ""), risk: "medium",
+      affected: `${draft.length} пунктов релиза`,
+      changes: ["Состав релиза заменён на отредактированный", "Все изменения пишутся в журнал (до/после)"], reversible: true, reasonLabel: "почему меняем состав",
+    },
+    run: (r) => adminApi.releaseItems(data!.release.id, { items: draft, reason: r }),
+  });
   if (loading) return <LoadingBlock rows={5} />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
   const THEMES_RU: Record<string, string> = { critical_fixes: "Критические исправления", conversion: "Улучшения конверсии", complaints: "Снижение жалоб", search: "Улучшение поиска", delivery: "Оптимизация доставки", security: "Безопасность", sellers: "Удобство продавцов", support: "Улучшение поддержки", new_features: "Новые функции" };
+  const PRIO_RU: Record<string, string> = { must: "must", should: "should", could: "could" };
   return (
     <div className="space-y-5">
       <Panel title={"План следующего релиза · " + (data!.release?.name || "")} sub="Агент группирует доработки по темам; администратор принимает состав, приоритеты и отправляет в разработку"
-        right={can("releases_manage") && data!.release && <Btn size="sm" onClick={() => setConfirm({ spec: { title: "Отправить план в разработку", risk: "medium", affected: `${data!.release.items?.length ?? 0} пунктов релиза`, changes: ["Статус релиза → committed", "Задачи уходят в бэклог разработки"], reversible: true, reasonLabel: "цель релиза" }, run: (r) => adminApi.releasePlanCommit({ release_id: data!.release.id, reason: r }) })}>Отправить в разработку</Btn>}>
+        right={<div className="flex gap-2">
+          {can("releases_manage") && data!.release && !editing && <Btn size="sm" variant="outline" onClick={startEdit}>Редактировать состав</Btn>}
+          {editing && <><Btn size="sm" disabled={!draft.length} onClick={saveItems}>Сохранить состав</Btn><Btn size="sm" variant="ghost" onClick={() => setEditing(false)}>Отмена</Btn></>}
+          {!editing && can("releases_manage") && data!.release && <Btn size="sm" onClick={() => setConfirm({ spec: { title: "Отправить план в разработку", risk: "medium", affected: `${data!.release.items?.length ?? 0} пунктов релиза`, changes: ["Статус релиза → committed", "Задачи уходят в бэклог разработки"], reversible: true, reasonLabel: "цель релиза" }, run: (r) => adminApi.releasePlanCommit({ release_id: data!.release.id, reason: r }) })}>Отправить в разработку</Btn>}
+        </div>}>
+        {editing && (
+          <div className="mb-4 border border-ai/30 bg-ai-soft rounded-xl p-4">
+            <p className="text-[12px] font-bold uppercase text-ink-mute mb-2">Состав релиза (только гипотезы агента; при сохранении причина обязательна)</p>
+            {draft.map((it, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2 mb-2">
+                <select className="field !h-9 !w-auto flex-1 min-w-40 text-[12.5px]" value={it.hyp} onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, hyp: e.target.value } : x))}>
+                  {(data!.all_hypotheses || []).map((h: any) => <option key={h.id} value={h.id}>{h.id} · {String(h.title).slice(0, 60)}</option>)}
+                </select>
+                <select className="field !h-9 !w-auto text-[12.5px]" value={it.prio} onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, prio: e.target.value } : x))}>{Object.keys(PRIO_RU).map((p) => <option key={p}>{p}</option>)}</select>
+                <select className="field !h-9 !w-16 text-[12.5px]" value={it.effort} onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, effort: e.target.value } : x))}>{["S", "M", "L"].map((p) => <option key={p}>{p}</option>)}</select>
+                <Btn size="sm" variant="ghost" className="!text-error" onClick={() => setDraft(draft.filter((_, j) => j !== i))}>Удалить</Btn>
+              </div>
+            ))}
+            <Btn size="sm" variant="outline" onClick={() => setDraft([...draft, { hyp: (data!.all_hypotheses || [])[0]?.id || "", prio: "should", effort: "M" }])}>+ Добавить пункт</Btn>
+          </div>
+        )}
         <div className="grid md:grid-cols-2 gap-3">
           {Object.entries(data!.themes).filter(([, items]: any) => (items as any[]).length).map(([theme, items]: any) => (
             <div key={theme} className="border border-line rounded-xl p-4">
               <p className="text-[12.5px] font-bold uppercase text-ai mb-2">{THEMES_RU[theme] || theme}</p>
               {(items as any[]).map((it) => (
                 <article key={it.hyp_id} className="mb-3 last:mb-0 pb-3 last:pb-0 border-b border-line/50 last:border-0">
-                  <p className="text-[13.5px] font-bold text-ink">{it.title}</p>
+                  <p className="text-[13.5px] font-bold text-ink">{it.title}<span className="text-[11px] text-ink-mute font-normal ml-1.5 font-mono">{it.hyp_id}</span></p>
                   <dl className="text-[12px] text-ink-soft mt-1 space-y-0.5">
                     <p><b>Сейчас:</b> {it.current || it.broken}</p>
                     <p><b>Почему важно:</b> {it.why}</p>
@@ -619,10 +654,14 @@ export function ReleasePlanScreen() {
                     <p><b>Ожидаемый результат:</b> {it.effect || "—"} · <b>Усилие:</b> {it.effort} · <b>Риски:</b> {it.risks || "—"}</p>
                     <p><b>Как измерить успех:</b> {it.measure || "—"}</p>
                   </dl>
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex flex-wrap gap-2 mt-2 items-center">
                     {can("view") && <>
-                      <Btn size="sm" variant="ghost" onClick={async () => { await adminApi.hypothesisPatch(it.hyp_id, { status: "backlog", reason: "перенесено в бэклог из плана релиза" }); push("Перенесено в бэклог"); reload(); }}>В бэклог</Btn>
-                      <Btn size="sm" variant="ghost" onClick={async () => { await adminApi.hypothesisPatch(it.hyp_id, { status: "rejected", reason: "отклонено при сборке релиза" }); push("Предложение отклонено"); reload(); }}>Отклонить</Btn>
+                      <select className="field !h-8 !w-auto text-[11.5px]" defaultValue="" onChange={async (e) => { if (!e.target.value) return; const r = await adminApi.hypothesisPatch(it.hyp_id, { status: e.target.value, assignee: e.target.value === "backlog" || e.target.value === "approved" ? profile?.id || null : undefined, reason: "статус изменён из плана релиза: " + e.target.value }); if (r?.ok) { push("Статус гипотезы обновлён (кто/когда/до/после — в журнале)"); reload(); } else push(mapErrLocal(r), "err"); }}>
+                        <option value="" disabled>Статус гипотезы…</option>
+                        {HYP_STATUSES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                      <Btn size="sm" variant="ghost" onClick={async () => { const r = await adminApi.hypothesisPatch(it.hyp_id, { status: "backlog", reason: "перенесено в бэклог из плана релиза" }); if (r?.ok) { push("Перенесено в бэклог"); reload(); } else push(mapErrLocal(r), "err"); }}>В бэклог</Btn>
+                      <Btn size="sm" variant="ghost" className="!text-error" onClick={async () => { const r = await adminApi.hypothesisPatch(it.hyp_id, { status: "rejected", reason: "отклонено при сборке релиза" }); if (r?.ok) { push("Предложение отклонено"); reload(); } else push(mapErrLocal(r), "err"); }}>Отклонить</Btn>
                     </>}
                   </div>
                 </article>
@@ -631,7 +670,7 @@ export function ReleasePlanScreen() {
           ))}
         </div>
       </Panel>
-      {confirm && <DangerConfirm spec={confirm.spec} busy={busy} onCancel={() => setConfirm(null)} onConfirm={async (reason) => { setBusy(true); const r = await confirm.run(reason); setBusy(false); setConfirm(null); if (r?.ok) { push("План утверждён и отправлен"); reload(); } else push(mapErrLocal(r), "err"); }} />}
+      {confirm && <DangerConfirm spec={confirm.spec} busy={busy} onCancel={() => setConfirm(null)} onConfirm={async (reason) => { setBusy(true); const r = await confirm.run(reason); setBusy(false); setConfirm(null); if (r?.ok) { push("План обновлён и зафиксирован в журнале"); setEditing(false); reload(); } else push(mapErrLocal(r), "err"); }} />}
     </div>
   );
 }

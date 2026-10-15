@@ -96,12 +96,22 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
 export default function App() {
   return (
     <HashRouter>
+      <AppInner />
+    </HashRouter>
+  );
+}
+
+function AppInner() {
+  /* Кабинет — закрытая зона: публичные Header/Footer не рендерятся на /admin* */
+  const isAdminZone = useLocation().pathname.startsWith("/admin");
+  return (
       <ErrorBoundary>
         <ScrollToTop />
         <ThemeSync />
         <SessionRestore />
         <div className="min-h-screen flex flex-col">
-          <Header />
+          {/* Кабинет — закрытая зона: публичные Header/Footer не рендерятся на /admin* */}
+          {!isAdminZone && <Header />}
           <Toasts />
           <main className="flex-1">
             <React.Suspense fallback={<PageFallback />}>
@@ -129,16 +139,15 @@ export default function App() {
               <Route path="/legal" element={<LegalIndexPage />} />
               <Route path="/legal/:type" element={<LegalPage />} />
               <Route path="/contacts" element={<ContactsPage />} />
-              <Route path="/admin" element={<Suspense fallback={<CenteredLoader />}><Cabinet /></Suspense>} />
-              <Route path="/admin/:seg" element={<Suspense fallback={<CenteredLoader />}><Cabinet /></Suspense>} />
+              <Route path="/admin" element={<React.Suspense fallback={<PageFallback />}><Cabinet /></React.Suspense>} />
+              <Route path="/admin/:seg" element={<React.Suspense fallback={<PageFallback />}><Cabinet /></React.Suspense>} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
             </React.Suspense>
           </main>
-          <Footer />
+          {!isAdminZone && <Footer />}
         </div>
       </ErrorBoundary>
-    </HashRouter>
   );
 }
 
