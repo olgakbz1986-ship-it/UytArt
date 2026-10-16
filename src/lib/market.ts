@@ -90,7 +90,13 @@ export function ensureDigitalCatalog(): void {
   fetch("/api/digital/products", { credentials: "include" })
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => {
-      if (d && Array.isArray(d.products)) useDigitalStore.getState().mergeFromServer({ products: d.products });
+      if (d && Array.isArray(d.products)) {
+        /* витринная синхронизация: серверный published-снимок актуальнее
+           локального persist-кэша, а приватные поля (systemPrompt/agentConfig/
+           fileUrl) на клиенте у витринных чужих товаров быть не должно —
+           поэтому серверные данные записываются с приоритетом поверх кэша */
+        useDigitalStore.getState().mergeFromServer({ products: d.products }, true);
+      }
     })
     .catch(() => { /* офлайн-режим: витрина работает на persist-сторе */ })
     .finally(() => { digitalCatalogLoading = false; });

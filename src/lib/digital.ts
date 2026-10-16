@@ -51,7 +51,7 @@ interface DigitalState {
   tickSubscriptions: () => void;
 
   /* --- синхронизация с сервером --- */
-  mergeFromServer: (d: { products?: DigitalProduct[]; purchases?: DigitalPurchase[] }) => void;
+  mergeFromServer: (d: { products?: DigitalProduct[]; purchases?: DigitalPurchase[] }, serverWins?: boolean) => void;
 }
 
 export const useDigitalStore = create<DigitalState>()(
@@ -293,12 +293,14 @@ export const useDigitalStore = create<DigitalState>()(
         });
       },
 
-      mergeFromServer: (d) => set((s) => {
+      mergeFromServer: (d, serverWins = false) => set((s) => {
         /* витринные товары других продавцов (приходят с /api/digital/products
            без секретных полей) — синхронизируем статусы и статистику целиком;
-           локальные объекты владельца при конфликте выигрывают содержимым */
+           локальные объекты владельца при конфликте выигрывают содержимым,
+           кроме витринной синхронизации (serverWins): там серверный published-
+           снимок актуальнее persist-кэша и не должен содержать секреты */
         const byId = new Map(s.products.map((p) => [p.id, p]));
-        (d.products || []).forEach((p) => { const prev = byId.get(p.id); byId.set(p.id, prev ? { ...p, ...prev } : p); });
+        (d.products || []).forEach((p) => { const prev = byId.get(p.id); byId.set(p.id, prev ? (serverWins ? { ...prev, ...p } : { ...p, ...prev }) : p); });
         const purKeys = new Set(s.purchases.map((p) => `${p.userId}:${p.productId}`));
         const newPur = (d.purchases || []).filter((p) => !purKeys.has(`${p.userId}:${p.productId}`));
         return { products: Array.from(byId.values()), purchases: [...newPur, ...s.purchases] };

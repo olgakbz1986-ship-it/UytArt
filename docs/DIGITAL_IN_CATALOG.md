@@ -57,7 +57,7 @@ stock=99 для published (цифровой товар всегда «в нал�
 
 ## Изменённые файлы
 - src/lib/market.ts — адаптер, карта маппинга, ensureDigitalCatalog, объединение в useMarketProducts
-- src/lib/digital.ts — mergeFromServer синхронизирует статусы витринных товаров (архивация исчезает из каталога)
+- src/lib/digital.ts — mergeFromServer(d, serverWins) синхронизирует статусы витринных товаров (архивация исчезает из каталога). Для витринной загрузки ensureDigitalCatalog() вызывает merge с serverWins=true: серверный published-снимок актуальнее локального persist-кэша и не содержит секретов (systemPrompt/agentConfig/fileUrl спроецированы на сервере); приватные поля локальных продуктов владельца при этом сохраняются. Обычный merge (seller-sync) оставляет приоритет за локальным объектом владельца.
 - src/types (Product) — опциональные digital-маркеры
 - src/pages/catalog.tsx — фильтр `sp- || dp-`, переход dp-* → /digital/:id
 - src/components/product.tsx — двойной рендер карточки, кнопки «Тест-драйв»/«Купить»
