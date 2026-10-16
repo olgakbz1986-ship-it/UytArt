@@ -401,8 +401,9 @@ module.exports = function registerAdmin(app, ctx) {
       catch (e) { console.error("[admin-mail]", e.message); }
       return { sent: true };
     }
-    console.log(`[DEV-письмо][admin] ${admin.email} → код ${rec.id}`);
-    return { sent: false, devHint: "SMTP не настроен: код не отправлен" };
+    rec.dev_plain = code; /* только для dev-режима (SMTP не настроен) */
+    console.log(`[DEV-письмо][admin] ${admin.email} → код ${code}`);
+    return { sent: false, devCode: code, devHint: "SMTP не настроен: код показан в консоли сервера" };
   }
 
   app.post("/api/admin/login/start", async (req, res) => {
@@ -430,7 +431,8 @@ module.exports = function registerAdmin(app, ctx) {
       const s = await issueCode(doc, admin, meta);
       logSec(doc, { admin_id: admin.id, type: "code_sent", result: "success", ip, device_id: dev, region, detail: "OTP отправлен" });
       await putStore(doc);
-      res.json({ ok: true, codeSent: !!s.sent, devMode: !s.sent });
+      /* devCode отдаётся ТОЛЬКО когда SMTP не настроен (dev-среда); в production код уходит только на почту */
+      res.json({ ok: true, codeSent: !!s.sent, devMode: !s.sent, ...(s.sent ? {} : { devCode: s.devCode }) });
     } catch (e) { console.error(e); res.status(500).json({ ok: false, error: "server" }); }
   });
 

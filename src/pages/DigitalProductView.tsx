@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useAppStore } from "../lib/store";
 import type { DigitalProduct, PromptProduct, AgentProduct } from "../types/digital";
 import { Btn } from "../components/ui";
 
 export function DigitalProductView() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const testDriveRef = useRef<HTMLDivElement | null>(null);
   const session = useAppStore((s) => s.session);
   const [product, setProduct] = useState<DigitalProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,6 +85,15 @@ export function DigitalProductView() {
   const isAgent = product.type === "agent";
   const showTestDrive = (isPrompt || isAgent) && !purchased;
 
+  /* Автофокус на секции тест-драйва при переходе с карточки каталога (?section=test-drive) */
+  useEffect(() => {
+    if (!loading && product && searchParams.get("section") === "test-drive" && testDriveRef.current) {
+      testDriveRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      const ta = testDriveRef.current.querySelector("textarea");
+      if (ta) setTimeout(() => ta.focus(), 350);
+    }
+  }, [loading, product, searchParams]);
+
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-8">
       <Link to="/catalog" className="text-blue-600 hover:underline mb-4 inline-block">← Назад в каталог</Link>
@@ -142,6 +153,13 @@ export function DigitalProductView() {
 
           {/* Кнопки действий */}
           <div className="space-y-3">
+            {showTestDrive && (product.testDriveLimit || 0) > 0 && (
+              <Btn variant="outline" className="w-full" onClick={() => {
+                testDriveRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                const ta = testDriveRef.current?.querySelector("textarea");
+                if (ta) setTimeout(() => ta.focus(), 350);
+              }}>Тест-драйв бесплатно</Btn>
+            )}
             {purchased ? (
               <Btn variant="primary" onClick={() => window.open(`/api/digital/${id}/download`, "_blank")}>
                 Скачать / Открыть доступ
@@ -155,7 +173,7 @@ export function DigitalProductView() {
 
           {/* Блок тест-драйва */}
           {showTestDrive && (
-            <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div ref={testDriveRef} className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <h3 className="font-bold mb-2">Тест-драйв (бесплатно, {product.testDriveLimit} попытки)</h3>
               <textarea
                 value={testDriveInput}

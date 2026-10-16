@@ -35,18 +35,19 @@
   ],
   "codes": [
     {
-      "id": "code-7669e5a66c",
+      "id": "code-6598bf0fa3",
       "admin_id": "adm-super",
       "email": "admin@starttechpro.ru",
-      "code_hash": "43f5fab9c9de6847",
-      "expires_at": 1792102804088,
-      "used": true,
+      "code_hash": "c176194030b97f13",
+      "expires_at": 1792103330627,
+      "used": false,
       "attempts": 0,
       "meta": {
         "ip": "::1",
         "device": "Unknown/Unknown",
         "region": "local"
-      }
+      },
+      "dev_plain": "745647"
     }
   ],
   "attempts": [
@@ -98,6 +99,50 @@
     }
   ],
   "security_log": [
+    {
+      "id": "sec-3da5a34ffc",
+      "ts": 1792103030627,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::1",
+      "device_id": "Unknown/Unknown",
+      "region": "local",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-fc96dc3599",
+      "ts": 1792103019409,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "login_success",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "session issued (12h)"
+    },
+    {
+      "id": "sec-957c28ef4f",
+      "ts": 1792103019364,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-686001aefa",
+      "ts": 1792102958909,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
     {
       "id": "sec-85d9dd6571",
       "ts": 1792102504207,

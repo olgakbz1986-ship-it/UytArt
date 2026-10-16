@@ -1,8 +1,83 @@
-import { PRODUCTS, CATEGORIES, type Product } from "../data/seed";
+import { PRODUCTS, CATEGORIES, catBySlug, type Product } from "../data/seed";
 import { useSellerAccount, useSellerReg, sellerProfileOf, type SellerProductItem, type SellerProfile } from "./seller";
 import { isZoneMatch } from "./geo";
 import { useAppStore } from "./store";
 import { useMemo } from "react";
+import { useDigitalStore } from "./digital";
+import type { DigitalProduct, DigitalProductType } from "../types/digital";
+
+/* ============================================================
+   АДАПТЕР ЦИФРОВЫХ ТОВАРОВ (digital → витрина)
+   Единственное место преобразования DigitalProduct в формат
+   витрины Product. При изменении структуры цифровых продуктов
+   правки вносятся только здесь. Префикс id "dp-" — аналог "sp-".
+   ============================================================ */
+
+/* Карта соответствия типов цифровых товаров категориям витрины.
+   Единственный источник истины маппинга (используются slug подкатегорий
+   из CATEGORIES: sites_templates / prompts / ai_agents / subscriptions). */
+export const DIGITAL_TYPE_TO_CATEGORY: Record<DigitalProductType, { categoryId: string; sub: string }> = {
+  site:         { categoryId: "sites_templates", sub: "сайты-экосистемы" },
+  prompt:       { categoryId: "prompts",         sub: "библиотеки-промтов" },
+  skill:        { categoryId: "ai_agents",       sub: "скиллы-для-голосовых-ассистентов" },
+  agent:        { categoryId: "ai_agents",       sub: "готовые-ии-агенты" },
+  subscription: { categoryId: "subscriptions",   sub: "подписка-на-ии-агентов-и-скиллы" },
+};
+
+/* Палитра градиентов-заглушек для карточек без превью */
+const DIGITAL_ARTS: [string, string][] = [
+  ["#4c3a8f", "#6f54c9"], ["#2d5f7c", "#4a8fb0"], ["#7c4a2d", "#b0764a"],
+  ["#2f6b4f", "#4aa37a"], ["#8f3a5e", "#c95488"],
+];
+
+/** Преобразует опубликованный цифровой товар в формат витрины. */
+export function digitalToMarketProduct(d: DigitalProduct): Product {
+  const map = DIGITAL_TYPE_TO_CATEGORY[d.type];
+  const cat = map ? CATEGORIES.find((c) => c.slug === map.categoryId) : undefined;
+  const art = DIGITAL_ARTS[Math.abs(d.id.split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 0)) % DIGITAL_ARTS.length];
+  return {
+    id: "dp-" + d.id,
+    slug: "dp-" + d.id,
+    name: d.title,
+    emoji: cat?.emoji || "🤖",
+    art,
+    image: d.previewUrl || "",
+    sub: map?.sub || "",
+    sku: "DP-" + (d.id.replace(/\D/g, "").slice(-6) || "0001"),
+    price: d.price,
+    categoryId: cat ? cat.slug : "prompts",
+    vendorId: "vendor-seller",
+    product_type: "ready_made",
+    is_non_returnable: true,
+    rating: d.stats?.rating || 0,
+    reviewsCount: d.stats?.salesCount || 0,
+    stock: d.status === "published" ? 99 : 0, /* цифровой товар всегда «в наличии», пока опубликован */
+    views: d.stats?.downloads || 0,
+    material: "Цифровой товар",
+    style: "Digital",
+    color: "—",
+    size: "—",
+    tags: [d.type, d.licenseType],
+    description: d.description || "",
+    createdAt: d.createdAt,
+    isNew: true,
+    ownerId: d.ownerId,
+    shopName: cat?.name || "Цифровые товары",
+    /* специфичные атрибуты цифрового товара — опциональные маркеры Product */
+    digitalType: d.type,
+    digitalId: d.id,
+    digitalVersion: d.version,
+    digitalSalesCount: d.stats?.salesCount || 0,
+    testDriveLimit: d.testDriveLimit || 0,
+  };
+}
+
+/* Опубликованные цифровые товары в формате витрины (архив исключается) */
+export function digitalMarketProducts(): Product[] {
+  return useDigitalStore.getState().products
+    .filter((d) => d.status === "published")
+    .map(digitalToMarketProduct);
+}
 
 /* Профиль продавца для товара: реестр по ownerId (Проблема №3 —
    карточка товара = зеркало актуального профиля, без снимков). */
@@ -78,13 +153,15 @@ export function sellerMarketProducts(): Product[] {
   });
 }
 
-/* Единый список: демо + реальные товары продавцов */
+/* Единый список: демо + реальные товары продавцов + цифровые товары */
 export function marketProducts(buyerCity?: string): Product[] {
   const st = useAppStore.getState();
   const city = buyerCity ?? st.viewerCity ?? (st.addresses.find((a) => a.isDefault)?.city || "");
-  const all = [...PRODUCTS, ...sellerMarketProducts()];
+  const all = [...PRODUCTS, ...sellerMarketProducts(), ...digitalMarketProducts()];
   if (!city) return all;
   return all.filter((p) => {
+    /* цифровые товары не имеют географических ограничений — выдача мгновенная */
+    if (p.id.startsWith("dp-")) return true;
     if (!p.id.startsWith("sp-")) return true;
     const item = useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
     // Если зоны доставки нет или она "по всей России", показываем всем
@@ -102,10 +179,11 @@ export function marketProducts(buyerCity?: string): Product[] {
 export function useMarketProducts(buyerCity?: string): Product[] {
   const products = useSellerAccount((s) => s.products);
   const profiles = useSellerReg((s) => s.profilesByAccount);
+  const digital = useDigitalStore((s) => s.products); /* цифровые товары: подписка на стор */
   const viewerCity = useAppStore((s) => s.viewerCity);
   const addresses = useAppStore((s) => s.addresses);
-  void products; void profiles; /* подписка на изменения */
-  return useMemo(() => marketProducts(buyerCity), [products, profiles, viewerCity, addresses, buyerCity]);
+  void products; void profiles; void digital; /* подписка на изменения */
+  return useMemo(() => marketProducts(buyerCity), [products, profiles, digital, viewerCity, addresses, buyerCity]);
 }
 
 export function useSellerMarketProducts(): Product[] {

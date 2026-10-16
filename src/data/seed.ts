@@ -312,6 +312,13 @@ export interface Product {
   draftSavedAt?: string; isHit?: boolean; isNew?: boolean;
   // Поля для AI-анимации (опционально)
   animation?: { frames: string[]; captions: string[]; frameMs?: number };
+  /* Маркеры цифровых товаров (адаптер digital→витрина, src/lib/market.ts).
+     Заполняются только для id с префиксом "dp-", физические товары их не имеют. */
+  digitalType?: string;        /* тип DigitalProduct: site | prompt | skill | agent | subscription */
+  digitalId?: string;          /* оригинальный id цифрового товара (без префикса "dp-") */
+  digitalVersion?: string;     /* версия продукта, напр. "1.0" */
+  digitalSalesCount?: number;  /* количество продаж (stats.salesCount) */
+  testDriveLimit?: number;     /* бесплатных тест-драйвов (для prompt/agent) */
 }
 
 const MATERIALS = ["Лён", "Хлопок", "Шерсть", "Керамика", "Дуб", "Ясень", "Латунь", "Ротанг", "Стекло", "Кожа", "Серебро", "Берёза"];

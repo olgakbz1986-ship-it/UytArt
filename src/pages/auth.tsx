@@ -49,7 +49,9 @@ export function AuthPage() {
       const st = await adminApi.loginStart(email);
       if (st && st.ok) {
         setAdminEmail(email); setAdminStep("code"); setError("");
-        setAdminHint(st.devMode ? "Код отправлен на почту (dev-режим: код в консоли сервера). Действует 5 минут." : "На почту отправлен одноразовый код. Действует 5 минут.");
+        setAdminHint(st.devMode
+          ? (st.devCode ? `Dev-режим (SMTP не настроен): ваш код ${st.devCode}. Действует 5 минут.` : "Dev-режим: код в консоли сервера. Действует 5 минут.")
+          : "На почту отправлен одноразовый код. Действует 5 минут.");
         return true;
       }
     } catch { /* fallthrough */ }
