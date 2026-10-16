@@ -33,46 +33,26 @@
       "created_at": 1792101679242
     }
   ],
-  "codes": [
-    {
-      "id": "code-796357d40b",
-      "admin_id": "adm-super",
-      "email": "admin@starttechpro.ru",
-      "code_hash": "941756a4f0b64a08",
-      "expires_at": 1792103452803,
-      "used": false,
-      "attempts": 0,
-      "meta": {
-        "ip": "::1",
-        "device": "Windows/Chrome",
-        "region": "local"
-      }
-    }
-  ],
-  "attempts": [
-    {
-      "ts": 1792102410101,
-      "email": "admin@quantiform.ru",
-      "ok": false,
-      "reason": "unknown_email",
-      "ip": "::ffff:127.0.0.1",
-      "device": "Unknown/Unknown"
-    },
-    {
-      "ts": 1792103236118,
-      "email": "kobzeva-1986@mail.ru",
-      "ok": false,
-      "reason": "unknown_email",
-      "ip": "::1",
-      "device": "Windows/Chrome"
-    }
-  ],
+  "codes": [],
+  "attempts": [],
   "devices": [
     {
       "admin_id": "adm-super",
       "device": "Unknown/Unknown",
       "last_ip": "::ffff:127.0.0.1",
       "added_at": 1792101726883
+    },
+    {
+      "admin_id": "adm-super",
+      "device": "Windows/Chrome",
+      "last_ip": "::ffff:127.0.0.1",
+      "added_at": 1792146292484
+    },
+    {
+      "admin_id": "adm-fin",
+      "device": "Windows/Chrome",
+      "last_ip": "::ffff:127.0.0.1",
+      "added_at": 1792146331260
     }
   ],
   "blocks": [
@@ -106,6 +86,138 @@
     }
   ],
   "security_log": [
+    {
+      "id": "sec-68b077c595",
+      "ts": 1792146331355,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "login_success",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "session issued (12h)"
+    },
+    {
+      "id": "sec-454a62d200",
+      "ts": 1792146331306,
+      "result": "fail",
+      "admin_id": "adm-super",
+      "type": "login_attempt",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "wrong_code"
+    },
+    {
+      "id": "sec-586b89cd46",
+      "ts": 1792146331292,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-b94584cd54",
+      "ts": 1792146331262,
+      "result": "success",
+      "admin_id": "adm-fin",
+      "type": "login_success",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "session issued (12h)"
+    },
+    {
+      "id": "sec-c06ab4b632",
+      "ts": 1792146331215,
+      "result": "success",
+      "admin_id": "adm-fin",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-827e9a5a5e",
+      "ts": 1792146331201,
+      "result": "denied",
+      "admin_id": null,
+      "type": "login_attempt",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "email не в allowlist"
+    },
+    {
+      "id": "sec-fade2e2c69",
+      "ts": 1792146292530,
+      "result": "fail",
+      "admin_id": "adm-super",
+      "type": "login_attempt",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "no_active_code"
+    },
+    {
+      "id": "sec-64a4bad937",
+      "ts": 1792146292488,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "login_success",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "session issued (12h)"
+    },
+    {
+      "id": "sec-a4db358ca6",
+      "ts": 1792146292439,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-214f1e41cd",
+      "ts": 1792146272587,
+      "result": "requires_reconfirm",
+      "admin_id": "adm-super",
+      "type": "new_device_challenge",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "неизвестное устройство — запрошен новый код"
+    },
+    {
+      "id": "sec-caec22b97a",
+      "ts": 1792146272538,
+      "result": "requires_reconfirm",
+      "admin_id": "adm-super",
+      "type": "new_device_challenge",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "неизвестное устройство — запрошен новый код"
+    },
+    {
+      "id": "sec-36f3ebc884",
+      "ts": 1792146272493,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Windows/Chrome",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
     {
       "id": "sec-39572fee27",
       "ts": 1792103236119,
