@@ -151,12 +151,13 @@ export const useAppStore = create<AppState>()(
         const pr = r.profile;
         useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
         /* Тихая проверка админской сессии: если в cookie OTP-сессия кабинета —
-           открываем кабинет. На публичном сайте это нигде не отображается. */
+           запоминаем профиль (кабинет подхватит его сам). Никаких принудительных
+           редиректов отсюда: навигацией владеет страница входа — это исключает
+           конкуренцию двух редиректов и «моргание» чужой страницей. */
         try {
           const m = await fetch("/api/admin/me", { credentials: "include" }).then((x) => x.json());
           if (m && m.ok && m.profile) {
             (window as any).__QF_ADMIN__ = m.profile;
-            if (!location.hash.startsWith("#/admin")) location.hash = "#/admin";
           }
         } catch { /* сервер недоступен */ }
         return { ok: true } as { ok: true };

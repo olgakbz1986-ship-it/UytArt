@@ -1,6 +1,15 @@
 {
   "admins": [
     {
+      "id": "adm-almin",
+      "email": "almin@starttechpro.ru",
+      "name": "Алмин — Super Admin (dev)",
+      "role": "super_admin",
+      "passkey": false,
+      "created_at": 1792185011309,
+      "password_hash": "240be518fabd2724"
+    },
+    {
       "id": "adm-super",
       "email": "admin@starttechpro.ru",
       "name": "Главный администратор",
@@ -35,17 +44,17 @@
   ],
   "codes": [
     {
-      "id": "code-f551e4428b",
-      "admin_id": "adm-super",
-      "email": "admin@starttechpro.ru",
-      "code_hash": "dd63e90713a5e541",
-      "expires_at": 1792182211971,
+      "id": "code-9a1ef22d6b",
+      "admin_id": "adm-almin",
+      "email": "almin@starttechpro.ru",
+      "code_hash": "7c2523c985881fb2",
+      "expires_at": 1792185311311,
       "used": true,
       "attempts": 0,
       "meta": {
-        "ip": "::1",
-        "device": "Linux/Chrome",
-        "region": "local"
+        "ip": "::ffff:127.0.0.1",
+        "device": "Unknown/Unknown",
+        "region": "RU/other"
       }
     }
   ],
@@ -74,6 +83,12 @@
       "device": "Linux/Chrome",
       "last_ip": "::1",
       "added_at": 1792181912053
+    },
+    {
+      "admin_id": "adm-almin",
+      "device": "Unknown/Unknown",
+      "last_ip": "::ffff:127.0.0.1",
+      "added_at": 1792185011321
     }
   ],
   "blocks": [
@@ -107,6 +122,39 @@
     }
   ],
   "security_log": [
+    {
+      "id": "sec-4c600a79e6",
+      "ts": 1792185011324,
+      "result": "success",
+      "admin_id": "adm-almin",
+      "type": "login_success",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "session issued (12h)"
+    },
+    {
+      "id": "sec-66d800e96d",
+      "ts": 1792185011311,
+      "result": "success",
+      "admin_id": "adm-almin",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "OTP отправлен"
+    },
+    {
+      "id": "sec-f31cef186c",
+      "ts": 1792185011310,
+      "result": "success",
+      "admin_id": "adm-almin",
+      "type": "code_sent",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "dev-пароль принят → фиксированный код"
+    },
     {
       "id": "sec-10682fb17d",
       "ts": 1792181912054,
