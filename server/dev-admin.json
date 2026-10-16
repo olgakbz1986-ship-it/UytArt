@@ -123,6 +123,28 @@
   ],
   "security_log": [
     {
+      "id": "sec-fd6639c435",
+      "ts": 1792190961508,
+      "result": "success",
+      "admin_id": "adm-almin",
+      "type": "login_success",
+      "ip": "::1",
+      "device_id": "Unknown/Unknown",
+      "region": "local",
+      "detail": "dev: пароль принят → сессия сразу (без кода)"
+    },
+    {
+      "id": "sec-c3c44e722e",
+      "ts": 1792190946182,
+      "result": "success",
+      "admin_id": "adm-almin",
+      "type": "login_success",
+      "ip": "::ffff:127.0.0.1",
+      "device_id": "Unknown/Unknown",
+      "region": "RU/other",
+      "detail": "dev: пароль принят → сессия сразу (без кода)"
+    },
+    {
       "id": "sec-4c600a79e6",
       "ts": 1792185011324,
       "result": "success",

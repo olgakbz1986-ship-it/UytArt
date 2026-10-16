@@ -50,6 +50,13 @@ export function AuthPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     try {
       const st = await adminApi.loginStart(email, emailForm.password);
+      /* Dev-режим (до публикации): пароль — единственный пропуск, код не нужен.
+         Сервер сразу выдаёт сессионную cookie → мгновенный тихий вход в кабинет. */
+      if (st && st.ok && st.devDirect && st.profile) {
+        (window as any).__QF_ADMIN__ = st.profile;
+        nav("/admin", { replace: true });
+        return true;
+      }
       if (st && st.ok) {
         setAdminEmail(email); setAdminStep("code"); setError("");
         setAdminHint(st.devCode

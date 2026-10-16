@@ -451,23 +451,34 @@ module.exports = function registerAdmin(app, ctx) {
         await putStore(doc);
         return res.json({ ok: false, error: "neutral" });
       }
-      /* временная блокировка после 3–5 неудачных попыток */
-      const recent = doc.attempts.filter((a) => a.email === email && !a.ok && Date.now() - a.ts < 15 * 60000);
-      if (recent.length >= 5) {
+      /* временная блокировка после 3–5 неудачных попыток.
+         Dev-режим: порог мягче (8) и окно короче (2 мин), чтобы случайные
+         ошибки при тестировании не запирала вход надолго. В проде — как раньше. */
+      const isProd = process.env.NODE_ENV === "production";
+      const recent = doc.attempts.filter((a) => a.email === email && !a.ok && Date.now() - a.ts < (isProd ? 15 : 2) * 60000);
+      if (recent.length >= (isProd ? 5 : 8)) {
         logSec(doc, { admin_id: admin.id, type: "login_blocked_temp", result: "blocked", ip, device_id: dev, region, detail: "5 неудачных попыток за 15 минут" });
         await putStore(doc);
         return res.json({ ok: false, error: "neutral" });
       }
       const meta = { ip, device: dev, region };
-      /* Dev-режим (до публикации сервиса): если у служебного аккаунта задан
-         password_hash и присланный пароль совпадает — вместо письма мгновенно
-         выдаётся фиксированный код «246810». Тот же verify-эндпоинт, та же
-         сессия, тот же журнал. В production — строго OTP на почту. */
-      const devFixed = process.env.NODE_ENV !== "production" && admin.password_hash && passHash(password) === admin.password_hash ? "246810" : null;
-      if (devFixed) {
-        logSec(doc, { admin_id: admin.id, type: "code_sent", result: "success", ip, device_id: dev, region, detail: "dev-пароль принят → фиксированный код" });
+      /* Dev-упрощение (только до публикации): пароль служебного аккаунта —
+         единственный пропуск. Код не требуется: сессия выдаётся сразу,
+         one-shot токен возвращается в ответе и подставляется на форме.
+         В production эта ветка исключена полностью (строгий OTP на почту). */
+      const devDirect = process.env.NODE_ENV !== "production" && admin.password_hash && passHash(password) === admin.password_hash;
+      if (devDirect) {
+        const tok = jwt.sign({ sub: admin.id, scope: "admin", role: admin.role, env: doc.settings.env }, JWT_SECRET, { expiresIn: "12h" });
+        res.cookie(COOKIE, tok, { httpOnly: true, sameSite: "lax", maxAge: 12 * 3600000, secure: false });
+        if (!doc.devices.some((d) => d.admin_id === admin.id && d.device === dev)) doc.devices.push({ admin_id: admin.id, device: dev, last_ip: ip, added_at: Date.now() });
+        logSec(doc, { admin_id: admin.id, type: "login_success", result: "success", ip, device_id: dev, region, detail: "dev: пароль принят → сессия сразу (без кода)" });
+        await putStore(doc);
+        return res.json({
+          ok: true, devDirect: true, sessionToken: tok,
+          profile: { id: admin.id, email: admin.email, name: admin.name, role: admin.role, role_title: doc.roles[admin.role].title, perms: doc.roles[admin.role].perms, sections: doc.roles[admin.role].sections, env: doc.settings.env },
+        });
       }
-      const s = await issueCode(doc, admin, meta, devFixed);
+      const s = await issueCode(doc, admin, meta, null);
       logSec(doc, { admin_id: admin.id, type: "code_sent", result: "success", ip, device_id: dev, region, detail: "OTP отправлен" });
       await putStore(doc);
       res.json({ ok: true, codeSent: !!s.sent, devMode: !s.sent, devCode: s.devCode || null });
