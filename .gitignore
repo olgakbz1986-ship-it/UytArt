@@ -4,3 +4,7 @@ node_modules/
 dist/
 .env.local
 server/dev-db.json
+server/dev-admin.json
+server/dev-db.json
+.env.local
+dist/
