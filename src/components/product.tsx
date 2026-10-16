@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Heart, ShoppingBag, Ban, Play, Download } from "lucide-react";
 import { Product, catBySlug, fmt, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
-import { Badge, Btn, ProductImg, Rating } from "./ui";
+import { Badge, ProductImg, Rating } from "./ui";
 import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
 
 // Компонент AI-анимации карточки (Ken Burns + кроссфейд)
@@ -35,6 +35,7 @@ export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
   const favorites = useAppStore((s) => s.favorites);
   const onFav = favorites.includes(p.id);
   const cat = catBySlug(p.categoryId);
+  const vendor = vendorById(p.vendorId);
 
   /* Цифровой товар (префикс id "dp-") — двойной рендер в том же layout.
      Переход ведёт на существующую страницу /digital/:id (оригинальный id). */
@@ -86,6 +87,19 @@ export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
             </div>
           </div>
           <p className="text-[11px] font-bold text-ink-soft mt-1.5 flex items-center gap-1"><Download size={11} /> Мгновенная выдача после оплаты</p>
+          {/* Кнопки действий цифрового товара (ТЗ п.9): тест-драйв с автофокусом + покупка */}
+          <div className="flex gap-2 mt-3" onClick={(e) => e.preventDefault()}>
+            {(p.testDriveLimit || 0) > 0 && (p.digitalType === "prompt" || p.digitalType === "agent") && (
+              <Link to={`${toDigital}?section=test-drive`}
+                className="flex-1 inline-flex items-center justify-center h-10 px-4 text-[13px] font-semibold rounded-[10px] border border-line bg-surface text-ink hover:bg-cream transition-all duration-200">
+                Тест-драйв
+              </Link>
+            )}
+            <Link to={toDigital}
+              className="flex-1 inline-flex items-center justify-center h-10 px-4 text-[13px] font-semibold rounded-[10px] bg-dark text-cream hover:bg-dark-deep transition-all duration-200">
+              Купить
+            </Link>
+          </div>
         </div>
       </Link>
     );

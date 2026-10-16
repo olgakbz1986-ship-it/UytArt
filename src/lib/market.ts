@@ -1,8 +1,8 @@
-import { PRODUCTS, CATEGORIES, catBySlug, type Product } from "../data/seed";
+import { PRODUCTS, CATEGORIES, type Product } from "../data/seed";
 import { useSellerAccount, useSellerReg, sellerProfileOf, type SellerProductItem, type SellerProfile } from "./seller";
 import { isZoneMatch } from "./geo";
 import { useAppStore } from "./store";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useDigitalStore } from "./digital";
 import type { DigitalProduct, DigitalProductType } from "../types/digital";
 
@@ -61,7 +61,6 @@ export function digitalToMarketProduct(d: DigitalProduct): Product {
     description: d.description || "",
     createdAt: d.createdAt,
     isNew: true,
-    ownerId: d.ownerId,
     shopName: cat?.name || "Цифровые товары",
     /* специфичные атрибуты цифрового товара — опциональные маркеры Product */
     digitalType: d.type,
@@ -77,6 +76,24 @@ export function digitalMarketProducts(): Product[] {
   return useDigitalStore.getState().products
     .filter((d) => d.status === "published")
     .map(digitalToMarketProduct);
+}
+
+/* Загрузка публичного каталога цифровых товаров с сервера.
+   Единая точка синхронизации для витрины: ответ /api/digital/products
+   содержит только published-товары всех продавцов платформы без секретных
+   полей (systemPrompt/agentConfig/fileUrl проецируются на сервере).
+   mergeFromServer идемпотентен и не перезаписывает локальные объекты. */
+let digitalCatalogLoading = false;
+export function ensureDigitalCatalog(): void {
+  if (digitalCatalogLoading) return;
+  digitalCatalogLoading = true;
+  fetch("/api/digital/products", { credentials: "include" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (d && Array.isArray(d.products)) useDigitalStore.getState().mergeFromServer({ products: d.products });
+    })
+    .catch(() => { /* офлайн-режим: витрина работает на persist-сторе */ })
+    .finally(() => { digitalCatalogLoading = false; });
 }
 
 /* Профиль продавца для товара: реестр по ownerId (Проблема №3 —
@@ -183,6 +200,9 @@ export function useMarketProducts(buyerCity?: string): Product[] {
   const viewerCity = useAppStore((s) => s.viewerCity);
   const addresses = useAppStore((s) => s.addresses);
   void products; void profiles; void digital; /* подписка на изменения */
+  /* витрина — единый источник данных: подтягиваем публичные цифровые
+     товары с сервера (только published, без секретных полей) */
+  useEffect(() => { ensureDigitalCatalog(); }, []);
   return useMemo(() => marketProducts(buyerCity), [products, profiles, digital, viewerCity, addresses, buyerCity]);
 }
 

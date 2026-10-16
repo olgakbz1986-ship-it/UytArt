@@ -319,6 +319,23 @@ export interface Product {
   digitalVersion?: string;     /* версия продукта, напр. "1.0" */
   digitalSalesCount?: number;  /* количество продаж (stats.salesCount) */
   testDriveLimit?: number;     /* бесплатных тест-драйвов (для prompt/agent) */
+  /* Реквизиты и маркеры реальных продавцов (seller→витрина, src/lib/market.ts).
+     Опциональные поля: демо-товары из seed их не заполняют. */
+  ownerId?: string;            /* аккаунт продавца-владельца товара */
+  shopName?: string;           /* название магазина из профиля продавца */
+  sellerCity?: string;         /* город продавца (гео-фильтр витрины) */
+  legalType?: string;          /* форма регистрации (ИП/ООО/самозанятый) */
+  inn?: string;                /* ИНН магазина */
+  avatar?: string;             /* логотип/аватар магазина */
+  contactName?: string;        /* контактное лицо */
+  masterName?: string;         /* имя мастера */
+  businessStory?: string;      /* история бренда */
+  isMaster?: boolean;          /* статус «Мастер» */
+  acceptsCustomOrders?: boolean; /* принимает индивидуальные заказы */
+  media?: unknown[];           /* медиа-галерея товара продавца */
+  ai_assets?: unknown;         /* AI-ассеты карточки */
+  ai_status?: string;          /* статус AI-обработки */
+  deliveryZone?: unknown;      /* зона доставки продавца */
 }
 
 const MATERIALS = ["Лён", "Хлопок", "Шерсть", "Керамика", "Дуб", "Ясень", "Латунь", "Ротанг", "Стекло", "Кожа", "Серебро", "Берёза"];

@@ -17,6 +17,7 @@ import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
 import { productRating } from "../lib/review";
 import { SpecSections } from "../components/SpecSections";
+import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
 
 type SortId = "popular" | "price-asc" | "price-desc" | "new" | "rating";
 const SORTS: { id: SortId; label: string }[] = [
