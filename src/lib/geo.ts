@@ -19,6 +19,8 @@ const LARGE = ["lighting"];
 
 /* сможет ли продавец доставить товар в округ покупателя */
 export function canDeliver(p: Product, cityOrDistrict: string): boolean {
+  /* цифровые товары не имеют географических ограничений — мгновенная выдача */
+  if (p.id.startsWith("dp-")) return true;
   const vendorRegion = (vendorById(p.vendorId)?.production_region || "").trim();
   if (!vendorRegion) return true;
 

@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
-import { Heart, ShoppingBag, Ban, Play } from "lucide-react";
+import { Heart, ShoppingBag, Ban, Play, Download } from "lucide-react";
 import { Product, catBySlug, fmt, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { Badge, ProductImg, Rating } from "./ui";
+import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
 
 // Компонент AI-анимации карточки (Ken Burns + кроссфейд)
 export function CardAnimation({ frames, captions, frameMs }: { frames: string[]; captions: string[]; frameMs?: number }) {
@@ -30,13 +31,81 @@ export function CardAnimation({ frames, captions, frameMs }: { frames: string[];
 }
 
 export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
-  const addToCart = useAppStore((s) => s.addToCart);
   const toggleFav = useAppStore((s) => s.toggleFav);
   const favorites = useAppStore((s) => s.favorites);
   const onFav = favorites.includes(p.id);
   const cat = catBySlug(p.categoryId);
   const vendor = vendorById(p.vendorId);
 
+  /* Цифровой товар (префикс id "dp-") — двойной рендер в том же layout.
+     Переход ведёт на существующую страницу /digital/:id (оригинальный id). */
+  if (p.digitalId) {
+    const meta = DIGITAL_TYPE_META[p.digitalType as DigitalProductType];
+    const toDigital = `/digital/${p.digitalId}`;
+    return (
+      <Link
+        to={toDigital}
+        className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1.5 transition-all duration-300 overflow-hidden flex flex-col fade-up"
+        style={{ animationDelay: `${(index % 12) * 45}ms` }}
+      >
+        <div className="relative aspect-[4/3.4]">
+          <ProductImg p={p} variant={index % 5} />
+          <div className="absolute top-2.5 left-2.5 flex flex-col items-start gap-1.5 z-10">
+            {meta && <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${meta.accentClass}`}>{meta.icon} {meta.label}</span>}
+            {(p.testDriveLimit || 0) > 0 && (p.digitalType === "prompt" || p.digitalType === "agent") && (
+              <Badge tone="honey">Тест-драйв</Badge>
+            )}
+          </div>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFav(p.id); }}
+            aria-label={onFav ? "Убрать из избранного" : "В избранное"}
+            className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer z-10 ${
+              onFav ? "bg-error text-white scale-105" : "bg-cream/90 text-ink-soft hover:text-error opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            <Heart size={15} fill={onFav ? "currentColor" : "none"} />
+          </button>
+          <span
+            aria-label="Мгновенная выдача"
+            className="absolute bottom-2.5 right-2.5 w-10 h-10 rounded-full bg-dark text-cream flex items-center justify-center z-10"
+          >
+            <Download size={17} />
+          </span>
+        </div>
+        <div className="p-4 flex flex-col flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute mb-1.5">{p.shopName || cat?.name}</p>
+          <h3 className="text-[13.5px] font-semibold leading-snug text-ink line-clamp-2 group-hover:text-accent-deep transition-colors">{p.name}</h3>
+          <p className="text-[11px] text-ink-mute mt-1">{cat?.name}</p>
+          <div className="mt-auto pt-3 flex items-end justify-between gap-2">
+            <div>
+              <span className="font-display font-bold text-[17px] text-ink">{fmt(p.price)}</span>
+              <span className="block text-[11px] text-ink-soft">Версия {p.digitalVersion || "1.0"}</span>
+            </div>
+            <div className="flex flex-col items-end gap-0.5">
+              <Rating value={p.rating} size={10} />
+              <span className="text-[11px] text-ink-mute">{p.digitalSalesCount || 0} продаж</span>
+            </div>
+          </div>
+          <p className="text-[11px] font-bold text-ink-soft mt-1.5 flex items-center gap-1"><Download size={11} /> Мгновенная выдача после оплаты</p>
+          {/* Кнопки действий цифрового товара (ТЗ п.9): тест-драйв с автофокусом + покупка */}
+          <div className="flex gap-2 mt-3" onClick={(e) => e.preventDefault()}>
+            {(p.testDriveLimit || 0) > 0 && (p.digitalType === "prompt" || p.digitalType === "agent") && (
+              <Link to={`${toDigital}?section=test-drive`}
+                className="flex-1 inline-flex items-center justify-center h-10 px-4 text-[13px] font-semibold rounded-[10px] border border-line bg-surface text-ink hover:bg-cream transition-all duration-200">
+                Тест-драйв
+              </Link>
+            )}
+            <Link to={toDigital}
+              className="flex-1 inline-flex items-center justify-center h-10 px-4 text-[13px] font-semibold rounded-[10px] bg-dark text-cream hover:bg-dark-deep transition-all duration-200">
+              Купить
+            </Link>
+          </div>
+        </div>
+      </Link>
+    );
+  }
+
+  const addToCart = useAppStore((s) => s.addToCart);
   return (
     <Link
       to={`/product/${p.slug}`}

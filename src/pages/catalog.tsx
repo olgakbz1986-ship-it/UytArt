@@ -17,6 +17,7 @@ import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
 import { productRating } from "../lib/review";
 import { SpecSections } from "../components/SpecSections";
+import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
 
 type SortId = "popular" | "price-asc" | "price-desc" | "new" | "rating";
 const SORTS: { id: SortId; label: string }[] = [
@@ -82,7 +83,7 @@ export function CatalogPage() {
 
   const market = useMarketProducts();
   const items = useMemo(() => {
-    let l = market.filter((x) => x.id.startsWith("sp-") && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
+    let l = market.filter((x) => (x.id.startsWith("sp-") || x.id.startsWith("dp-")) && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
     if (q) {
       l = l.filter((p) => {
         const c = catBySlug(p.categoryId);
@@ -90,6 +91,7 @@ export function CatalogPage() {
         const subName = c?.subs.find((s) => s.slug === p.sub)?.name.toLowerCase() ?? "";
         return (
           p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) || /* цифровые товары ищутся также по описанию */
           p.material.toLowerCase().includes(q) ||
           p.tags.some((t) => t.toLowerCase().includes(q)) ||
           subName.includes(q) ||
@@ -267,6 +269,10 @@ export function ProductPage() {
   const { slug = "" } = useParams();
   const market = useMarketProducts();
   const p = useMemo(() => market.find((x) => x.slug === slug) || productBySlug(slug), [market, slug]);
+  /* цифровые товары обслуживает существующая страница /digital/:id (ТЗ: без дублирования рендера) */
+  useEffect(() => {
+    if (p?.digitalId) window.location.hash = `#/digital/${p.digitalId}`;
+  }, [p?.digitalId]);
   const addToCart = useAppStore((s) => s.addToCart);
   const toggleFav = useAppStore((s) => s.toggleFav);
   const favs = useAppStore((s) => s.favorites);
