@@ -398,11 +398,20 @@ module.exports = function registerAdmin(app, ctx) {
     doc.codes.unshift(rec);
     if (mail) {
       try { await mail.sendMail({ from: MAIL_FROM, to: admin.email, subject: "Код входа в кабинет", html: `<p>Ваш код: <b style="font-size:20px">${code}</b></p><p>Действует 5 минут. Никому не передавайте.</p>` }); }
-      catch (e) { console.error("[admin-mail]", e.message); }
+      catch (e) {
+        console.error("[admin-mail]", e.message);
+        /* письмо не доставлено — показываем код в ответе UI (только вне production) */
+        if (process.env.NODE_ENV !== "production") return { sent: false, devModeNoSmtp: false, devCode: code };
+        return { sent: true };
+      }
       return { sent: true };
     }
-    console.log(`[DEV-письмо][admin] ${admin.email} → код ${rec.id}`);
-    return { sent: false, devHint: "SMTP не настроен: код не отправлен" };
+    /* DEV-режим (SMTP не настроен): раньше код только логировался на сервере и нигде
+       не был доступен пользователю — вход был физически невозможен. Теперь код
+       возвращается в ответе и показывается в форме входа. В production — строго нет. */
+    console.log(`[DEV-письмо][admin] ${admin.email} → код ${code} (id ${rec.id})`);
+    if (process.env.NODE_ENV === "production") return { sent: false, devHint: "SMTP не настроен: код не отправлен" };
+    return { sent: false, devMode: true, devCode: code };
   }
 
   app.post("/api/admin/login/start", async (req, res) => {
@@ -430,7 +439,7 @@ module.exports = function registerAdmin(app, ctx) {
       const s = await issueCode(doc, admin, meta);
       logSec(doc, { admin_id: admin.id, type: "code_sent", result: "success", ip, device_id: dev, region, detail: "OTP отправлен" });
       await putStore(doc);
-      res.json({ ok: true, codeSent: !!s.sent, devMode: !s.sent });
+      res.json({ ok: true, codeSent: !!s.sent, devMode: !s.sent, devCode: s.devCode || null });
     } catch (e) { console.error(e); res.status(500).json({ ok: false, error: "server" }); }
   });
 
@@ -450,22 +459,29 @@ module.exports = function registerAdmin(app, ctx) {
       const rec = doc.codes.find((c) => c.admin_id === admin.id && !c.used && c.expires_at > Date.now());
       if (!rec) return neutralFail("no_active_code");
       if (hash(code) !== rec.code_hash) { rec.attempts++; if (rec.attempts >= 5) rec.used = true; return neutralFail("wrong_code"); }
+      /* сверка контекста: код привязан к IP/устройству запроса (иначе код с чужого
+         устройства/IP не принимается). Исключение: fresh-код, выданный в ответ на
+         new_device-challenge этой же сессии — иначе поток подтверждение-через-код
+         зацикливался и вход был невозможен. */
+      const ip0 = clientIp(req), dev0 = uaDevice(req);
+      const sameSession = rec.meta && rec.meta.device === dev0 && rec.meta.ip === ip0;
+      if (rec.meta && !sameSession) return neutralFail("code_context_mismatch");
       rec.used = true;
       /* проверка устройства / IP / региона / времени / истории попыток */
-      const ip = clientIp(req), dev = uaDevice(req), region = geoOf(ip);
+      const ip = ip0, dev = dev0, region = geoOf(ip);
       const knownDev = doc.devices.some((d) => d.admin_id === admin.id && d.device === dev);
       const knownIp = doc.devices.some((d) => d.admin_id === admin.id && d.last_ip === ip);
       const hour = new Date().getHours();
       const unusualTime = hour >= 1 && hour < 6;
       const tooManyFails = doc.attempts.filter((a) => a.email === email && !a.ok && Date.now() - a.ts < 15 * 60000).length >= 3;
       if (tooManyFails) return neutralFail("attempt_storm");
-      if (!knownDev || !knownIp || unusualTime) {
-        /* первое/подозрительное устройство: просим повторный код, фиксируем в безопасности */
+      if ((!knownDev || !knownIp || unusualTime) && !sameSession) {
+        /* неизвестное устройство/контекст: просим повторный код, фиксируем в безопасности */
         if (!knownDev) {
           logSec(doc, { admin_id: admin.id, type: "new_device_challenge", result: "requires_reconfirm", ip, device_id: dev, region, detail: "неизвестное устройство — запрошен новый код" });
-          await issueCode(doc, admin, { ip, device: dev, region });
+          const s2 = await issueCode(doc, admin, { ip, device: dev, region });
           await putStore(doc);
-          return res.json({ ok: false, error: "new_device", message: "Новое устройство — проверьте почту ещё раз" });
+          return res.json({ ok: false, error: "new_device", message: "Новое устройство — проверьте почту ещё раз", devMode: !s2.sent, devCode: s2.devCode || null });
         }
         logSec(doc, { admin_id: admin.id, type: "risk_context", result: "soft_warn", ip, device_id: dev, region, detail: `unusual_time=${unusualTime} new_ip=${!knownIp}` });
       }

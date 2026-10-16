@@ -49,7 +49,9 @@ export function AuthPage() {
       const st = await adminApi.loginStart(email);
       if (st && st.ok) {
         setAdminEmail(email); setAdminStep("code"); setError("");
-        setAdminHint(st.devMode ? "Код отправлен на почту (dev-режим: код в консоли сервера). Действует 5 минут." : "На почту отправлен одноразовый код. Действует 5 минут.");
+        setAdminHint(st.devCode
+          ? `Dev-режим (SMTP не настроен): ваш одноразовый код — ${st.devCode}. Действует 5 минут.`
+          : st.devMode ? "Код отправлен на почту (dev-режим: код показан выше/в консоли сервера). Действует 5 минут." : "На почту отправлен одноразовый код. Действует 5 минут.");
         return true;
       }
     } catch { /* fallthrough */ }
@@ -62,7 +64,12 @@ export function AuthPage() {
       const v = await adminApi.loginVerify(adminEmail, adminCode.replace(/\D/g, ""));
       setBusy(false);
       if (v && v.ok) { (window as any).__QF_ADMIN__ = v.profile; location.hash = "#/admin"; setTimeout(() => location.reload(), 60); return; }
-      if (v && v.error === "new_device") { setAdminHint(v.message || "Новое устройство — запрошен новый код. Проверьте почту."); setAdminCode(""); return; }
+      if (v && v.error === "new_device") {
+        setAdminHint(v.devCode
+          ? `Новое устройство. Dev-режим: новый код — ${v.devCode}. Действует 5 минут.`
+          : (v.message || "Новое устройство — запрошен новый код. Проверьте почту."));
+        setAdminCode(""); return;
+      }
       setAdminCode("");
       setError("Не удалось выполнить вход"); /* одна нейтральная ошибка без раскрытия причины */
     } catch { setBusy(false); setError("Не удалось выполнить вход"); }
