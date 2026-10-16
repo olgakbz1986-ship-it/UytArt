@@ -35,16 +35,16 @@
   ],
   "codes": [
     {
-      "id": "code-f551e4428b",
+      "id": "code-fd8be65b09",
       "admin_id": "adm-super",
       "email": "admin@starttechpro.ru",
-      "code_hash": "dd63e90713a5e541",
-      "expires_at": 1792182211971,
-      "used": true,
+      "code_hash": "57bb6aa667d6fb17",
+      "expires_at": 1792184135578,
+      "used": false,
       "attempts": 0,
       "meta": {
         "ip": "::1",
-        "device": "Linux/Chrome",
+        "device": "Windows/Chrome",
         "region": "local"
       }
     }
@@ -107,6 +107,17 @@
     }
   ],
   "security_log": [
+    {
+      "id": "sec-04e8199ec2",
+      "ts": 1792183835579,
+      "result": "success",
+      "admin_id": "adm-super",
+      "type": "code_sent",
+      "ip": "::1",
+      "device_id": "Windows/Chrome",
+      "region": "local",
+      "detail": "OTP отправлен"
+    },
     {
       "id": "sec-10682fb17d",
       "ts": 1792181912054,
@@ -2629,7 +2640,7 @@
     ]
   },
   "users": null,
-  "usersSnapshotAt": 1792181933668,
+  "usersSnapshotAt": 1792183488794,
   "usersSnapshot": [
     {
       "id": "u-101",
@@ -2642,13 +2653,13 @@
       "verified": false,
       "role": "seller",
       "segment": "vip",
-      "created_at": 1792181933667,
+      "created_at": 1792183488794,
       "orders": 0,
       "spent_rub": 0,
       "complaints": 2,
       "risk": 0,
       "devices": 1,
-      "last_login": 1792181933668,
+      "last_login": 1792183488794,
       "bonuses": 0,
       "lifetime": "LTV 0.0k ₽"
     },
@@ -2663,13 +2674,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "active",
-      "created_at": 1792095533667,
+      "created_at": 1792097088794,
       "orders": 3,
       "spent_rub": 29400,
       "complaints": 0,
       "risk": 0.11,
       "devices": 2,
-      "last_login": 1792178333668,
+      "last_login": 1792179888794,
       "bonuses": 150,
       "lifetime": "LTV 29.4k ₽"
     },
@@ -2684,13 +2695,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "active",
-      "created_at": 1792009133667,
+      "created_at": 1792010688794,
       "orders": 6,
       "spent_rub": 4200,
       "complaints": 0,
       "risk": 0.22,
       "devices": 3,
-      "last_login": 1792174733668,
+      "last_login": 1792176288794,
       "bonuses": 300,
       "lifetime": "LTV 4.2k ₽"
     },
@@ -2705,13 +2716,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "sleeping",
-      "created_at": 1791922733667,
+      "created_at": 1791924288794,
       "orders": 9,
       "spent_rub": 33600,
       "complaints": 0,
       "risk": 0.33,
       "devices": 1,
-      "last_login": 1792171133668,
+      "last_login": 1792172688794,
       "bonuses": 450,
       "lifetime": "LTV 33.6k ₽"
     },
@@ -2726,13 +2737,13 @@
       "verified": false,
       "role": "buyer",
       "segment": "active",
-      "created_at": 1791836333667,
+      "created_at": 1791837888794,
       "orders": 1,
       "spent_rub": 8400,
       "complaints": 0,
       "risk": 0.44,
       "devices": 2,
-      "last_login": 1792167533668,
+      "last_login": 1792169088794,
       "bonuses": 0,
       "lifetime": "LTV 8.4k ₽"
     },
@@ -2747,13 +2758,13 @@
       "verified": true,
       "role": "seller",
       "segment": "seller_staff",
-      "created_at": 1791749933667,
+      "created_at": 1791751488794,
       "orders": 4,
       "spent_rub": 37800,
       "complaints": 0,
       "risk": 0.55,
       "devices": 3,
-      "last_login": 1792163933668,
+      "last_login": 1792165488794,
       "bonuses": 150,
       "lifetime": "LTV 37.8k ₽"
     },
@@ -2768,13 +2779,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "sleeping",
-      "created_at": 1791663533668,
+      "created_at": 1791665088794,
       "orders": 7,
       "spent_rub": 12600,
       "complaints": 2,
       "risk": 0.66,
       "devices": 1,
-      "last_login": 1792160333668,
+      "last_login": 1792161888794,
       "bonuses": 300,
       "lifetime": "LTV 12.6k ₽"
     },
@@ -2789,13 +2800,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "risk",
-      "created_at": 1791577133668,
+      "created_at": 1791578688794,
       "orders": 10,
       "spent_rub": 42000,
       "complaints": 0,
       "risk": 0.77,
       "devices": 2,
-      "last_login": 1792156733668,
+      "last_login": 1792158288794,
       "bonuses": 450,
       "lifetime": "LTV 42.0k ₽"
     },
@@ -2810,13 +2821,13 @@
       "verified": false,
       "role": "buyer",
       "segment": "active",
-      "created_at": 1791490733668,
+      "created_at": 1791492288794,
       "orders": 2,
       "spent_rub": 16800,
       "complaints": 0,
       "risk": 0.88,
       "devices": 3,
-      "last_login": 1792153133668,
+      "last_login": 1792154688794,
       "bonuses": 0,
       "lifetime": "LTV 16.8k ₽"
     },
@@ -2831,13 +2842,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "sleeping",
-      "created_at": 1791404333668,
+      "created_at": 1791405888794,
       "orders": 5,
       "spent_rub": 46200,
       "complaints": 0,
       "risk": 0,
       "devices": 1,
-      "last_login": 1792149533668,
+      "last_login": 1792151088794,
       "bonuses": 150,
       "lifetime": "LTV 46.2k ₽"
     },
@@ -2852,13 +2863,13 @@
       "verified": true,
       "role": "seller",
       "segment": "seller_staff",
-      "created_at": 1791317933668,
+      "created_at": 1791319488794,
       "orders": 8,
       "spent_rub": 21000,
       "complaints": 0,
       "risk": 0.11,
       "devices": 2,
-      "last_login": 1792145933668,
+      "last_login": 1792147488794,
       "bonuses": 300,
       "lifetime": "LTV 21.0k ₽"
     },
@@ -2873,13 +2884,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "active",
-      "created_at": 1791231533668,
+      "created_at": 1791233088794,
       "orders": 0,
       "spent_rub": 50400,
       "complaints": 0,
       "risk": 0.22,
       "devices": 3,
-      "last_login": 1792142333668,
+      "last_login": 1792143888794,
       "bonuses": 450,
       "lifetime": "LTV 50.4k ₽"
     },
@@ -2894,13 +2905,13 @@
       "verified": false,
       "role": "buyer",
       "segment": "sleeping",
-      "created_at": 1791145133668,
+      "created_at": 1791146688794,
       "orders": 3,
       "spent_rub": 25200,
       "complaints": 2,
       "risk": 0.33,
       "devices": 1,
-      "last_login": 1792138733668,
+      "last_login": 1792140288794,
       "bonuses": 0,
       "lifetime": "LTV 25.2k ₽"
     },
@@ -2915,13 +2926,13 @@
       "verified": true,
       "role": "buyer",
       "segment": "active",
-      "created_at": 1791058733668,
+      "created_at": 1791060288794,
       "orders": 6,
       "spent_rub": 0,
       "complaints": 0,
       "risk": 0.44,
       "devices": 2,
-      "last_login": 1792135133668,
+      "last_login": 1792136688794,
       "bonuses": 150,
       "lifetime": "LTV 0.0k ₽"
     }
@@ -3423,7 +3434,7 @@
       "pay_method": "sbp",
       "delivery_method": "courier",
       "region": "MSK",
-      "created_at": 1792181941066,
+      "created_at": 1792183513305,
       "items": [
         {
           "title": "Товар 0",
@@ -3442,7 +3453,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "ЕКБ",
-      "created_at": 1792178341066,
+      "created_at": 1792179913305,
       "items": [
         {
           "title": "Товар 1",
@@ -3461,7 +3472,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "MSK",
-      "created_at": 1792174741066,
+      "created_at": 1792176313305,
       "items": [
         {
           "title": "Товар 2",
@@ -3480,7 +3491,7 @@
       "pay_method": "sbp",
       "delivery_method": "courier",
       "region": "ЕКБ",
-      "created_at": 1792171141066,
+      "created_at": 1792172713305,
       "items": [
         {
           "title": "Товар 3",
@@ -3499,7 +3510,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "MSK",
-      "created_at": 1792167541066,
+      "created_at": 1792169113305,
       "items": [
         {
           "title": "Товар 4",
@@ -3518,7 +3529,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "ЕКБ",
-      "created_at": 1792163941066,
+      "created_at": 1792165513305,
       "items": [
         {
           "title": "Товар 5",
@@ -3537,7 +3548,7 @@
       "pay_method": "sbp",
       "delivery_method": "courier",
       "region": "MSK",
-      "created_at": 1792160341066,
+      "created_at": 1792161913305,
       "items": [
         {
           "title": "Товар 6",
@@ -3556,7 +3567,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "ЕКБ",
-      "created_at": 1792156741066,
+      "created_at": 1792158313305,
       "items": [
         {
           "title": "Товар 7",
@@ -3575,7 +3586,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "MSK",
-      "created_at": 1792153141066,
+      "created_at": 1792154713305,
       "items": [
         {
           "title": "Товар 8",
@@ -3594,7 +3605,7 @@
       "pay_method": "sbp",
       "delivery_method": "courier",
       "region": "ЕКБ",
-      "created_at": 1792149541066,
+      "created_at": 1792151113305,
       "items": [
         {
           "title": "Товар 9",
@@ -3613,7 +3624,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "MSK",
-      "created_at": 1792145941066,
+      "created_at": 1792147513305,
       "items": [
         {
           "title": "Товар 10",
@@ -3632,7 +3643,7 @@
       "pay_method": "card",
       "delivery_method": "courier",
       "region": "ЕКБ",
-      "created_at": 1792142341066,
+      "created_at": 1792143913305,
       "items": [
         {
           "title": "Товар 11",
@@ -3642,5 +3653,5 @@
       ]
     }
   ],
-  "ordersCacheAt": 1792181941066
+  "ordersCacheAt": 1792183513305
 }
