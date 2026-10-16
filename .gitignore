@@ -1,32 +1,3 @@
-# Зависимости
+*.out
 node_modules/
-
-# Переменные окружения (секреты)
-.env
-.env.local
-.env.*.local
-*.env.*
-
-# Папки сборки (НИКОГДА не коммитим)
-dist/
-build/
-
-# Приватное хранилище цифровых товаров и локальная БД разработки
-server/uploads/digital/
-server/dev-db.json
-
-# Файлы операционной системы
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Редакторы кода
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Логи
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+*.log
