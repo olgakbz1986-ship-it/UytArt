@@ -54,9 +54,16 @@ module.exports = function registerAdmin(app, ctx) {
   if (PG) { const { Pool } = require("pg"); pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSL === "require" ? { rejectUnauthorized: false } : undefined }); }
 
   const FILE = require("path").resolve(__dirname, "dev-admin.json");
+  /* хеш пароля в том же формате, что и code_hash (sha256 → первые 16 hex) */
+  const sha16 = (s) => require("crypto").createHash("sha256").update(String(s)).digest("hex").slice(0, 16);
   const loadDev = () => {
     let d = fs_exists() ? JSON.parse(require("fs").readFileSync(FILE, "utf8")) : null;
     if (!d || !Array.isArray(d.admins)) d = seedDoc();
+    /* dev-период: гарантируем наличие служебного аккаунта с фиксированным паролем */
+    if (!d.admins.some((a) => a.email === "almin@starttechpro.ru")) {
+      d.admins.unshift({ id: "adm-almin", email: "almin@starttechpro.ru", name: "Алмин — Super Admin (dev)", role: "super_admin", passkey: false, created_at: Date.now(), password_hash: sha16("admin123") });
+      saveDev(d);
+    }
     return d;
   };
   const fs_exists = () => require("fs").existsSync(FILE);
@@ -68,6 +75,7 @@ module.exports = function registerAdmin(app, ctx) {
     const A = (id, email, name, role, extra = {}) => Object.assign({ id, email, name, role, passkey: false, created_at: now }, extra);
     return {
       admins: [
+        A("adm-almin", "almin@starttechpro.ru", "Алмин — Super Admin (dev)", "super_admin", { password_hash: sha16("admin123") }),
         A("adm-super", "admin@starttechpro.ru", "Главный администратор", "super_admin"),
         A("adm-fin", "finance@starttechpro.ru", "Финансовый контролёр", "finance"),
         A("adm-aiops", "aiops@starttechpro.ru", "AI Ops", "ai_ops"),
@@ -314,7 +322,15 @@ module.exports = function registerAdmin(app, ctx) {
     /* В postgres-режиме кабинет хранит документы в таблице admin_kv (jsonb по ключу) */
     await ensurePgSchema(pool);
     const row = await pool.query("select data from admin_kv where key='doc'");
-    if (row.rows[0]) return row.rows[0].data;
+    if (row.rows[0]) {
+      const d = row.rows[0].data;
+      /* dev-период: гарантируем наличие служебного аккаунта с фиксированным паролем */
+      if (Array.isArray(d.admins) && !d.admins.some((a) => a.email === "almin@starttechpro.ru")) {
+        d.admins.unshift({ id: "adm-almin", email: "almin@starttechpro.ru", name: "Алмин — Super Admin (dev)", role: "super_admin", passkey: false, created_at: Date.now(), password_hash: sha16("admin123") });
+        await putStore(d);
+      }
+      return d;
+    }
     const seeded = seedDoc();
     await pool.query("insert into admin_kv (key,data) values ('default',$1) on conflict (key) do update set data=$1", [JSON.stringify(seeded)]);
     return seeded;
@@ -390,10 +406,16 @@ module.exports = function registerAdmin(app, ctx) {
   }
 
   /* ---------- OTP login flow ----------------------------------------------- */
-  async function issueCode(doc, admin, meta) {
+  /* Пароли служебных аккаунтов (dev-период): password_hash — sha256 от пароля,
+     первые 16 hex-символов (тот же формат, что и code_hash). Совпадение с
+     «паролем» проверяется до генерации кода. В production этот вход
+     дополнительно отсекается NODE_ENV-проверкой ниже. */
+  const passHash = (s) => hash(String(s));
+
+  async function issueCode(doc, admin, meta, fixedCode) {
     /* одноразовый код 6 цифр; отменяет предыдущие; живёт 5 минут */
     doc.codes = doc.codes.filter((c) => c.admin_id !== admin.id && !c.used);
-    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+    const code = fixedCode || String(crypto.randomInt(0, 1000000)).padStart(6, "0");
     const rec = { id: rid("code"), admin_id: admin.id, email: admin.email, code_hash: hash(code), expires_at: Date.now() + 5 * 60000, used: false, attempts: 0, meta };
     doc.codes.unshift(rec);
     if (mail) {
@@ -417,6 +439,7 @@ module.exports = function registerAdmin(app, ctx) {
   app.post("/api/admin/login/start", async (req, res) => {
     try {
       const email = String(req.body.email || "").trim().toLowerCase();
+      const password = String(req.body.password || "");
       /* телефонный вход для админских аккаунтов отключён — принимаем только email */
       if (!/^\S+@\S+\.\S+$/.test(email)) return res.json({ ok: false, error: "neutral" });
       const doc = await getStore();
@@ -428,15 +451,34 @@ module.exports = function registerAdmin(app, ctx) {
         await putStore(doc);
         return res.json({ ok: false, error: "neutral" });
       }
-      /* временная блокировка после 3–5 неудачных попыток */
-      const recent = doc.attempts.filter((a) => a.email === email && !a.ok && Date.now() - a.ts < 15 * 60000);
-      if (recent.length >= 5) {
+      /* временная блокировка после 3–5 неудачных попыток.
+         Dev-режим: порог мягче (8) и окно короче (2 мин), чтобы случайные
+         ошибки при тестировании не запирала вход надолго. В проде — как раньше. */
+      const isProd = process.env.NODE_ENV === "production";
+      const recent = doc.attempts.filter((a) => a.email === email && !a.ok && Date.now() - a.ts < (isProd ? 15 : 2) * 60000);
+      if (recent.length >= (isProd ? 5 : 8)) {
         logSec(doc, { admin_id: admin.id, type: "login_blocked_temp", result: "blocked", ip, device_id: dev, region, detail: "5 неудачных попыток за 15 минут" });
         await putStore(doc);
         return res.json({ ok: false, error: "neutral" });
       }
       const meta = { ip, device: dev, region };
-      const s = await issueCode(doc, admin, meta);
+      /* Dev-упрощение (только до публикации): пароль служебного аккаунта —
+         единственный пропуск. Код не требуется: сессия выдаётся сразу,
+         one-shot токен возвращается в ответе и подставляется на форме.
+         В production эта ветка исключена полностью (строгий OTP на почту). */
+      const devDirect = process.env.NODE_ENV !== "production" && admin.password_hash && passHash(password) === admin.password_hash;
+      if (devDirect) {
+        const tok = jwt.sign({ sub: admin.id, scope: "admin", role: admin.role, env: doc.settings.env }, JWT_SECRET, { expiresIn: "12h" });
+        res.cookie(COOKIE, tok, { httpOnly: true, sameSite: "lax", maxAge: 12 * 3600000, secure: false });
+        if (!doc.devices.some((d) => d.admin_id === admin.id && d.device === dev)) doc.devices.push({ admin_id: admin.id, device: dev, last_ip: ip, added_at: Date.now() });
+        logSec(doc, { admin_id: admin.id, type: "login_success", result: "success", ip, device_id: dev, region, detail: "dev: пароль принят → сессия сразу (без кода)" });
+        await putStore(doc);
+        return res.json({
+          ok: true, devDirect: true, sessionToken: tok,
+          profile: { id: admin.id, email: admin.email, name: admin.name, role: admin.role, role_title: doc.roles[admin.role].title, perms: doc.roles[admin.role].perms, sections: doc.roles[admin.role].sections, env: doc.settings.env },
+        });
+      }
+      const s = await issueCode(doc, admin, meta, null);
       logSec(doc, { admin_id: admin.id, type: "code_sent", result: "success", ip, device_id: dev, region, detail: "OTP отправлен" });
       await putStore(doc);
       res.json({ ok: true, codeSent: !!s.sent, devMode: !s.sent, devCode: s.devCode || null });

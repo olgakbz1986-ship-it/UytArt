@@ -6,7 +6,7 @@
    затем «почему». Все цифры кликабельны там, где есть детальная карточка.
    ============================================================ */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Bot, ClipboardCheck, Users, Store, Package, ShoppingCart, Wallet,
   Scale, LifeBuoy, Shield, Megaphone, BarChart3, Rocket, Settings, ScrollText,
@@ -319,8 +319,10 @@ function NotificationCenter() {
 /* ── оболочка кабинета ──────────────────────────────────── */
 export default function CabinetLayout({ content }: { content: ReactNode }) {
   const loc = useLocation();
+  const nav = useNavigate();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [profile, setProfile] = useState<AdminProfile | null>((window as any).__QF_ADMIN__ || null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -329,7 +331,7 @@ export default function CabinetLayout({ content }: { content: ReactNode }) {
     adminApi.me().then((r: any) => {
       if (r && r.ok) { setProfile(r.profile); (window as any).__QF_ADMIN__ = r.profile; }
       else if (r && r.error === "no_session") setProfile(null);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setSessionChecked(true));
   }, []);
 
   const push = (text: string, kind: Toast["kind"] = "ok") => {
@@ -340,7 +342,7 @@ export default function CabinetLayout({ content }: { content: ReactNode }) {
 
   const can = (perm: string) => !!profile && (profile.perms.includes(perm) || profile.perms.includes("*"));
   const inSection = (s: string) => !!profile && (profile.sections.includes("*") || profile.sections.includes(s));
-  const logout = async () => { await adminApi.logout(); delete (window as any).__QF_ADMIN__; location.hash = "#/auth"; location.reload(); };
+  const logout = async () => { await adminApi.logout(); delete (window as any).__QF_ADMIN__; nav("/auth", { replace: true }); };
 
   const sectionId = (() => {
     const p = loc.pathname.replace("/admin", "").replace(/^\//, "");
@@ -352,18 +354,11 @@ export default function CabinetLayout({ content }: { content: ReactNode }) {
     return p.split("/")[0].split("-")[0];
   })();
 
+  /* Нет служебной сессии — тихо возвращаем на страницу входа (без промежуточных
+     экранов и перезагрузок: именно они давали «моргание» чужой страницей). */
   if (!profile) {
-    return (
-      <div className="min-h-screen bg-canvas grid place-items-center p-6">
-        <div className="max-w-[420px] text-center bg-surface rounded-2xl shadow-card border border-line p-8">
-          <Shield size={26} className="mx-auto text-ink-mute mb-3" />
-          <h2 className="font-display font-bold text-[20px] text-ink mb-2">Требуется служебная сессия</h2>
-          <p className="text-[13px] text-ink-soft mb-5">Зона закрыта. Вход выполняется только со стандартной страницы входа платформы по заранее разрешённому email с одноразовым кодом.</p>
-          <Link to="/auth"><Btn size="md">Перейти на страницу входа</Btn></Link>
-          <p className="text-[11.5px] text-ink-mute mt-4">Если вы искали обычный сайт — <Link to="/" className="underline">вернуться на главную</Link>.</p>
-        </div>
-      </div>
-    );
+    if (!sessionChecked) return <div className="min-h-screen bg-canvas" />;
+    return <Navigate to="/auth" replace />;
   }
 
   return (

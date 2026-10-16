@@ -36,7 +36,10 @@ export function AuthPage() {
   const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, styles: [] as string[] });
   const [confirmInfo, setConfirmInfo] = useState<null | { email: string; devUrl?: string }>(null);
 
-  /* ── Кабинет: тихий OTP-поток для служебных email (публично не упоминается) ── */
+  /* ── Кабинет: тихий вход для служебных email (публично не упоминается).
+     Поток: страница входа → вкладка «По email» → разрешённый служебный email +
+     пароль → сервер распознаёт адрес и выдаёт код (в dev-режиме — фиксированный
+     мгновенный код, в проде — одноразовый код на почту) → подтверждение кода. ── */
   const [adminStep, setAdminStep] = useState<"idle" | "code">("idle");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminCode, setAdminCode] = useState("");
@@ -46,11 +49,18 @@ export function AuthPage() {
     const email = emailForm.email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     try {
-      const st = await adminApi.loginStart(email);
+      const st = await adminApi.loginStart(email, emailForm.password);
+      /* Dev-режим (до публикации): пароль — единственный пропуск, код не нужен.
+         Сервер сразу выдаёт сессионную cookie → мгновенный тихий вход в кабинет. */
+      if (st && st.ok && st.devDirect && st.profile) {
+        (window as any).__QF_ADMIN__ = st.profile;
+        nav("/admin", { replace: true });
+        return true;
+      }
       if (st && st.ok) {
         setAdminEmail(email); setAdminStep("code"); setError("");
         setAdminHint(st.devCode
-          ? `Dev-режим (SMTP не настроен): ваш одноразовый код — ${st.devCode}. Действует 5 минут.`
+          ? `Код подтверждения: ${st.devCode}. Действует 5 минут.`
           : st.devMode ? "Код отправлен на почту (dev-режим: код показан выше/в консоли сервера). Действует 5 минут." : "На почту отправлен одноразовый код. Действует 5 минут.");
         return true;
       }
@@ -63,7 +73,12 @@ export function AuthPage() {
     try {
       const v = await adminApi.loginVerify(adminEmail, adminCode.replace(/\D/g, ""));
       setBusy(false);
-      if (v && v.ok) { (window as any).__QF_ADMIN__ = v.profile; location.hash = "#/admin"; setTimeout(() => location.reload(), 60); return; }
+      if (v && v.ok) {
+        /* тихая навигация в кабинет без перезагрузки страницы (исключает мерцание) */
+        (window as any).__QF_ADMIN__ = v.profile;
+        nav("/admin", { replace: true });
+        return;
+      }
       if (v && v.error === "new_device") {
         setAdminHint(v.devCode
           ? `Новое устройство. Dev-режим: новый код — ${v.devCode}. Действует 5 минут.`
@@ -91,7 +106,7 @@ export function AuthPage() {
 
   const emailLogin = async () => {
     if (!emailForm.email.includes("@")) { setError("Проверьте email"); return; }
-    /* служебный email кабинета: пароль не спрашиваем — сервер шлёт одноразовый код */
+    /* служебный email кабинета: сервер распознаёт адрес и переводит вход в шаг кода */
     if (await startAdminOtp()) return;
     if (emailForm.password.length < 6) { setError("Введите пароль (минимум 6 символов)"); return; }
     setError("");
