@@ -9,7 +9,7 @@ import {
   ReleasePlanScreen, TracesScreen, EvalScreen, RoiScreen, UsersScreen, SellersScreen,
   CatalogScreen, SearchAnalyticsScreen, OrdersScreen, FinanceScreen, DisputesScreen,
   SupportScreen, SecurityScreen, ContentScreen, AnalyticsScreen, ReleasesScreen,
-  SettingsScreen, LogsScreen,
+  SettingsScreen, LearningScreen, IntelScreen, LogsScreen,
 } from "./screens";
 
 const ROUTES: Record<string, () => any> = {
@@ -36,7 +36,9 @@ const ROUTES: Record<string, () => any> = {
   analytics: AnalyticsScreen,
   releases: ReleasesScreen,
   settings: SettingsScreen,
-  logs: LogsScreen,
+  learning: LearningScreen,
+  intel: IntelScreen,
+logs: LogsScreen,
 };
 
 export default function CabinetRouter() {

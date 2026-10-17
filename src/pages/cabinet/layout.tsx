@@ -237,6 +237,8 @@ export const NAV: { id: string; title: string; icon: any; subs?: { to: string; t
   { id: "analytics", title: "Аналитика", icon: BarChart3 },
   { id: "releases", title: "Релизы", icon: Rocket },
   { id: "settings", title: "Настройки", icon: Settings },
+  { id: "learning", title: "Обучение", icon: GraduationCap },
+  { id: "intel", title: "Разведка", icon: Radar },
   { id: "logs", title: "Журналы", icon: ScrollText },
 ];
 
