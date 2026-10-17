@@ -370,9 +370,18 @@ export default function CabinetLayout({ content }: { content: ReactNode }) {
         <div className="min-h-screen bg-canvas flex">
           <aside className={cn("fixed lg:sticky top-0 z-40 h-screen bg-dark text-cream flex flex-col transition-all duration-200", collapsed ? "w-[64px]" : "w-[230px]", menuOpen ? "left-0" : "-left-[260px] lg:left-0")}>
             <div className="h-[56px] flex items-center gap-2 px-4 border-b border-white/10">
-              <Sparkles size={18} className="text-honey shrink-0" />
-              {!collapsed && <span className="font-display font-bold text-[15px] tracking-wide">Quantiform · Оператор</span>}
-              <button onClick={() => setCollapsed(!collapsed)} className="ml-auto hidden lg:grid w-7 h-7 place-items-center rounded-md hover:bg-white/10 cursor-pointer text-cream/70"><ChevronDown size={14} className={cn("transition-transform", collapsed ? "-rotate-90" : "rotate-90")} /></button>
+              <svg viewBox="0 0 64 64" className="logo-q w-9 h-9 shrink-0" fill="none" aria-hidden="true">
+                <rect className="logo-q-frame" x="7" y="9" width="46" height="46" rx="13" stroke="#1e3a2f" strokeWidth="1.8" opacity="0.85" />
+                <path className="logo-q-ring" d="M48.8 38.8 A 20 20 0 1 0 36.8 50.8" stroke="#1e3a2f" strokeWidth="5.5" strokeLinecap="round" />
+                <path className="logo-q-tail" d="M38 40 L54 56" stroke="#d98e32" strokeWidth="5.5" strokeLinecap="round" />
+              </svg>
+              {!collapsed && (
+                <span className="leading-tight">
+                  <span className="block font-display font-medium text-[18px] tracking-tight text-cream">Quantiform</span>
+                  <span className="block text-[9px] font-semibold tracking-[0.14em] uppercase text-cream/60">AI administrator</span>
+                </span>
+              )}
+              <button onClick={() => setCollapsed(!collapsed)} className="ml-auto w-7 h-7 place-items-center rounded-md hover:bg-white/10 cursor-pointer text-cream/70 flex-shrink-0"><ChevronDown size={14} className={cn("transition-transform", collapsed ? "-rotate-90" : "rotate-90")} /></button>
             </div>
             <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
               {NAV.filter((n) => inSection(n.id)).map((n) => {
@@ -380,7 +389,7 @@ export default function CabinetLayout({ content }: { content: ReactNode }) {
                 return (
                   <div key={n.id}>
                     <Link to={"/admin/" + (n.id === "home" ? "" : n.id)} onClick={() => setMenuOpen(false)}
-                      className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold no-underline transition-colors cursor-pointer", active ? "bg-honey text-dark" : "text-cream/80 hover:bg-white/10")}>
+                      className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold no-underline transition-colors cursor-pointer", active ? "bg-honey text-ink font-bold" : "text-cream/80 hover:bg-white/10")}>
                       <n.icon size={16} className="shrink-0" />
                       {!collapsed && <span className="truncate">{n.title}</span>}
                     </Link>
@@ -396,7 +405,7 @@ export default function CabinetLayout({ content }: { content: ReactNode }) {
               })}
             </nav>
             <div className="p-3 border-t border-white/10">
-              <button onClick={logout} className="flex items-center gap-2 w-full rounded-lg px-2.5 py-2 text-[12.5px] font-semibold text-cream/70 hover:bg-white/10 cursor-pointer"><LogOut size={15} /> Выход</button>
+              <button onClick={logout} className="flex items-center gap-2 w-full rounded-lg px-2.5 py-2 text-[12.5px] font-semibold text-cream/70 hover:bg-white/10 cursor-pointer"><LogOut size={15} />{!collapsed && <span>Выход</span>}</button>
             </div>
           </aside>
           {menuOpen && <div className="fixed inset-0 bg-dark/40 z-30 lg:hidden" onClick={() => setMenuOpen(false)} />}
