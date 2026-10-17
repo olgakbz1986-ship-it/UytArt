@@ -128,7 +128,7 @@ export function HomeScreen() {
     </div>
   );
 }
-const MODE_RU: Record<string, string> = { observer: "Наблюдатель", copilot: "Помощник", limited_autopilot: "Ограниченный автопилот", critical_confirm: "Критические действия" };
+const MODE_RU: Record<string, string> = { observer: "Наблюдатель", advisor: "Советник (руки с разрешения)" };
 const FEED_COLOR: Record<string, string> = { release: "#2d5f4c", flag: "#d98e32", rule: "#b98a2f", mass: "#e53935", finance: "#7cb342", block: "#e53935", incident: "#e53935", agent: "#2d5f4c", action: "#6b6b66" };
 const Info = ({ label, v }: { label: string; v: any }) => (
   <div className="rounded-lg bg-line-soft/50 px-3 py-2"><p className="text-[10.5px] uppercase font-bold text-ink-mute">{label}</p><p className="text-[13px] font-semibold text-ink mt-0.5">{v}</p></div>
@@ -158,7 +158,7 @@ export function AgentScreen() {
   };
 
   const setMode = (mode: string) => setConfirm({
-    spec: { title: "Сменить режим автономности агента", risk: mode === "limited_autopilot" ? "high" : "medium", affected: "все будущие действия агента", changes: [`Режим: ${MODE_RU[a.autonomy_mode]} → ${MODE_RU[mode]}`], reversible: true, reasonLabel: "почему меняем границы" },
+    spec: { title: "Сменить режим автономности агента", risk: mode === "observer" ? "medium" : "low", affected: "все будущие действия агента", changes: [`Режим: ${MODE_RU[a.autonomy_mode] || a.autonomy_mode} → ${MODE_RU[mode]}`, "Конституция А1 v2: автономная запись запрещена в обоих режимах"], reversible: true, reasonLabel: "почему меняем границы" },
     run: (reason) => adminApi.agentPatch({ autonomy_mode: mode, reason }),
   });
   const kill = () => setConfirm({
@@ -169,7 +169,8 @@ export function AgentScreen() {
   return (
     <div className="space-y-5">
       <Panel title={"Агент · " + a.model_version} sub={`Промпт ${a.prompt_version} · Правила ${a.rules_version} · Инструменты ${a.tools_version} · Обновлено ${timeAgo(a.last_updated)} · Владелец: ${a.owner}`}
-        right={<St s={a.status} />}>
+        right={<span className="flex items-center gap-2"><Badge tone={a.autonomy_mode === "advisor" ? "success" : "neutral"}>РЕЖИМ: {(MODE_RU[a.autonomy_mode] || a.autonomy_mode).toUpperCase()}</Badge><St s={a.status} /></span>}>
+        <p className="text-[12.5px] text-ink-soft bg-line-soft/60 border border-line rounded-xl px-3.5 py-2.5 mb-4">Конституция А1 v2 «руки с разрешения»: агент не выполняет ни одной записывающей операции автономно. Единственный канал влияния — очередь решений по протоколу двухшагового согласия (разрешить → переспрос → исполнение по одноразовому токену).</p>
         <div className="grid md:grid-cols-2 gap-5">
           <div>
             <p className="text-[12px] font-bold uppercase text-ink-mute mb-2">Режим автономности</p>
@@ -242,7 +243,7 @@ export function AgentScreen() {
     </div>
   );
 }
-const MODE_DESC: Record<string, string> = { observer: "только анализ и предложения", copilot: "безопасные действия с уведомлением", limited_autopilot: "сам в пределах политик", critical_confirm: "важное — только через человека" };
+const MODE_DESC: Record<string, string> = { observer: "только анализ и предложения", advisor: "читает всё; любая запись — только по двухшаговому согласию (А1 v2)" };
 const pct = (n: number) => Math.round(n * 100) + "%";
 const Chip = ({ t, bad }: { t: string; bad?: boolean }) => <span className={cn("px-2 py-1 rounded-lg border text-[11.5px] font-semibold", bad ? "border-error/40 text-error bg-error/5" : "border-line text-ink-soft bg-surface")}>{t}</span>;
 const mapErrLocal = (r: any) => r?.hint || (r?.error === "double_confirmation_required" ? "Нужно подтверждение второго администратора" : r?.error === "forbidden" ? `Нет права: ${r.need || "требуемое"}` : "Не удалось выполнить. Подробности в журнале.");
@@ -1386,6 +1387,247 @@ export function SearchAnalyticsScreen() {
           <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Низкая конверсия</p>{d.search.lowconv.map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40">{s[0]} <span className="text-ink-mute float-right">{(s[1] * 100).toFixed(1)}%</span></p>)}</div>
         </div>
         <p className="text-[12.5px] text-ink-soft mt-3 bg-ai-soft border border-ai/20 rounded-lg px-3 py-2"><Sparkles size={13} className="inline mr-1 text-ai" />Рекомендация агента: добавить словарь синонимов «фурнитура↔латунь/петля» и подсказку продавцам по отсутствующим позициям — см. гипотезу hyp-3.</p>
+      </Panel>
+    </div>
+  );
+}
+
+/* ════════════════ ОБУЧЕНИЕ: конвейер навыков, ежедневный отчёт (А5) ════════════════
+   Три потока → навыки-кандидаты → экзамен против базы → ежедневный отчёт →
+   одобрение администратором по двухшаговому согласию → регрессионный фильтр →
+   раскатка под наблюдением дрейфа. Скрытое самоизменение исключено конструктивно. */
+const SKILL_STATUS_META: Record<string, { label: string; tone: any }> = {
+  candidate: { label: "кандидат", tone: "warning" },
+  deferred: { label: "отложен", tone: "neutral" },
+  exam_failed: { label: "экзамен не сдан — в песочнице", tone: "error" },
+  active: { label: "в работе", tone: "success" },
+  rejected: { label: "отклонён", tone: "error" },
+  rolled_back: { label: "снят с работы", tone: "neutral" },
+};
+export function LearningScreen() {
+  const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.skills());
+  const { can } = useCabinet(); const { push } = useToast();
+  const [report, setReport] = useState<any>(null);
+  const [repBusy, setRepBusy] = useState(false);
+  const [openSkill, setOpenSkill] = useState<any>(null);
+  const [permit, setPermit] = useState<any>(null); // { skill, token, reask, statement_hash }
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (loading) return <LoadingBlock rows={6} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  const d = data!;
+  const loadReport = async (id?: string) => {
+    setRepBusy(true);
+    const r: any = await adminApi.skillReport(id);
+    setRepBusy(false);
+    if (r?.ok) setReport(r.report); else push(mapErrLocal(r), "err");
+  };
+  useEffect(() => { if (!report && d.reports?.length) loadReport(); /* первый отчёт — один раз */ }, [d.reports?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const requestApprove = async () => {
+    if (reason.trim().length < 5) { push("Причина обязательна", "err"); return; }
+    setBusy(true);
+    const r: any = await adminApi.skillApproveRequest(openSkill.id, reason.trim());
+    setBusy(false);
+    if (r?.ok) { setPermit({ skill: openSkill, ...r }); setOpenSkill(null); }
+    else { push(mapErrLocal(r) || "Одобрение невозможно: " + (r?.error || ""), "err"); if (r?.error === "exam_not_passed") reload(); }
+  };
+  const confirmApprove = async () => {
+    setBusy(true);
+    const r: any = await adminApi.skillApproveConfirm(permit.skill.id, permit.token);
+    setBusy(false);
+    if (r?.ok) { push(`Навык выпущен в работу (правила ${r.rules_version}). Регрессионный фильтр пройден, включено наблюдение дрейфа.`); setPermit(null); reload(); }
+    else push(mapErrLocal(r) || "Исполнение запрещено: " + (r?.error || ""), "err");
+  };
+  const decide = async (fn: (id: string, reason: string) => Promise<any>, text: string, okMsg: string) => {
+    if (text.trim().length < 5) { push("Причина обязательна — она попадёт в журнал и учебный датасет", "err"); return; }
+    setBusy(true);
+    const r: any = await fn(openSkill.id, text.trim());
+    setBusy(false);
+    if (r?.ok) { push(okMsg); setOpenSkill(null); reload(); } else push(mapErrLocal(r), "err");
+  };
+
+  const groups: [string, any[]][] = [
+    ["Кандидаты на подпись", d.skills.filter((s: any) => ["candidate", "deferred", "exam_failed"].includes(s.status))],
+    ["В работе", d.skills.filter((s: any) => s.status === "active")],
+    ["Отклонённые и снятые (границы допустимого)", d.skills.filter((s: any) => ["rejected", "rolled_back"].includes(s.status))],
+  ];
+  return (
+    <div className="space-y-5">
+      <Panel title="Конвейер самообучения" sub="Живые примеры людей + внутренняя статистика + внешняя разведка → навыки-кандидаты → экзамен → ежедневный отчёт → подпись администратора → регрессионный фильтр → раскатка под наблюдением дрейфа"
+        right={<Badge tone="ai">A5 · конституция</Badge>}>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2.5 mb-4">
+          <Info label="Версия правил" v={d.rules_version} />
+          <Info label="Версия агента" v={d.agent_version} />
+          <Info label="Кандидатов" v={String(d.skills.filter((s: any) => s.status === "candidate").length)} />
+          <Info label="Активных навыков" v={String(d.skills.filter((s: any) => s.status === "active").length)} />
+          <Info label="Примеров в датасете" v={fmtNum(d.dataset.length)} />
+          <Info label="Лимит уведомлений/час" v={`${d.limits.notify_requests_per_hour_per_user}${d.limits.digest_after_excess ? " → дайджест" : ""}`} />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(d.dataset_stats || {}).map(([k, n]: [string, any]) => <Chip key={k} t={`${k}: ${n}`} />)}
+        </div>
+      </Panel>
+
+      <Panel title="Ежедневный отчёт об обучении" sub="Составляется всегда, включая дни без новых навыков (нулевая сводка с метриками в норме). Аудируемый документ: версия, блоки, подпись."
+        right={<Btn size="sm" variant="outline" disabled={repBusy} onClick={() => loadReport()}>{repBusy ? "Загрузка…" : "Обновить"}</Btn>}>
+        {!!d.reports?.length && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {d.reports.map((r: any) => (
+              <button key={r.id} onClick={() => loadReport(r.id)} className={cn("px-2.5 py-1 rounded-lg border text-[12px] font-semibold cursor-pointer transition-colors", report?.id === r.id ? "border-dark bg-dark text-cream" : "border-line text-ink hover:border-dark")}>
+                {r.date}{r.zero_summary ? " · пусто" : ""}{r.signed_by ? " ✓" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+        {!report ? <p className="text-[13px] text-ink-soft">Отчёты появятся после первой сборки воркером (ежедневно в 08:00) или по кнопке «Обновить».</p> : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 flex-wrap"><Badge tone="neutral">{report.version}</Badge><b className="text-[14px]">{report.date}</b>{report.zero_summary && <Badge tone="success">нулевая сводка — метрики в норме</Badge>}</div>
+            {(["learned", "material", "usefulness", "apply"] as const).map((bk, i) => (
+              <div key={bk} className="rounded-xl border border-line bg-surface p-3.5">
+                <p className="text-[11px] uppercase font-bold text-ink-mute mb-1.5">{["① Что выучено (простым языком)", "② На каком материале (происхождение каждого примера)", "③ Насколько полезно (эффект, покрытие, балл экзамена против базы)", "④ Можно ли применять (поле, поведение, риск)"][i]}</p>
+                {bk === "learned" && (report.blocks.learned.length ? <ul className="space-y-1 text-[13px]">{report.blocks.learned.map((l: any) => <li key={l.skill_id}>• {l.plain} <Badge tone={l.verdict === "deferred" ? "neutral" : "warning"}>{l.verdict}</Badge>{l.external_tag && <Badge tone="ai" className="ml-1">{l.external_tag}</Badge>}</li>)}</ul> : <p className="text-[13px] text-ink-soft">Новых навыков за сутки нет.</p>)}
+                {bk === "material" && <ul className="space-y-1 text-[13px]">{report.blocks.material.map((m: any, j: number) => <li key={j}>• {m.example} <span className="text-ink-mute">— {m.origin}</span>{m.external_tag && <Badge tone="ai" className="ml-1">{m.external_tag}</Badge>}</li>)}</ul>}
+                {(bk === "usefulness" || bk === "apply") && <p className="text-[13px] whitespace-pre-line">{String(report.blocks[bk]).split(" | ").join("\n")}</p>}
+              </div>
+            ))}
+            <div className="rounded-xl border border-ai/30 bg-ai-soft p-3.5">
+              <p className="text-[11px] uppercase font-bold text-ai mb-1.5">Рынок и перспектива — карта отставания от лучших практик</p>
+              <ul className="space-y-1 text-[13px] mb-2">{(report.blocks.market?.lag_map || []).map((l: any, j: number) => <li key={j}>• {l.practice} — <b>{l.state}</b></li>)}</ul>
+              <p className="text-[12.5px] text-ink-soft">Шаги преодоления: {report.blocks.market?.steps}</p>
+            </div>
+            <p className="text-[12px] text-ink-mute">Подпись одобрившего: {report.signed_by || "не подписан (ожидает решений администратора)"}</p>
+          </div>
+        )}
+      </Panel>
+
+      {groups.map(([title, list]) => (
+        <Panel key={title} title={title}>
+          {!list.length ? <EmptyState title="Пусто" why="В этой группе пока нет навыков — конвейер наполняется тремя потоками обучения." /> : (
+            <DataTable cols={[
+              { key: "name", title: "Навык", render: (s: any) => <div><b>{s.name}</b><p className="text-[11.5px] text-ink-mute mt-0.5">{s.behavior_change}</p></div> },
+              { key: "origin", title: "Происхождение", render: (s: any) => <div className="text-[12px]">{s.origin}{s.external_tag && <Badge tone="ai" className="ml-1">{s.external_tag}</Badge>}</div> },
+              { key: "field", title: "Поле" },
+              { key: "exam", title: "Экзамен vs база", mono: true, render: (s: any) => <span className={s.exam.cand_acc > s.exam.base_acc ? "text-success font-bold" : "text-error font-bold"}>{(s.exam.cand_acc * 100).toFixed(1)}% / {(s.exam.base_acc * 100).toFixed(1)}%</span> },
+              { key: "risk", title: "Риск", render: (s: any) => <RiskTag r={s.risk} /> },
+              { key: "status", title: "Статус", render: (s: any) => <Badge tone={(SKILL_STATUS_META[s.status]?.tone) || "neutral"}>{SKILL_STATUS_META[s.status]?.label || s.status}</Badge> },
+            ]} rows={list} rowKey={(s: any) => s.id} onRow={(s: any) => { setOpenSkill(s); setReason(""); }} />
+          )}
+        </Panel>
+      ))}
+
+      {/* карточка навыка: решения человека — одобрить / отклонить с причиной / отложить / снять */}
+      <Drawer open={!!openSkill && !permit} onClose={() => setOpenSkill(null)} title={openSkill?.name || ""} wide>
+        {openSkill && (
+          <div className="space-y-4">
+            <div className="flex gap-2 flex-wrap"><RiskTag r={openSkill.risk} /><Badge tone={(SKILL_STATUS_META[openSkill.status]?.tone) || "neutral"}>{SKILL_STATUS_META[openSkill.status]?.label || openSkill.status}</Badge>{openSkill.external_tag && <Badge tone="ai">{openSkill.external_tag}</Badge>}</div>
+            <div className="bg-line-soft/60 rounded-xl p-4 text-[13px] space-y-1.5">
+              <p><b>Что изменится в поведении:</b> {openSkill.behavior_change}</p>
+              <p><b>Поле действия:</b> {openSkill.field} · <b>Покрытие:</b> {openSkill.coverage}</p>
+              <p><b>Ожидаемый эффект:</b> {openSkill.expected_effect}</p>
+              <p><b>Экзамен против базовой версии:</b> кандидат {(openSkill.exam.cand_acc * 100).toFixed(1)}% vs база {(openSkill.exam.base_acc * 100).toFixed(1)}% ({openSkill.exam.suite})</p>
+              <p><b>Материал:</b> {openSkill.origin}</p>
+              {openSkill.reason && <p><b>Причина прошлого решения:</b> {openSkill.reason}</p>}
+              {openSkill.rollout && <p><b>Раскатка:</b> с {timeAgo(openSkill.rollout.at)}, наблюдение дрейфа {openSkill.rollout.drift_watch ? "включено" : "—"}, гейт {openSkill.rollout.regression_gate}</p>}
+            </div>
+            <Field label="Причина / обоснование решения (обязательно, попадёт в журнал и учебный датасет)" required>
+              <textarea className="field min-h-[70px]" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="почему одобряю / отклоняю / откладываю…" />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              {openSkill.status !== "active" && (
+                <Btn disabled={!can("agent_manage") || busy} onClick={requestApprove}><ClipboardList size={14} className="mr-1" /> Одобрить (шаг 1: токен + переспрос)</Btn>
+              )}
+              {openSkill.status !== "active" && (
+                <Btn variant="outline" disabled={!can("agent_manage") || busy} onClick={() => decide(adminApi.skillReject, reason, "Навык отклонён: причина зафиксирована в журнале и добавлена в следующий экзаменационный набор")}>Отклонить с причиной</Btn>
+              )}
+              {openSkill.status !== "active" && (
+                <Btn variant="outline" disabled={!can("agent_manage") || busy} onClick={() => decide(adminApi.skillDefer, reason, "Навык отложен: вернётся в следующий отчёт с накопленной статистикой")}>Отложить</Btn>
+              )}
+              {openSkill.status === "active" && can("agent_manage") && (
+                <Btn variant="outline" className="!text-error !border-error/40" disabled={busy} onClick={() => decide(adminApi.skillRevoke, reason, "Навык снят с работы")}>Снять с работы</Btn>
+              )}
+            </div>
+            <p className="text-[12px] text-ink-mute">Одобрение проходит двухшаговое согласие (А4/А5): сервер выдаёт одноразовый токен на точную формулировку поведения, показывает переспрос, затем применяет регрессионный фильтр и выпускает навык только после второго подтверждения человеком.</p>
+          </div>
+        )}
+      </Drawer>
+
+      {/* шаг 2: переспрос — что именно изменится, сроки токена, куда ляжет запись */}
+      <Modal open={!!permit} onClose={() => setPermit(null)} title="Переспрос перед выпуском навыка (шаг 2 согласия)">
+        {permit && (
+          <div className="space-y-4">
+            <div className="bg-line-soft/60 rounded-xl p-4 text-[13px] space-y-2">
+              <p className="font-bold">{permit.skill.name}</p>
+              <p><b>Что произойдёт:</b> {permit.reask.what_changes}</p>
+              <p><b>Поле действия:</b> {permit.reask.field} · <b>Риск:</b> {permit.reask.risk}</p>
+              <p><b>Экзамен уже пройден:</b> {(permit.reask.exam.cand_acc * 100).toFixed(1)}% против базы {(permit.reask.exam.base_acc * 100).toFixed(1)}%</p>
+              <p><b>Дальше:</b> регрессионный фильтр Evaluation Hub → раскатка → наблюдение дрейфа (порог 0.2, автоуведомление).</p>
+              <p><b>Куда будет внесена запись:</b> {permit.reask.journal}</p>
+              <p><b>До какого момента можно отменить:</b> {permit.reask.cancel_until} (токен одноразовый, привязан к хэшу формулировки {String(permit.statement_hash).slice(0, 8)}…)</p>
+            </div>
+            <div className="flex gap-3">
+              <Btn variant="outline" className="flex-1" disabled={busy} onClick={() => setPermit(null)}>Отменить (токен сгорит)</Btn>
+              <Btn className="flex-1" disabled={busy} onClick={confirmApprove}>{busy ? "Проверяю токен и фильтр…" : "Подтвердить — выпустить в работу"}</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/* ════════════════ РАЗВЕДКА: внешний контур обучения каждые 12 часов (А6) ════════════════ */
+export function IntelScreen() {
+  const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.intel());
+  const { can } = useCabinet(); const { push } = useToast();
+  const [busy, setBusy] = useState(false);
+  if (loading) return <LoadingBlock rows={5} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  const d = data!;
+  const runCycle = async () => {
+    setBusy(true);
+    const r: any = await adminApi.intelRun();
+    setBusy(false);
+    if (r?.ok) { push(`Цикл завершён: находок ${r.findings?.length || 0}, кандидатов ${r.candidate_skills?.length || 0}, отсеяно враждебных ${r.hostile_filtered}`); reload(); }
+    else push(mapErrLocal(r), "err");
+  };
+  return (
+    <div className="space-y-5">
+      <Panel title="Внешняя разведка" sub="Каждые 12 часов по трём направлениям интересов: лучшие практики маркетплейсов, паттерны покупки, цены и промо, антифрод, поддержка, категории, сертификация, AI-тренды"
+        right={<div className="flex items-center gap-2"><Badge tone={d.due_for_run ? "warning" : "success"}>{d.due_for_run ? "цикл созрел" : "цикл идёт по расписанию"}</Badge><Btn size="sm" disabled={!can("agent_manage") || busy} onClick={runCycle}><Play size={13} className="mr-1" />{busy ? "Цикл…" : "Запустить цикл"}</Btn></div>}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
+          <Info label="Периодичность" v={d.cadence_h + " ч"} />
+          <Info label="Следующий цикл" v={new Date(d.next_run_at).toLocaleString("ru-RU")} />
+          <Info label="Циклов в журнале" v={String(d.runs.length)} />
+          <Info label="Белый список" v={d.whitelist.length + " источников"} />
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">{d.whitelist.map((w: string) => <Chip key={w} t={"✓ " + w} />)}</div>
+        <p className="text-[12.5px] text-ink-soft bg-line-soft/60 border border-line rounded-xl px-3.5 py-2.5">Защита контура: любой внешний текст трактуется как данные, а не команды; попытка внедрения инструкций отсекается и помечается; факт подтверждается минимум двумя независимыми источниками из белого списка; находка становится только навыком-кандидатом с меткой «внешний источник» — применение решает человек.</p>
+      </Panel>
+
+      <Panel title="Журнал циклов разведки">
+        {!d.runs.length ? <EmptyState title="Циклов ещё не было" why="Воркер запускает цикл каждые 12 часов; вручную — кнопкой выше." /> : (
+          <div className="space-y-3">
+            {d.runs.map((r: any) => (
+              <div key={r.id} className="border border-line rounded-xl p-4">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <b className="text-[13px]">{new Date(r.ts).toLocaleString("ru-RU")}</b>
+                  <Badge tone="neutral">{r.directions.join(" · ")}</Badge>
+                  <Badge tone="success">находок: {r.findings.length}</Badge>
+                  <Badge tone={r.hostile_filtered ? "error" : "neutral"}>отсеяно враждебного: {r.hostile_filtered}</Badge>
+                  {r.injected_instructions_detected > 0 && <Badge tone="error">инъекций инструкций: {r.injected_instructions_detected}</Badge>}
+                  {r.triggered_by && <span className="text-[11.5px] text-ink-mute ml-auto">запуск: {r.triggered_by}</span>}
+                </div>
+                <ul className="space-y-1 text-[12.5px]">
+                  {r.findings.map((f: any, i: number) => (
+                    <li key={i}>• <b>{f.topic}</b> <Badge tone="ai" className="mx-1">внешний источник</Badge><span className="text-ink-mute">подтверждено: {f.confirmed_by.join(" + ")} · поле: {f.field}</span></li>
+                  ))}
+                  {!r.findings.length && <li className="text-ink-mute">Подтверждённых находок в этом цикле нет.</li>}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </Panel>
     </div>
   );
