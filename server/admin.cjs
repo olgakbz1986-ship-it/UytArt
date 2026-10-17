@@ -99,16 +99,25 @@ module.exports = function registerAdmin(app, ctx) {
       policies: [
         { id: "pol-read", action_type: "analytics.read", mode: "auto", risk: "low", max_per_hour: 200, max_money_rub: 0, max_affected: 0, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Чтение обезличенной аналитики — автоматически" },
         { id: "pol-hyp", action_type: "hypothesis.create", mode: "auto", risk: "low", max_per_hour: 100, max_money_rub: 0, max_affected: 0, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Формирование гипотез — автоматически" },
-        { id: "pol-warn", action_type: "seller.warning", mode: "confirm_operator", risk: "medium", max_per_hour: 10, max_money_rub: 0, max_affected: 1, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Предупреждение продавцу — оператор подтверждает" },
-        { id: "pol-flag", action_type: "product.flag", mode: "auto", risk: "low", max_per_hour: 50, max_money_rub: 0, max_affected: 0, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Пометить товар подозрительным — авто, удаление — только через подтверждение" },
-        { id: "pol-refund", action_type: "refund.propose", mode: "confirm_operator", risk: "medium", max_per_hour: 20, max_money_rub: 50000, max_affected: 1, enabled: true, version: 1, updated_by: "adm-fin", updated_at: now, effective_at: now, prev: null, note: "Агент предлагает возврат, списание — запрещено" },
+        { id: "pol-warn", action_type: "seller.warning", mode: "permit_required", risk: "medium", max_per_hour: 10, max_money_rub: 0, max_affected: 1, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Предупреждение продавцу — действие-запись, только по разрешению (А1 v2)" },
+        { id: "pol-flag", action_type: "product.flag", mode: "auto", risk: "low", max_per_hour: 50, max_money_rub: 0, max_affected: 0, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Пометить товар подозрительным — наблюдение/флаг (не рука), удаление — только через разрешение" },
+        { id: "pol-refund", action_type: "refund.propose", mode: "permit_required", risk: "medium", max_per_hour: 20, max_money_rub: 50000, max_affected: 1, enabled: true, version: 1, updated_by: "adm-fin", updated_at: now, effective_at: now, prev: null, note: "Возврат — исполнение только по токену разрешения покупателя/администратора (А1 v2)" },
         { id: "pol-block", action_type: "seller.block", mode: "forbidden_auto", risk: "critical", max_per_hour: 2, max_money_rub: 0, max_affected: 1, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Блокировка продавца — только двойное подтверждение + причина" },
         { id: "pol-payout", action_type: "payout.freeze", mode: "confirm_specialist", risk: "high", max_per_hour: 5, max_money_rub: 100000, max_affected: 1, enabled: true, version: 1, updated_by: "adm-fin", updated_at: now, effective_at: now, prev: null, note: "Заморозка выплат — профильный администратор (Finance)" },
         { id: "pol-mass", action_type: "mass.action", mode: "confirm_specialist", risk: "high", max_per_hour: 1, max_money_rub: 0, max_affected: 500, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Массовые действия — предпросмотр затронутых объектов обязателен" },
+        /* Конституция А1 v2 «руки с разрешения»: перечисленные ниже записывающие операции агента исполняются ТОЛЬКО по токену разрешения */
+        { id: "pol-warnsend", action_type: "seller.warning.send", mode: "permit_required", risk: "medium", max_per_hour: 10, max_money_rub: 0, max_affected: 1, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Рассылка предупреждения продавцу — только по разрешению" },
+        { id: "pol-cardedit", action_type: "product.edit", mode: "permit_required", risk: "medium", max_per_hour: 20, max_money_rub: 0, max_affected: 1, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Правка карточки — черновик + разрешение продавца" },
+        { id: "pol-publish", action_type: "product.publish", mode: "permit_required", risk: "high", max_per_hour: 10, max_money_rub: 0, max_affected: 1, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Публикация — действие-запись, только по разрешению" },
+        { id: "pol-mailing", action_type: "notification.send", mode: "permit_required", risk: "medium", max_per_hour: 4, max_money_rub: 0, max_affected: 50000, enabled: true, version: 1, updated_by: "adm-super", updated_at: now, effective_at: now, prev: null, note: "Рассылка — действие-запись; массовость требует предпросмотра и разрешения" },
       ],
-      limits: { max_actions_per_hour: 120, max_money_impact_rub_day: 500000, max_api_calls_per_run: 40, token_budget_per_day: 2000000, cost_budget_per_day_rub: 3000, forbidden_data: ["payment_card_data", "raw_passwords", "medical", "biometric"] },
+      /* Конституция А1 v2 «руки с разрешения»: автономная запись агента = 0.
+         Лимиты действий/денежного влияния отменены (раздел 8 спецификации),
+         сохранены: гигиена запросов-уведомлений, денежный порог четырёх глаз,
+         экономические предохранители агента, абсолютный запрет чувствительных данных. */
+      limits: { max_actions_per_hour: 0, max_money_impact_rub_day: 0, max_api_calls_per_run: 40, token_budget_per_day: 2000000, cost_budget_per_day_rub: 3000, notify_requests_per_hour_per_user: 6, digest_after_excess: true, four_eyes_threshold_rub: 150000, forbidden_data: ["payment_card_data", "raw_passwords", "medical", "biometric"], constitution: "A1v2-hands-with-permit" },
       agent: {
-        status: "active", autonomy_mode: "copilot", model_version: "qf-agent-1.4.2", prompt_version: "p-87", rules_version: "r-31", tools_version: "t-19",
+        status: "active", autonomy_mode: "advisor", model_version: "qf-agent-1.4.2", prompt_version: "p-87", rules_version: "r-31", tools_version: "t-19",
         last_updated: now - 3 * DAY, owner: "adm-aiops", kill_switch: false,
         health: { answer_quality: 0.91, classification_accuracy: 0.88, false_positive_rate: 0.04, tool_errors: 3, avg_exec_ms: 2100, cost_rub_day: 214, human_share: 0.23, cancelled_by_admin: 2 },
         drift: { score: 0.06, flags: [] }, roi: { tasks_closed_no_human: 500, hours_saved_week: 120, fraud_prevented_rub: 1840000, disputes_reduced_pct: 17, support_speedup_pct: 30, conversions_uplift_pct: 2.4, prevented_payouts: 18, cost_tokens_rub: 96, cost_infra_rub: 60, cost_control_rub: 45, cost_errors_rub: 12 },
@@ -305,13 +314,30 @@ module.exports = function registerAdmin(app, ctx) {
         { type: "order", id: "QF-1060", risk: 0.55, flags: ["chargeback_risk"], linked: ["u-109"], recommendation: "Ужесточить проверку для покупателя" },
       ],
       graph: { nodes: [{ id: "u-777", t: "user" }, { id: "dev-x9", t: "device" }, { id: "ip-185", t: "ip" }, { id: "u-320", t: "user" }, { id: "sel-ml", t: "seller" }], edges: [["u-777", "dev-x9", "device"], ["u-320", "dev-x9", "device"], ["u-777", "ip-185", "ip"], ["u-320", "ip-185", "ip"], ["sel-ml", "ip-185", "shared_ip"]] },
+      /* Конституция А1 v2: все антифрод-правила — «флаг + уведомление» (notify_only).
+         Автономного применения нет; вопрос о кодовых стопах — отдельное решение администратора. */
       antifraud_rules: [
-        { id: "ar-1", title: "Блокировать платёж при risk ≥ 0.9", enabled: true, hits_7d: 12 },
-        { id: "ar-2", title: "Лимит 3 заказов/сутки для новых продавцов", enabled: true, hits_7d: 4 },
-        { id: "ar-3", title: "Ручная проверка заказов > 100 000 ₽", enabled: true, hits_7d: 2 },
-        { id: "ar-4", title: "Детект накрутки отзывов (1 IP → ≥5 авторов)", enabled: true, hits_7d: 6 },
-        { id: "ar-5", title: "Контроль ценовых аномалий ±60%", enabled: true, hits_7d: 9 },
+        { id: "ar-1", title: "Флаг риска платежа при risk ≥ 0.9", enabled: true, mode: "notify_only", hits_7d: 12, applied_7d: 0 },
+        { id: "ar-2", title: "Флаг лимита 3 заказов/сутки для новых продавцов", enabled: true, mode: "notify_only", hits_7d: 4, applied_7d: 0 },
+        { id: "ar-3", title: "Ручная проверка заказов > 100 000 ₽ (карточка в очередь)", enabled: true, mode: "notify_only", hits_7d: 2, applied_7d: 0 },
+        { id: "ar-4", title: "Флаг накрутки отзывов (1 IP → ≥5 авторов)", enabled: true, mode: "notify_only", hits_7d: 6, applied_7d: 0 },
+        { id: "ar-5", title: "Флаг ценовых аномалий ±60%", enabled: true, mode: "notify_only", hits_7d: 9, applied_7d: 0 },
       ],
+      /* Конвейер самообучения (раздел 7): навыки-кандидаты, экзамен, ежедневный отчёт, подпись администратора */
+      skills: [
+        { id: "sk-101", name: "Тон ответов поддержки при задержке доставки", origin: "внутренняя статистика + живые примеры (отклонения операторов)", source_kind: "internal", field: "buyer_support", behavior_change: "Добавлять извинение + конкретный срок и компенсацию бонусами в первый ответ", exam: { base_acc: 0.88, cand_acc: 0.93, suite: "support_tone_v3" }, coverage: "≈18% обращений в поддержку", expected_effect: "−12% эскалаций по жалобам на доставку", risk: "low", status: "candidate", in_report: null, created_at: now - 2 * DAY, decided_by: null, decided_at: null, reason: null, rollout: null, external_sources: [] },
+        { id: "sk-102", name: "Признаки серийных отмен у продавцов декора", origin: "наблюдение obs-1 + внешняя разведка (двух источниках подтверждён)", source_kind: "external", field: "service", behavior_change: "Раньше реагировать на паттерн «≥8 отмен за 7 дней», создавая карточку решения", exam: { base_acc: 0.81, cand_acc: 0.86, suite: "fraud_detection" }, coverage: "топ-3 категории риска", expected_effect: "+1 день упреждения по блокировкам-рекомендациям", risk: "medium", status: "candidate", in_report: null, created_at: now - DAY, decided_by: null, decided_at: null, reason: null, rollout: null, external_sources: ["marketpulse.dev (подтверждено: retail-analytics.ru)"], external_tag: "внешний источник" },
+        { id: "sk-103", name: "Формулировка отказа в черновике возврата", origin: "живые примеры: 24 правки покупателей", source_kind: "internal", field: "buyer", behavior_change: "В объяснении отказа ссылаться на конкретный пункт правил платформы", exam: { base_acc: 0.9, cand_acc: 0.9, suite: "refund_explanations" }, coverage: "все отказы возвратов", expected_effect: "−20% повторных вопросов", risk: "low", status: "deferred", in_report: "rep-yesterday", created_at: now - 3 * DAY, decided_by: "adm-super", decided_at: now - DAY, reason: "Отложен: ждём данных после релиза 25.10", rollout: null, external_sources: [] },
+      ],
+      skill_reports: [
+        { id: "rep-yesterday", date: new Date(now - DAY).toISOString().slice(0, 10), scheduled_hour: 8, version: "r-1", zero_summary: false, blocks: { learned: [{ skill_id: "sk-103", plain: "Научился понятнее объяснять причины отказа в возврате", verdict: "deferred", by: "adm-super" }], material: [{ example: "24 правки черновиков покупателями", origin: "поле покупателя" }, { example: "журнал наблюдений obs-1..obs-4", origin: "внутренняя статистика" }], usefulness: "Покрытие ≈31% отказов, балл экзамена 0.90 против базы 0.90 — польза не доказана", apply: "Поле: buyer; риск низкий; поведение: ссылки на правила в тексте отказа", market: { lag_map: [{ practice: "упреждающие уведомления о статусе", state: "внедряем (hyp-1)" }, { practice: "прозрачные объяснения решений ИИ", state: "этот навык закрывает частично" }], steps: "довыпустить отчёт по 25.10, затем пересдать экзамен" } }, created_at: now - DAY, signed_by: "adm-super" },
+      ],
+      intel_runs: [
+        { id: "ir-1", ts: now - 12 * 3600000, cadence_h: 12, directions: ["покупатель", "продавец", "сервис"], sources_whitelist: ["retail-digest.example", "marketpulse.dev", "gov-standards.example", "ai-commerce-review.example"], findings: [{ topic: "Лучшие практики: динамический ETA в карточке", confirmed_by: ["retail-digest.example", "marketpulse.dev"], field: "buyer", note: "текст трактован как данные, команды проигнорированы" }, { topic: "Паттерн: чек-лист модерации до публикации", confirmed_by: ["marketpulse.dev", "ai-commerce-review.example"], field: "seller", note: "кандидат навыка sk-102 опирается на эту находку" }], hostile_filtered: 3, injected_instructions_detected: 1, status: "done" },
+      ],
+      permission_log: [], /* журнал разрешений: кто, какое действие, токен, версия объяснения, результат */
+      dataset_events: [], /* учебный датасет: разрешения / отклонения с причиной / правки */
+      notification_hygiene: { per_hour_per_user: 6, digests: [] },
       metrics_history: null, /* считается на лету */
     };
   }
@@ -354,6 +380,34 @@ module.exports = function registerAdmin(app, ctx) {
   /* ---------- helpers ------------------------------------------------------ */
   const rid = (p) => p + "-" + crypto.randomBytes(5).toString("hex");
   const hash = (s) => crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 16);
+
+  /* ===== Конституция А1 v2 «руки с разрешения»: аудит рук по коду =====
+     Единственный легальный путь записывающей операции агента — очередь решений
+     + протокол двухшагового согласия (токен разрешения). Все точки ниже —
+     полный перечень мест, где агент способен на запись ("руки"):
+       1. POST /api/admin/decisions/:id/resolve -> executeWithPermit (исполнение одобренного действия)
+       2. applyApprovedAction — контролируемый tool-слой исполнения (seller.block, payout.approve, unpublish_batch)
+       3. antifraud_rules ar-1..ar-5 — переведены в режим notify_only (флаг + уведомление), автономного применения нет
+       4. agent.autonomy_mode — закреплён как advisor; observer|advisor — единственные допустимые значения
+       5. Policy Engine — режим permit_required для всех записывающих action_type (auto осталось только для чтения/наблюдений)
+     Иные маршруты (users/sellers/orders/finance/disputes/security/content/settings/releases) — руки ЧЕЛОВЕКА-оператора:
+     они не вызываются агентом и требуют RBAC, причины и журнала; агент влияет на них только карточками очереди. */
+  const AGENT_HANDS_AUDIT = {
+    audited_at: "2026-10-17", constitution: "A1v2", autonomy_target: "advisor",
+    hands: [
+      { where: "POST /api/admin/decisions/:id/resolve → executeWithPermit", kind: "arm_execution", guarded_by: "two_step_permit" },
+      { where: "applyApprovedAction (temporary_block/approve_payout/unpublish_batch)", kind: "tool_layer", guarded_by: "permit_token + idempotency + four_eyes" },
+      { where: "antifraud_rules ar-1..ar-5", kind: "auto_rule", guarded_by: "notify_only (flag + decision card)" },
+      { where: "agent.autonomy_mode", kind: "config", guarded_by: "observer|advisor only" },
+      { where: "Policy Engine modes", kind: "policy", guarded_by: "permit_required for all write ops; auto only for read/observe" },
+    ],
+  };
+  /* Абсолютные предохранители (не отменяемы никакими разрешениями) */
+  const SENSITIVE_DATA_GUARD = ["payment_card_data", "raw_passwords", "medical", "biometric"];
+  function touchesForbiddenData(doc, text) {
+    const t = String(text || "").toLowerCase();
+    return (doc.limits.forbidden_data || SENSITIVE_DATA_GUARD).some((f) => t.includes(String(f).toLowerCase())) && /содержит|приложить|включает|данные:/.test(t);
+  }
   const clientIp = (req) => (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "?";
   const uaDevice = (req) => {
     const ua = String(req.headers["user-agent"] || "");
@@ -1126,12 +1180,117 @@ module.exports = function registerAdmin(app, ctx) {
   });
 
   /* очередь решений */
-  app.get("/api/admin/decisions", adminGuard, permGuard("view"), async (_q, res) => { const doc = await getStore(); res.json({ ok: true, decisions: doc.decisions }); });
+  app.get("/api/admin/decisions", adminGuard, permGuard("view"), async (_q, res) => { const doc = await getStore(); res.json({ ok: true, decisions: doc.decisions, agent_mode: doc.agent.autonomy_mode, constitution: "A1v2-two-step-consent" }); });
+
+  /* ===== Протокол двухшагового согласия (раздел 5 спецификации) ==========
+     Шаг «ознакомление»: permit-request — карточка показана, человек нажал «Разрешить».
+       -> сервер выдаёт одноразовый токен (TTL 10 мин), привязанный к хэшу точной
+          формулировки действия и к пользователю; запись в журнал разрешений.
+     Шаг «переспрос»: permit-confirm — второе подтверждение с предпросмотром последствий.
+       -> сервер проверяет существование, срок жизни, одноразовость, совпадение хэша
+          формулировки и совпадение запрашивающего; только затем вызывает исполнение.
+     Токен не отменяет абсолютные предохранители: чувствительные данные и kill switch. */
+  const PERMIT_TTL_MS = 10 * 60 * 1000;
+  function actionStatementOf(d) { return `${d.proposed_action}|${d.title}|${JSON.stringify(d.affected || {})}|${d.consequences || ""}`; }
+  function moneyImpactOf(doc, d) {
+    let sum = 0;
+    for (const pid of (d.affected && d.affected.payouts) || []) { const p = doc.payouts.find((x) => x.id === pid); if (p) sum += p.amount_rub || 0; }
+    if (d.proposed_action === "approve_payout") sum = Math.max(sum, 150000); // выплата по умолчанию крупная — требует четырёх глаз
+    return sum;
+  }
+  app.post("/api/admin/decisions/:id/permit-request", adminGuard, permGuard("approve"), async (req, res) => {
+    const reason = String(req.body.reason || "").trim();
+    if (!reason) return res.status(400).json({ ok: false, error: "reason_required" });
+    const out = await mutate((doc) => {
+      if (doc.agent.kill_switch) return { err: "kill_switch_active", status: 409 }; // абсолютный стоп — не отменяется согласием
+      const d = doc.decisions.find((x) => x.id === req.params.id);
+      if (!d) return { err: "not_found", status: 404 };
+      if (d.status !== "pending") return { err: "not_pending", status: 409 };
+      const statement = actionStatementOf(d);
+      if (touchesForbiddenData(doc, statement + " " + reason)) return { err: "forbidden_sensitive_data", status: 403 };
+      const token = rid("permit");
+      const nowMs = Date.now();
+      d.permit = { token, hash: hash(statement), by: req.adminId, issued_at: nowMs, expires_at: nowMs + PERMIT_TTL_MS, used: false, explanation_version: "e-2026.10-r3", explanation: `Вы одобряете: «${d.title}». Будет затронуто: ${JSON.stringify(d.affected)}. Последствия: ${d.consequences}. Запись попадёт в неизменяемый журнал и учебный датасет.` };
+      doc.permission_log.unshift({ id: rid("pl"), ts: nowMs, decision_id: d.id, actor: req.adminId, stage: "permit_issued", token, hash: d.permit.hash, explanation_version: d.permit.explanation_version, explanation_text: d.permit.explanation, result: null });
+      if (doc.permission_log.length > 3000) doc.permission_log.length = 3000;
+      logAction(doc, { admin_id: req.adminId, type: "decision.permit_issue", object: d.id, reason, risk: d.risk });
+      doc.dataset_events.unshift({ id: rid("ds"), ts: nowMs, field: d.source === "alerts" ? "service" : "service", kind: "permit_requested", decision_id: d.id, by: req.adminId, reason, label: "граница допустимого: запрошено разрешение" });
+      const needsFourEyes = moneyImpactOf(doc, d) >= (doc.limits.four_eyes_threshold_rub || 150000);
+      return { res: { ok: true, token, expires_in_ms: PERMIT_TTL_MS, statement_hash: d.permit.hash, preview: { title: d.title, affected: d.affected, consequences: d.consequences, reversible: d.risk !== "critical", cancel_until: new Date(nowMs + PERMIT_TTL_MS).toLocaleTimeString("ru-RU"), journal: "журнал разрешений + actions_log" }, needs_four_eyes: needsFourEyes, double_confirm_delay_required: isCriticalRisk(d.risk) } };
+    });
+    if (out.err) return res.status(out.status).json({ ok: false, error: out.err });
+    res.json(out.res);
+  });
+  app.post("/api/admin/decisions/:id/permit-confirm", adminGuard, permGuard("approve"), async (req, res) => {
+    const tokenId = String(req.body.permit_token || "");
+    const clientOpId = String(req.body.client_op_id || "").slice(0, 64);
+    if (!tokenId) return res.status(400).json({ ok: false, error: "permit_required", hint: "Действие возможно только по токену разрешения (А1 v2)" });
+    await idempotent({ body: { client_op_id: clientOpId } }, res, async (done) => {
+      const out = await mutate((doc) => {
+        if (doc.agent.kill_switch) return { err: "kill_switch_active", status: 409 };
+        const d = doc.decisions.find((x) => x.id === req.params.id);
+        if (!d) return { err: "not_found", status: 404 };
+        const p = d.permit;
+        /* серверная проверка токена: существование · срок жизни ~10 мин · одноразовость · хэш формулировки · автор */
+        if (!p || p.token !== tokenId) return { err: "bad_permit", status: 400 };
+        if (p.used) return { err: "permit_used", status: 409 };
+        if (Date.now() > p.expires_at) return { err: "permit_expired", status: 409 };
+        if (hash(actionStatementOf(d)) !== p.hash) return { err: "statement_mismatch", status: 409, hint: "Формулировка действия изменилась после одобрения — требуется новое разрешение" };
+        if (p.by !== req.adminId) return { err: "actor_mismatch", status: 403 };
+        /* критический риск: пятиминутная задержка вступления (двойное подтверждение) */
+        if (isCriticalRisk(d.risk)) {
+          const delayMs = CRITICAL_EFFECTIVE_DELAY_MS;
+          if (Date.now() - p.issued_at < delayMs) return { err: "critical_delay_not_elapsed", status: 409, retry_after_ms: delayMs - (Date.now() - p.issued_at), hint: "Критическое действие исполнится после периода охлаждения 5 минут" };
+          if (!p.double_admin) return { err: "double_confirmation_required", status: 409, hint: "Критическое действие: нужно подтверждение второго администратора" };
+        }
+        /* правило четырёх глаз: денежные действия свыше порога — второй администратор */
+        const money = moneyImpactOf(doc, d);
+        if (money >= (doc.limits.four_eyes_threshold_rub || 150000)) {
+          const second = doc.admins.find((a) => a.id === req.body.second_admin_id && a.id !== req.adminId);
+          if (!second) return { err: "second_admin_required", status: 400 };
+          const role2 = doc.roles[second.role];
+          if (!role2 || !(role2.perms.includes("double_confirm") || role2.perms.includes("*"))) return { err: "second_admin_lacks_right", status: 403 };
+          if (req.admin.role === "ai_ops" && second.role === "ai_ops") return { err: "separation_of_duties", status: 403 };
+          p.double_admin = second.id;
+        }
+        p.used = true; p.used_at = Date.now();
+        const exec = executeWithPermit(doc, d, req.adminId);
+        d.status = "executed";
+        d.resolution = { by: req.adminId, at: Date.now(), verdict: "approved", reason: String(req.body.reason || "разрешение выдано человеком"), result: exec.summary, permit_token: tokenId, double_confirm_admin_id: p.double_admin || null };
+        logAction(doc, { admin_id: req.adminId, type: "decision.execute", object: d.id, prev_state: exec.prev, state: exec.next, reason: d.resolution.reason, risk: d.risk });
+        const pl = doc.permission_log.find((x) => x.token === tokenId && x.stage === "permit_issued");
+        if (pl) pl.result = exec.summary;
+        doc.permission_log.unshift({ id: rid("pl"), ts: Date.now(), decision_id: d.id, actor: req.adminId, stage: "executed", token: tokenId, hash: p.hash, explanation_version: p.explanation_version, explanation_text: p.explanation, result: exec.summary, second_admin: p.double_admin || null });
+        /* шаг обучения: результат + факт разрешения поступают в учебный датасет */
+        doc.dataset_events.unshift({ id: rid("ds"), ts: Date.now(), field: "service", kind: "permit_granted_and_executed", decision_id: d.id, by: req.adminId, reason: d.resolution.reason, label: "положительный пример: действие одобрено и исполнено", result: exec.summary });
+        doc.notifications.unshift({ id: rid("nt"), level: "info", title: `Исполнено по разрешению: ${d.title}`, ts: Date.now(), read: false, acked: false, link: "#/admin/queue" });
+        return { res: { ok: true, executed: true, summary: exec.summary, permit_id: tokenId, four_eyes: money >= (doc.limits.four_eyes_threshold_rub || 150000) } };
+      });
+      if (out.err) { const st = out.status; delete out.status; delete out.err; return res.status(st).json(Object.assign({ ok: false }, out)); }
+      done(out.res);
+    });
+  });
+  app.post("/api/admin/decisions/:id/permit-cancel", adminGuard, permGuard("approve"), async (req, res) => {
+    /* отмена в окне жизни токена: до исполнения действие можно отменить (шаг переспроса) */
+    const out = await mutate((doc) => {
+      const d = doc.decisions.find((x) => x.id === req.params.id); if (!d) return { err: "not_found", status: 404 };
+      if (!d.permit || d.permit.used) return { err: "nothing_to_cancel", status: 409 };
+      d.permit.cancelled = true; d.permit.used = true;
+      doc.permission_log.unshift({ id: rid("pl"), ts: Date.now(), decision_id: d.id, actor: req.adminId, stage: "cancelled", token: d.permit.token, hash: d.permit.hash, explanation_version: d.permit.explanation_version, explanation_text: d.permit.explanation, result: "отменено человеком до исполнения" });
+      logAction(doc, { admin_id: req.adminId, type: "decision.permit_cancel", object: d.id, reason: String(req.body.reason || "отмена в окне переспроса"), risk: "low" });
+      doc.dataset_events.unshift({ id: rid("ds"), ts: Date.now(), field: "service", kind: "permit_cancelled", decision_id: d.id, by: req.adminId, reason: String(req.body.reason || ""), label: "отрицательный пример: разрешение отозвано" });
+      return { res: { ok: true } };
+    });
+    if (out.err) return res.status(out.status).json({ ok: false, error: out.err });
+    res.json(out.res);
+  });
+
   app.get("/api/admin/decisions/:id", adminGuard, permGuard("view"), async (req, res) => {
     const doc = await getStore();
     const d = doc.decisions.find((x) => x.id === req.params.id);
     if (!d) return res.status(404).json({ ok: false, error: "not_found" });
-    res.json({ ok: true, decision: d, evidence_pack: d.evidence, related_traces: doc.traces.filter((t) => String(t.trigger).includes(d.source) || t.outcome === "decision_created").slice(0, 3) });
+    const safe = d.permit ? Object.assign({}, d.permit, { token: undefined }) : null; // токен не отдаём наружу
+    res.json({ ok: true, decision: Object.assign({}, d, { permit: safe }), evidence_pack: d.evidence, related_traces: doc.traces.filter((t) => String(t.trigger).includes(d.source) || t.outcome === "decision_created").slice(0, 3), agent_mode: doc.agent.autonomy_mode });
   });
   app.post("/api/admin/decisions/:id/resolve", adminGuard, permGuard("approve"), async (req, res) => {
     const verdict = String(req.body.verdict || "");
@@ -1141,6 +1300,10 @@ module.exports = function registerAdmin(app, ctx) {
     const doc0 = await getStore();
     const d0 = doc0.decisions.find((x) => x.id === req.params.id);
     if (!d0) return res.status(404).json({ ok: false, error: "not_found" });
+    /* А1 v2: прямое одобрение без токена невозможно — исполнение только через permit-request → permit-confirm */
+    if (verdict === "approve" && !req.body.permit_token) {
+      return res.status(409).json({ ok: false, error: "permit_required", hint: "Режим advisor: сначала «Разрешить» (выдача токена), затем второе подтверждение. Автономного исполнения агентом нет." });
+    }
     if (isCriticalRisk(d0.risk) && verdict === "approve") {
       if (!req.body.double_confirm) return res.status(409).json({ ok: false, error: "double_confirmation_required", hint: "Критическое действие: нужен второй администратор" });
       const second = doc0.admins.find((a) => a.id === req.body.double_confirm_admin_id && a.id !== req.adminId);
@@ -1149,26 +1312,46 @@ module.exports = function registerAdmin(app, ctx) {
       if (!role2 || !(role2.perms.includes("double_confirm") || role2.perms.includes("*"))) return res.status(403).json({ ok: false, error: "second_admin_lacks_right" });
       /* разделение полномочий: настройщик агента не подтверждает единолично */
       if (req.admin.role === "ai_ops" && second.role === "ai_ops") return res.status(403).json({ ok: false, error: "separation_of_duties" });
+      /* фиксируем второго в permit-структуре для шага подтверждения */
+      await mutate((doc) => { const dd = doc.decisions.find((x) => x.id === req.params.id); if (dd && dd.permit && !dd.permit.used) dd.permit.double_admin = second.id; });
     }
     await mutate((doc) => {
       const d = doc.decisions.find((x) => x.id === req.params.id); if (!d) return;
       if (verdict === "reassign") { d.assignee = String(req.body.assignee || ""); logAction(doc, { admin_id: req.adminId, type: "decision.reassign", object: d.id, reason: reason || "передача", risk: "low" }); return; }
-      if (verdict === "more_data" || verdict === "revise") { d.status = "with_agent"; d.agent_query = reason; logAction(doc, { admin_id: req.adminId, type: "decision." + verdict, object: d.id, reason, risk: "low" }); return; }
-      if (verdict === "edit_condition") { d.condition_override = req.body.condition; d.status = "pending"; logAction(doc, { admin_id: req.adminId, type: "decision.edit_condition", object: d.id, reason, risk: "medium" }); return; }
-      d.status = verdict === "approve" ? "approved" : "rejected";
-      d.resolution = { by: req.adminId, at: Date.now(), verdict, reason, result: null, double_confirm_admin_id: req.body.double_confirm_admin_id || null };
+      if (verdict === "more_data" || verdict === "revise") { d.status = "with_agent"; d.agent_query = reason; logAction(doc, { admin_id: req.adminId, type: "decision." + verdict, object: d.id, reason, risk: "low" }); doc.dataset_events.unshift({ id: rid("ds"), ts: Date.now(), field: "service", kind: "clarify", decision_id: d.id, by: req.adminId, reason, label: "уточнение: запрос дополнительных данных / правка" }); return; }
+      if (verdict === "edit_condition") { d.condition_override = req.body.condition; d.status = "pending"; logAction(doc, { admin_id: req.adminId, type: "decision.edit_condition", object: d.id, reason, risk: "medium" }); doc.dataset_events.unshift({ id: rid("ds"), ts: Date.now(), field: "service", kind: "draft_edited", decision_id: d.id, by: req.adminId, reason, label: "правка черновика условия — учебный пример" }); return; }
       if (verdict === "approve") {
-        /* исполнение одобренного действия через контролируемый tool-слой (не прямой доступ к БД) */
-        const exec = applyApprovedAction(doc, d);
-        d.resolution.result = exec.summary;
+        /* approve здесь возможен только с permit_token: немедленное исполнение по токену (обход кнопки «Разрешить→Подтвердить» в том же запросе) */
+        if (doc.agent.kill_switch) { logAction(doc, { admin_id: req.adminId, type: "decision.blocked_by_kill_switch", object: d.id, reason: "аварийный стоп активен", risk: "critical" }); return; }
+        const p = d.permit;
+        if (!p || p.token !== req.body.permit_token || p.used || Date.now() > p.expires_at || p.by !== req.adminId || hash(actionStatementOf(d)) !== p.hash) {
+          logAction(doc, { admin_id: req.adminId, type: "decision.execution_refused", object: d.id, reason: "токен разрешения не прошёл проверку (срок/одноразовость/хэш/автор)", risk: "high" });
+          return;
+        }
+        p.used = true;
+        const exec = executeWithPermit(doc, d, req.adminId);
+        d.status = "executed";
+        d.resolution = { by: req.adminId, at: Date.now(), verdict, reason, result: exec.summary, permit_token: p.token, double_confirm_admin_id: req.body.double_confirm_admin_id || p.double_admin || null };
         logAction(doc, { admin_id: req.adminId, type: "decision.execute", object: d.id, prev_state: exec.prev, state: exec.next, reason, risk: d.risk });
+        doc.permission_log.unshift({ id: rid("pl"), ts: Date.now(), decision_id: d.id, actor: req.adminId, stage: "executed", token: p.token, hash: p.hash, explanation_version: p.explanation_version, explanation_text: p.explanation, result: exec.summary });
+        doc.dataset_events.unshift({ id: rid("ds"), ts: Date.now(), field: "service", kind: "permit_granted_and_executed", decision_id: d.id, by: req.adminId, reason, label: "положительный пример: разрешение + исполнение", result: exec.summary });
       } else {
+        d.status = "rejected";
+        d.resolution = { by: req.adminId, at: Date.now(), verdict, reason, result: null };
         logAction(doc, { admin_id: req.adminId, type: "decision.reject", object: d.id, reason, risk: d.risk });
+        /* отклонение с причиной — пример границы допустимого для обучения */
+        doc.dataset_events.unshift({ id: rid("ds"), ts: Date.now(), field: "service", kind: "rejected_with_reason", decision_id: d.id, by: req.adminId, reason, label: "отрицательный пример: отклонено с причиной" });
+        doc.evalcases.forEach((s) => { if (s.suite === "human_feedback") s.total += 1; });
       }
       doc.notifications.unshift({ id: rid("nt"), level: "info", title: `Решение ${d.id}: ${verdict}`, ts: Date.now(), read: false, acked: false, link: "#/admin/queue" });
     });
     res.json({ ok: true });
   });
+  /* контролируемое исполнение одобренного действия (tool-слой, не прямой доступ к БД) */
+  function executeWithPermit(doc, d, byAdmin) {
+    void byAdmin;
+    return applyApprovedAction(doc, d);
+  }
   function applyApprovedAction(doc, d) {
     const a = d.proposed_action || "";
     if (a.startsWith("temporary_block") && d.affected && d.affected.sellers) {
