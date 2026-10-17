@@ -2,7 +2,7 @@
    CABINET ADMIN — маршрутизация закрытой зоны.
    Публичный сайт не ссылается на эти пути и не индексирует их.
    ============================================================ */
-import { useParams } from "react-router-dom";
+import { useParams, Navigate } from "react-router-dom";
 import CabinetLayout, { EmptyState } from "./layout";
 import {
   HomeScreen, AgentScreen, SourcesScreen, ObservationsScreen, QueueScreen, PoliciesScreen,
@@ -13,6 +13,7 @@ import {
 } from "./screens";
 
 const ROUTES: Record<string, () => any> = {
+  decisions: () => <Navigate to="/admin/queue" replace />,
   "": HomeScreen,
   agent: AgentScreen,
   sources: SourcesScreen,
