@@ -27,7 +27,7 @@ const patch = (p: string, body?: any) => req(p, { method: "PATCH", body: JSON.st
 export const opKey = () => "op-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 
 export const adminApi = {
-  loginStart: (email: string) => post("/login/start", { email }),
+  loginStart: (email: string, password?: string) => post("/login/start", { email, password: password || "" }),
   loginVerify: (email: string, code: string) => post("/login/verify", { email, code }),
   me: () => req("/me"),
   logout: () => post("/logout"),

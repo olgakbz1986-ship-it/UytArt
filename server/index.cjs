@@ -11,7 +11,11 @@ const path = require("path");
 const nodemailer = require("nodemailer");
 
 const PORT = process.env.PORT || 8787;
-const JWT_SECRET = process.env.JWT_SECRET || "dev-" + crypto.randomBytes(16).toString("hex");
+/* ВАЖНО: секрет должен быть стабильным между перезапусками сервера.
+   Раньше он генерировался случайно при каждом старте — все выданные сессии
+   (включая админскую cookie) становились невалидны после рестарта: вход в
+   кабинет «слетал», и /admin тут же выбрасывало обратно на /auth. */
+const JWT_SECRET = process.env.JWT_SECRET || "qf-dev-secret-stable-2026";
 const API_URL = process.env.API_URL || "http://localhost:8787";
 const COOKIE = "qf_session";
 const MAIL_FROM = process.env.MAIL_FROM || "Quantiform <no-reply@starttechpro.ru>";
