@@ -1,0 +1,506 @@
+@import "tailwindcss";
+
+@theme {
+  /* ---- палитра Quantiform ---- */
+  --color-cream: #f6f3eb;
+  --color-surface: #ffffff;
+  --color-ink: #2c2c2c;
+  --color-ink-soft: #6b6b66;
+  --color-ink-mute: #9a9a94;
+  --color-line: #d9d4c7;
+  --color-line-soft: #eae4d4;
+
+  --color-dark: #1e3a2f;
+  --color-dark-deep: #244534;
+
+  --color-accent: #d98e32;
+  --color-accent-deep: #c77e28;
+  --color-accent-soft: #f9ebd2;
+
+  --color-ai: #2d5f4c;
+  --color-ai-soft: #eaf2ee;
+
+  --color-success: #7cb342;
+  --color-success-soft: #eff6e3;
+  --color-error: #e53935;
+  --color-error-soft: #fbe9e8;
+
+  --color-premium: #d4a574;
+  --color-premium-soft: #f3e7d8;
+
+  /* ---- семантические токены (AI-дизайнер и статусы) ---- */
+  --color-honey: #f9ebd2;
+  --color-pale: #eef3ef;
+  --color-warning: #b98a2f;
+
+  /* ---- шрифты ---- */
+  /* ---- брейкпоинты (ТЗ 2.1): xs..3xl ---- */
+  --breakpoint-xs: 360px;
+  --breakpoint-3xl: 1920px;
+
+  --font-display: "Unbounded", "Manrope", sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-quote: "Cormorant Garamond", Georgia, serif;
+
+  /* ---- тени (блоки разделяются тенью, не линиями) ---- */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 24px -18px rgba(0, 0, 0, 0.06);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.1), 0 18px 38px -16px rgba(0, 0, 0, 0.1);
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: clip;
+  /* iOS Safari (17+) не поддерживает padding с env() на <html> — используем safe-area insets */
+  padding-top: env(safe-area-inset-top, 0px);
+  /* подстройка размера шрифта: запрещаем автоувеличение текста в ландшафте iOS/Android */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: clip;
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  /* растягиваем фон под «чёлку» и нижнюю панель iOS без изменения макета */
+  margin: 0;
+  min-height: 100%;
+}
+footer {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+/* sticky-шапка: не залезает под вырез/статус-бар на iPhone и Android */
+@supports (top: env(safe-area-inset-top)) {
+  header.sticky { top: max(0px, calc(env(safe-area-inset-top) * 0)); }
+}
+
+/* нижние плавающие панели (toast AI-дизайнера и т.п.) поднимаем над home-indicator iOS */
+.floating-bottom {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* touch-friendly: все кликабельные элементы — не меньше 44×44 px на устройствах с касанием */
+@media (pointer: coarse) {
+  button:not(.burger):not([class*="w-7"]):not([class*="w-8"]):not([class*="h-7"]):not([class*="h-8"]),
+  a.btn-touch {
+    min-height: 44px;
+  }
+  /* shoppable-маркеры AI-дизайнера: визуально 28px, область нажатия расширена до 44px (ТЗ 8.5) */
+  .ai-marker::before {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    border-radius: 9999px;
+  }
+  input.field, select.field, textarea.field {
+    font-size: 16px; /* предотвращает автозум клавиатуры в iOS Safari */
+  }
+  /* нативные input/textarea/select без класса .field — тоже 16px (ТЗ 2.4) */
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: max(16px, inherit);
+  }
+}
+
+/* проблема 100vh в iOS Safari (ТЗ 4.4): десктопные значения остаются нетронутыми */
+@supports (height: 100dvh) {
+  @media (max-width: 767px) {
+    .min-h-screen { min-height: 100dvh; }
+    .h-screen { height: 100dvh; }
+  }
+}
+@supports not (height: 100dvh) {
+  @media (max-width: 767px) {
+    .min-h-screen { min-height: -webkit-fill-available; }
+  }
+}
+
+/* отключаем hover-«приподнимание» карточек на тач-устройствах (иначе «залипает») */
+@media (hover: none) {
+  .shadow-card:hover { transform: none; box-shadow: 0 1px 2px rgba(24,38,30,.05), 0 10px 30px -6px rgba(24,38,30,.12), 0 30px 60px -18px rgba(24,38,30,.16); }
+  .group:hover .house-mark { transform: none; }
+  .group:hover .logo-q { transform: none; }
+}
+
+/* Windows High Contrast / принудительный контраст */
+@media (forced-colors: active) {
+  .bg-accent, .bg-dark, .bg-surface { border: 1px solid CanvasText; }
+}
+
+/* тонкая фактура бумаги — чистый CSS, без data-URI */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(30, 58, 47, 0.4) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(217, 142, 50, 0.3) 0 1px, transparent 1px 9px);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-dark);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-line-soft); }
+::-webkit-scrollbar-thumb { background: #d9d4c7; border-radius: 8px; border: 2px solid var(--color-line-soft); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ai); }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ---- фокус: изумрудное кольцо, без чёрных outline ---- */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--color-ai);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer base {
+  .bg-surface { box-shadow: var(--shadow-card); }
+}
+
+/* премиальный сериф для hero-слогана */
+.font-lux {
+  font-family: var(--font-quote);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.font-quote {
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* ---------- логотип: прорисовка контура ---------- */
+.house-mark { transition: transform 0.25s ease-out; }
+.group:hover .house-mark { transform: translateY(-1.5px); }
+.house-mark path {
+  stroke-dasharray: 90;
+  stroke-dashoffset: 90;
+  animation: drawMark 0.8s ease-out forwards;
+}
+.house-mark path:nth-child(2) { animation-delay: 0.25s; }
+.house-mark path:nth-child(3) { animation-delay: 0.45s; }
+@keyframes drawMark { to { stroke-dashoffset: 0; } }
+
+/* ---------- анимации 200–300ms ease-out ---------- */
+@keyframes kb {
+  0% { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.12) translate(-1.4%, -1.6%); }
+}
+.kb { animation: kb 22s ease-in-out infinite alternate; will-change: transform; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track { animation: marquee 34s linear infinite; }
+.marquee-track:hover { animation-play-state: paused; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.3s ease-out both; }
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.96) translateY(8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.pop-in { animation: popIn 0.25s ease-out both; }
+
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float-y { animation: floatY 5s ease-in-out infinite; }
+
+@keyframes skPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.skeleton { background: #ebe6d9; border-radius: 10px; animation: skPulse 1.2s ease-in-out infinite; }
+
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+.reveal.in { opacity: 1; transform: translateY(0); }
+
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+.typing-dot { animation: typingDot 1.2s infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* ---------- AI-анимация карточки товара (Ken Burns + кроссфейд) ---------- */
+@keyframes kenBurnsFrame {
+  0% { transform: scale(1) translate(0, 0); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { transform: scale(1.1) translate(-8px, -6px); opacity: 0; }
+}
+
+@keyframes kenBurnsCaption {
+  0%, 100% { opacity: 0; transform: translateY(8px); }
+  15%, 85% { opacity: 1; transform: translateY(0); }
+}
+
+.ai-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  animation: kenBurnsFrame 8s ease-in-out infinite;
+}
+
+.ai-caption {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 8px 12px;
+  background: rgba(30, 58, 47, 0.85);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  animation: kenBurnsCaption 8s ease-in-out infinite;
+}
+
+/* ---------- гамбургер: линии 2px×20px, крестик с поворотом ---------- */
+.burger {
+  width: 44px; height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative; cursor: pointer; border-radius: 10px;
+}
+.burger:hover { background: var(--color-line-soft); }
+.burger-box { position: relative; width: 24px; height: 24px; }
+.burger-line {
+  position: absolute; left: 2px; width: 20px; height: 2px;
+  border-radius: 2px; background: var(--color-dark);
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+}
+.burger-line:nth-child(1) { top: 6px; }
+.burger-line:nth-child(2) { top: 11px; }
+.burger-line:nth-child(3) { top: 16px; }
+.burger.is-open .burger-line:nth-child(1) { opacity: 0; transform: translateY(-3px); transition-delay: 0ms; }
+.burger.is-open .burger-line:nth-child(2) { opacity: 0; transition-delay: 60ms; }
+.burger.is-open .burger-line:nth-child(3) { opacity: 0; transform: translateY(3px); transition-delay: 120ms; }
+.burger-cross {
+  position: absolute; inset: 0;
+  transition: opacity 0.2s ease-out, transform 0.25s ease-out;
+  opacity: 0; pointer-events: none;
+}
+.burger.is-open .burger-cross { opacity: 1; }
+.burger.is-closing .burger-cross { transform: rotate(-90deg); }
+.burger-cross::before, .burger-cross::after {
+  content: ""; position: absolute; left: 3px; top: 11px;
+  width: 18px; height: 2px; border-radius: 2px; background: var(--color-dark);
+}
+.burger-cross::before { transform: rotate(45deg); }
+.burger-cross::after { transform: rotate(-45deg); }
+
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.drawer-in { animation: drawerIn 0.3s ease-out both; }
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.backdrop-in { animation: backdropIn 0.3s ease-out both; }
+
+/* ---------- формы ---------- */
+.field {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: 10px;
+  padding: 8px 14px;
+  line-height: 1.5;
+  font-size: 14px;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.2s ease-out;
+}
+.field::placeholder { color: var(--color-ink-mute); }
+.field:focus { border-color: var(--color-ai); }
+.field-error { border-color: var(--color-error) !important; }
+
+/* --- подавление нативной стрелки datalist у полей с автодополнением (подсказки сохраняются) --- */
+.field[list] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none;
+}
+.field[list]::-webkit-calendar-picker-indicator,
+.field[list]::-webkit-datetime-edit-picker-indicator,
+.field[list]::picker-icon {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+input[type="checkbox"], input[type="radio"] {
+  accent-color: var(--color-dark);
+  width: 16px; height: 16px; cursor: pointer;
+}
+
+/* ============================================================
+   ТЁМНАЯ ТЕМА — применяется атрибутом data-theme="dark" на <html>
+   (переключается в настройках кабинетов, хранится в localStorage)
+   ============================================================ */
+[data-theme="dark"] {
+  --color-cream: #141a16;
+  --color-surface: #1c241f;
+  --color-ink: #ece8dd;
+  --color-ink-soft: #b3ac9d;
+  --color-ink-mute: #827c6f;
+  --color-line: #35413a;
+  --color-line-soft: #262f29;
+
+  --color-dark: #1e3a2f;
+  --color-dark-deep: #2c5140;
+
+  --color-accent: #d98e32;
+  --color-accent-deep: #e0a14a;
+  --color-accent-soft: #3a2f1c;
+
+  --color-ai: #4c8a6d;
+  --color-ai-soft: #20302a;
+
+  --color-success: #8fc255;
+  --color-success-soft: #26331e;
+  --color-error: #e5655f;
+  --color-error-soft: #3b2321;
+
+  --color-premium: #d4a574;
+  --color-premium-soft: #37301f;
+
+  --color-honey: #3a2f1c;
+  --color-pale: #20302a;
+  --color-warning: #e0a14a;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 24px -18px rgba(0, 0, 0, 0.55);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 38px -16px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .bg-surface { border: 1px solid #262f29; }
+[data-theme="dark"] .skeleton { background: #262f29; }
+[data-theme="dark"] ::selection { background: #3a2f1c; color: #ece8dd; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #1c241f; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #35413a; border-color: #1c241f; }
+
+/* кремовый текст (в т.ч. с прозрачностью) остаётся светлым на тёмных поверхностях */
+[data-theme="dark"] [class*="text-cream"] { color: #ece8dd !important; }
+/* на янтарных кнопках — тёмный текст для контраста в обеих темах */
+[data-theme="dark"] .bg-accent[class*="text-"] { color: #241809 !important; }
+
+/* линии гамбургера и крестика — светлые на тёмном */
+[data-theme="dark"] .burger-line,
+[data-theme="dark"] .burger-cross::before,
+[data-theme="dark"] .burger-cross::after {
+  background: var(--color-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; }
+  .kb, .marquee-track, .float-y { animation: none; }
+  .house-mark path { animation: none; stroke-dashoffset: 0; }
+}
+
+/* Живые обложки: медленный зум ВНУТРИ рамки (размер плитки не меняется) */
+@keyframes kbZoom {
+  0%   { transform: scale(1) translate(0, 0); }
+  50%  { transform: scale(1.1) translate(-1.5%, 1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+.kb-zoom { animation: kbZoom 18s ease-in-out infinite; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .kb-zoom { animation: none; } }
+/* ========== Фактура: зерно поверх фирменных цветов ========== */
+body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
+  animation: grainDrift 120s linear infinite;
+}
+.bg-dark {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
+}
+@keyframes grainDrift {
+  from { background-position: 0 0; }
+  to { background-position: 240px 240px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body { animation: none; }
+}
+/* ========== Парящие блоки ========== */
+body { background-attachment: fixed; }
+.shadow-card {
+  box-shadow: 0 1px 2px rgba(24,38,30,.05), 0 10px 30px -6px rgba(24,38,30,.12), 0 30px 60px -18px rgba(24,38,30,.16);
+  transition: transform .35s cubic-bezier(.22,.8,.36,1), box-shadow .35s cubic-bezier(.22,.8,.36,1);
+}
+.shadow-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 2px 4px rgba(24,38,30,.06), 0 18px 44px -8px rgba(24,38,30,.16), 0 44px 80px -24px rgba(24,38,30,.22);
+}
+.shadow-lift {
+  box-shadow: 0 2px 4px rgba(24,38,30,.06), 0 18px 44px -8px rgba(24,38,30,.16), 0 44px 80px -24px rgba(24,38,30,.22);
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(30px) scale(.985); filter: blur(5px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shadow-card, .shadow-card:hover { transition: none; transform: none; }
+}
+/* ========== Логотип Q: анимация ========== */
+.logo-q-frame { stroke-dasharray: 162; stroke-dashoffset: 162; animation: qDraw .8s cubic-bezier(.6,.05,.2,1) forwards; }
+.logo-q { transition: transform .4s cubic-bezier(.22,.8,.36,1); }
+.group:hover .logo-q { transform: rotate(-8deg) scale(1.05); }
+.logo-q-ring { stroke-dasharray: 110; stroke-dashoffset: 110; animation: qDraw 1.1s cubic-bezier(.6,.05,.2,1) .5s forwards; }
+.logo-q-tail { stroke-dasharray: 24; stroke-dashoffset: 24; animation: qDraw .45s cubic-bezier(.6,.05,.2,1) 1.5s forwards; }
+@keyframes qDraw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .logo-q-ring, .logo-q-tail, .logo-q-frame { animation: none; stroke-dashoffset: 0; }
+  .group:hover .logo-q { transform: none; }
+}
+/* ========== Фирменный фон: хиро и тёмные блоки ========== */
+.bg-dark {
+  background-image: linear-gradient(rgba(20,40,30,0.8), rgba(20,40,30,0.8)), url("/img/hero-bg.jpg");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+.hero-bg {
+  background-image: linear-gradient(rgba(12,28,20,0.42), rgba(12,28,20,0.62)), url("/img/hero-bg.jpg");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
