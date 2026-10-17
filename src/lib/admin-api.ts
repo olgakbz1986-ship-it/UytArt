@@ -36,6 +36,7 @@ export const adminApi = {
   notifications: () => req("/notifications"),
   notifRead: (id: string) => put(`/notifications/${id}/read`),
   notifAck: (id: string, reason?: string) => put(`/notifications/${id}/ack`, { reason }),
+  notifDelete: (id: string) => req(`/notifications/${id}`, { method: "DELETE" }),
   search: (q: string) => req(`/search?q=${encodeURIComponent(q)}`),
   users: (params: Record<string, string> = {}) => req("/users?" + new URLSearchParams(params).toString()),
   user: (id: string) => req(`/users/${id}`),

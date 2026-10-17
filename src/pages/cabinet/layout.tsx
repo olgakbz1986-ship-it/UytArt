@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Bot, ClipboardCheck, Users, Store, Package, ShoppingCart, Wallet,
   Scale, LifeBuoy, Shield, Megaphone, BarChart3, Rocket, Settings, ScrollText,
   Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, Sparkles, ChevronRight,
-  GraduationCap, Radar,
+  GraduationCap, Radar, Trash2,
 } from "lucide-react";
 import { Btn, Badge, Field, Modal, Switch } from "../../components/ui";
 import { adminApi } from "../../lib/admin-api";
@@ -288,6 +288,7 @@ function NotificationCenter() {
   const unread = items.filter((n) => !n.read).length;
   const critOpen = items.filter((n) => n.level === "critical" && !n.acked).length;
   const ack = async (id: string) => { await adminApi.notifAck(id, "принято к рассмотрению"); await adminApi.notifRead(id); setItems((x) => x.map((n) => n.id === id ? { ...n, read: true, acked: true } : n)); bump(); };
+  const remove = async (id: string) => { await adminApi.notifDelete(id); setItems((x) => x.filter((n) => n.id !== id)); bump(); };
   const TONE: Record<string, string> = { critical: "border-error/40 bg-error/5", important: "border-warning/40 bg-warning/5", info: "border-line bg-surface" };
   return (
     <div className="relative">
@@ -300,13 +301,16 @@ function NotificationCenter() {
           <p className="px-2 py-1.5 text-[11px] uppercase font-bold text-ink-mute">Центр уведомлений</p>
           {!items.length && <p className="p-3 text-[12.5px] text-ink-mute">Новых событий нет.</p>}
           {items.map((n) => (
-            <div key={n.id} className={cn("border rounded-lg p-2.5 mb-1.5", TONE[n.level] || TONE.info)}>
+            <div key={n.id} className={cn("border rounded-lg p-2.5 mb-1.5 group", TONE[n.level] || TONE.info)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <Badge tone={n.level === "critical" ? "error" : n.level === "important" ? "warning" : "neutral"}>{n.level === "critical" ? "критично" : n.level === "important" ? "важно" : "инфо"}</Badge>
                   <p className="text-[12.5px] font-semibold text-ink mt-1">{n.title}</p>
                 </div>
+                <div className="flex items-center gap-2">
                 <a href={n.link} onClick={() => adminApi.notifRead(n.id)} className="text-[11px] font-bold text-accent-deep shrink-0">открыть</a>
+                <button onClick={(e) => { e.stopPropagation(); if (confirm("Удалить это уведомление?")) remove(n.id); }} className="opacity-0 group-hover:opacity-100 text-ink-mute hover:text-error cursor-pointer shrink-0" aria-label="Удалить уведомление"><Trash2 size={14} /></button>
+              </div>
               </div>
               {n.level === "critical" && !n.acked && (
                 <button onClick={() => ack(n.id)} className="mt-1.5 text-[11px] font-bold text-error hover:underline cursor-pointer">Принято к рассмотрению</button>

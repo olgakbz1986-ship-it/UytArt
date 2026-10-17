@@ -726,7 +726,21 @@ module.exports = function registerAdmin(app, ctx) {
   function maskEmail(e) { const [l, d] = String(e || "").split("@"); return (l ? l.slice(0, 2) + "***" : "") + (d ? "@" + d : ""); }
   function maskPhone(p) { const s = String(p || ""); return s.length > 6 ? s.slice(0, 4) + " *** **" + s.slice(-2) : ""; }
 
-  app.get("/api/admin/users", adminGuard, permGuard("view"), async (req, res) => {
+  
+
+  /* Удаление уведомления (скрытие из списка) */
+  app.delete("/api/admin/notifications/:id", adminGuard, async (req, res) => {
+    await mutate((doc) => {
+      const idx = doc.notifications.findIndex((x) => x.id === req.params.id);
+      if (idx !== -1) {
+        doc.notifications.splice(idx, 1);
+        logAction(doc, { admin_id: req.adminId, type: "notification.delete", object: req.params.id, reason: "удалено пользователем" });
+      }
+    });
+    res.json({ ok: true });
+  });
+
+app.get("/api/admin/users", adminGuard, permGuard("view"), async (req, res) => {
     const doc = await getStore();
     const snap = await usersSnapshot(doc);
     let users = snap.users;
