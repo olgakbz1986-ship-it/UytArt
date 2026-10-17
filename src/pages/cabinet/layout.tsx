@@ -11,6 +11,7 @@ import {
   LayoutDashboard, Bot, ClipboardCheck, Users, Store, Package, ShoppingCart, Wallet,
   Scale, LifeBuoy, Shield, Megaphone, BarChart3, Rocket, Settings, ScrollText,
   Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, Sparkles, ChevronRight,
+  GraduationCap, Radar,
 } from "lucide-react";
 import { Btn, Badge, Field, Modal, Switch } from "../../components/ui";
 import { adminApi } from "../../lib/admin-api";
