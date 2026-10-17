@@ -657,7 +657,7 @@ export function ReleasePlanScreen() {
                   </dl>
                   <div className="flex flex-wrap gap-2 mt-2 items-center">
                     {can("view") && <>
-                      <select className="field !h-8 !w-auto text-[11.5px]" defaultValue="" onChange={async (e) => { if (!e.target.value) return; const r = await adminApi.hypothesisPatch(it.hyp_id, { status: e.target.value, assignee: e.target.value === "backlog" || e.target.value === "approved" ? profile?.id || null : undefined, reason: "статус изменён из плана релиза: " + e.target.value }); if (r?.ok) { push("Статус гипотезы обновлён (кто/когда/до/после — в журнале)"); reload(); } else push(mapErrLocal(r), "err"); }}>
+                      <select className="field !h-9 !w-auto text-[11.5px]" defaultValue="" onChange={async (e) => { if (!e.target.value) return; const r = await adminApi.hypothesisPatch(it.hyp_id, { status: e.target.value, assignee: e.target.value === "backlog" || e.target.value === "approved" ? profile?.id || null : undefined, reason: "статус изменён из плана релиза: " + e.target.value }); if (r?.ok) { push("Статус гипотезы обновлён (кто/когда/до/после — в журнале)"); reload(); } else push(mapErrLocal(r), "err"); }}>
                         <option value="" disabled>Статус гипотезы…</option>
                         {HYP_STATUSES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>

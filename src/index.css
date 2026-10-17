@@ -329,7 +329,8 @@ body::before {
   border: 1px solid var(--color-line);
   background: var(--color-surface);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 8px 14px;
+  line-height: 1.5;
   font-size: 14px;
   color: var(--color-ink);
   outline: none;
