@@ -18,6 +18,8 @@ const crypto = require("crypto");
    Паттерн: safeParse В САМОМ НАЧАЛЕ обработчика, до бизнес-логики;
    при success=false → 400 + массив ошибок; дальше — только v.data. */
 const vld = require("./validators.cjs");
+/* БЛОК 5, Пункт 5.1: структурированное логирование security-событий */
+const log = require("./logger.cjs");
 
 /* ---------- матрицы (полные копии клиентских, сервер — истина) ---------- */
 const COMMISSION_MATRIX = {
@@ -320,10 +322,26 @@ function mount(app, ctx) {
     const r = schema.safeParse(payload ?? {});
     if (!r.success) {
       const errors = (r.error?.issues || []).map((e) => ({ path: (e.path || []).join("."), message: e.message, code: e.code || "invalid" }));
+      /* §5.1 security-событие: Zod отклонил запрос (в лог — только пути и коды, без значений) */
+      log.security("validation_error", { route: res.req.originalUrl, ip: res.req.ip, errors });
       res.status(400).json({ error: "validation", message: "Данные не прошли проверку", errors });
       return null;
     }
     return r.data;
+  }
+
+  /* §5.1 Подозрительные паттерны: аномально частая смена тарифа одним
+     пользователем (например, ≥10 раз за минуту) → warning в структурированный лог. */
+  const tariffChangeWindow = new Map(); /* userId -> Array<ts> */
+  function noteTariffChange(userId) {
+    const now = Date.now(), win = 60_000, THRESHOLD = 10;
+    const arr = (tariffChangeWindow.get(userId) || []).filter((t) => now - t < win);
+    arr.push(now);
+    tariffChangeWindow.set(userId, arr);
+    if (arr.length >= THRESHOLD) {
+      log.security("suspicious_pattern", { pattern: "tariff_change_burst", userId, count: arr.length, windowSec: 60 });
+      tariffChangeWindow.set(userId, []); /* не спамим повторными предупреждениями */
+    }
   }
 
   /* Пункт 1.1: единый конфиг секретов (process.env), fallback — server/config.cjs */
@@ -672,6 +690,7 @@ function mount(app, ctx) {
          подпись токенов невозможна → 500 misconfigured + предупреждение в лог. */
       if (requireEnv(res, ["JWT_SECRET"])) return;
       const { kind, planId, legalType } = b;
+      noteTariffChange(req.userId); /* §5.1 детектор подозрительной частоты смен */
       if (kind === "seller") {
         if (!["self_employed", "ip", "ooo"].includes(legalType)) return res.status(400).json({ error: "bad_legal_type" });
         const row = COMMISSION_MATRIX[legalType];
@@ -951,7 +970,8 @@ function mount(app, ctx) {
         req.headers["signature"] || req.headers["x-content-sha-256"];
       const okSig = verifyWebhookSignature(raw, sig);
       if (okSig === false) {
-        console.warn("[WEBHOOK] HMAC-подпись не совпала — запрос отклонён (возможная подделка уведомления)");
+        /* §5.1 security-событие: криптографическая ошибка проверки вебхука */
+        log.security("webhook_signature_invalid", { route: "/api/webhooks/yookassa", ip: req.ip, hasSignature: !!sig });
         return res.status(403).json({ error: "bad_signature" });
       }
       /* 3) парсинг и обработка события */
@@ -979,7 +999,7 @@ function mount(app, ctx) {
         req.headers["signature"] || req.headers["x-content-sha-256"];
       const okSig = verifyWebhookSignature(raw, sig);
       if (okSig === false) {
-        console.warn("[WEBHOOK] legacy: HMAC-подпись не совпала — 403");
+        log.security("webhook_signature_invalid", { route: "/api/payments/webhook", ip: req.ip, hasSignature: !!sig });
         return res.status(403).json({ error: "bad_signature" });
       }
       const evt = raw ? JSON.parse(raw) : {};

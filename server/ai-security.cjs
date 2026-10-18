@@ -152,6 +152,8 @@ function makeAiRateLimiter({ windowMs = 60_000, max = 10 } = {}) {
     const now = Date.now();
     const arr = (hits.get(key) || []).filter((t) => now - t < windowMs);
     if (arr.length >= max) {
+      /* §5.1 security-событие: срабатывание rate-limit (JSON-лог) */
+      try { require("./logger.cjs").security("rate_limit_exceeded", { limiter: "ai_user", key, windowMs, max, ip: req.ip }); } catch (_) {}
       res.set("Retry-After", String(Math.ceil((windowMs - (now - arr[0])) / 1000)));
       return res.status(429).json({ ok: false, error: "ai_rate_limited", message: "Слишком много AI-запросов. Повторите через минуту." });
     }
