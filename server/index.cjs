@@ -259,10 +259,22 @@ app.patch("/api/profile", guard, async (req, res) => {
 // ==========================================
 // AGENT API ENDPOINTS (Phase 2 - Tools Integration)
 // ==========================================
-app.post("/api/agent/chat", async (req, res) => {
+/* БЛОК 4: AI-безопасность — санитизация ввода (анти-prompt-injection),
+   маскирование PII перед LLM, изоляция контекста по пользователям,
+   per-user rate limiting на AI-эндпоинты. */
+const aiSec = require("./ai-security.cjs");
+const aiUserLimiter = aiSec.makeAiRateLimiter({ windowMs: 60_000, max: 10 }); /* §4.3: ≤10 AI-запросов в минуту на пользователя */
+/* Хранилище AI-сессий: sessionId -> { userId, messages[] }. История
+   загружается ТОЛЬКО после проверки владельца (§4.3). */
+const aiSessions = new Map();
+
+app.post("/api/agent/chat", aiUserLimiter, async (req, res) => {
   try {
     const { message, role, userRegion, items } = req.body;
-    const rawMsg = String(message || "").toLowerCase();
+    /* §4.1/§4.2: пользовательский ввод санитизируется и очищается от PII
+       ДО любой обработки и ДО формирования сообщений для LLM. */
+    const safeMessage = aiSec.maskPII(aiSec.sanitizeUserInput(message));
+    const rawMsg = safeMessage.toLowerCase();
     
     let reply = "Я ваш помощник. Чем могу помочь?";
     
@@ -298,7 +310,32 @@ app.post("/api/agent/chat", async (req, res) => {
       reply = "Ваша конверсия за неделю выросла на 5%. Рекомендую добавить больше фото в карточку товара.";
     }
     
-    res.json({ ok: true, reply, role });
+    /* §4.3: изоляция AI-контекста — сессия привязана к пользователю;
+       история загружается только после проверки владельца сессии. */
+    const userId = req.cookies[COOKIE] || (String(req.headers.authorization || "").startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+    let owner = null;
+    if (userId) { try { const p = jwt.verify(userId, JWT_SECRET); if (p.scope === "user") owner = p.sub; } catch { /* анонимный диалог без истории */ } }
+    let sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
+    let history = [];
+    if (owner) {
+      if (sessionId && aiSessions.has(sessionId)) {
+        const sess = aiSessions.get(sessionId);
+        try { aiSec.assertSessionOwner(sess, owner); history = sess.messages; }
+        catch { /* чужая сессия — историю НЕ подгружаем (§4.3) */ }
+      } else {
+        sessionId = aiSec.aiSessionId(owner).sessionId;
+        aiSessions.set(sessionId, { userId: owner, messages: [] });
+      }
+      const sess = aiSessions.get(sessionId);
+      sess.messages.push({ role: "user", content: safeMessage }, { role: "assistant", content: reply });
+      if (sess.messages.length > 40) sess.messages.splice(0, sess.messages.length - 40);
+    }
+    /* Каноническая форма запроса к LLM (первым — system-промт, затем
+       проверенная история и санитизированный ввод): используется боевым
+       провайдером при подключении реальных моделей. */
+    void aiSec.buildChatMessages(safeMessage, history);
+
+    res.json({ ok: true, reply, role, sessionId });
   } catch (e) {
     console.error("[AGENT ERROR]", e);
     res.status(500).json({ error: "server" });

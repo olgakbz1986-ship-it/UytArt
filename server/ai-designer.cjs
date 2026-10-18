@@ -18,6 +18,8 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+/* БЛОК 4: защита от prompt-injection, маскирование PII, изоляция контекста */
+const aiSec = require("./ai-security.cjs");
 
 const AI_PROVIDER = process.env.AI_DESIGNER_PROVIDER || "mock"; // mock | gigachat | yandex | hybrid
 const MAX_VARIANTS = Number(process.env.AI_DESIGNER_MAX_VARIANTS || 3);
@@ -101,16 +103,23 @@ function mockResponse(task, payload) {
 /* ---------- маршруты ---------- */
 function mount(app, ctx) {
   const { guard } = ctx;
+  /* §4.3: per-user rate limiting на все AI-эндпоинты модуля (≤10/мин) */
+  const aiLimit = aiSec.makeAiRateLimiter({ windowMs: 60_000, max: Number(process.env.AI_DESIGNER_RATE_MAX || 10) });
 
   /* создание проекта */
-  app.post("/api/ai-designer/projects", guard, async (req, res) => {
+  app.post("/api/ai-designer/projects", guard, aiLimit, async (req, res) => {
     try {
       const { mode, sourceImageId, preferences } = req.body || {};
       if (!["interior", "fashion"].includes(mode)) return res.status(400).json({ ok: false, code: "bad_mode", userMessage: "Неизвестный сценарий." });
+      /* §4.1/§4.2: текстовые поля предпочтений санитизируются и очищаются от PII
+         до сохранения и до будущей отправки провайдеру */
+      const cleanPrefs = sanitizePreferences(preferences);
       const project = {
         id: uid("prj"), userId: req.userId, mode, status: "analyzing",
+        /* уникальный id AI-сессии, привязанный к владельцу (§4.3) */
+        aiSessionId: aiSec.aiSessionId(req.userId).sessionId,
         sourceImageId: typeof sourceImageId === "string" && sourceImageId.length < 8_000_000 ? sourceImageId : "",
-        preferences: preferences || {}, variants: [], createdAt: now(), updatedAt: now(),
+        preferences: cleanPrefs, variants: [], createdAt: now(), updatedAt: now(),
       };
       const d = loadAll(); d.projects.unshift(project); saveAll(d);
       res.json({ projectId: project.id, status: "analyzing" });
@@ -141,20 +150,20 @@ function mount(app, ctx) {
   });
 
   /* анализ фото */
-  app.post("/api/ai-designer/projects/:id/analyze", guard, wrap(callTask((req) =>
+  app.post("/api/ai-designer/projects/:id/analyze", guard, aiLimit, wrap(callTask((req) =>
     req.body?.mode === "fashion" ? "analyze_fashion" : "analyze_interior")));
 
   /* генерация вариантов */
-  app.post("/api/ai-designer/projects/:id/generate", guard, wrap(callTask(() => "generate")));
+  app.post("/api/ai-designer/projects/:id/generate", guard, aiLimit, wrap(callTask(() => "generate")));
 
   /* выбор варианта + grounding */
-  app.post("/api/ai-designer/projects/:id/variants/:variantId/select", guard, wrap(callTask(() => "select")));
+  app.post("/api/ai-designer/projects/:id/variants/:variantId/select", guard, aiLimit, wrap(callTask(() => "select")));
 
   /* замена товара */
-  app.post("/api/ai-designer/projects/:id/variants/:variantId/objects/:objectId/replace", guard, wrap(callTask(() => "replace")));
+  app.post("/api/ai-designer/projects/:id/variants/:variantId/objects/:objectId/replace", guard, aiLimit, wrap(callTask(() => "replace")));
 
-  /* точечное редактирование */
-  app.post("/api/ai-designer/projects/:id/variants/:variantId/edit", guard, wrap(callTask(() => "edit")));
+  /* точечное редактирование (свободный текстовый ввод пользователя → санитизация §4.1) */
+  app.post("/api/ai-designer/projects/:id/variants/:variantId/edit", guard, aiLimit, wrap(callTask(() => "edit")));
 
   /* добавление комплекта в существующую корзину (клиентская корзина —
      единая для всего сайта; сюда приходят только productIds) */
@@ -167,11 +176,36 @@ async function callTask(taskOf) {
   return async (req, res) => {
     const task = taskOf(req);
     const payload = { projectId: req.params.id, variantId: req.params.variantId, objectId: req.params.objectId, ...(req.body || {}) };
-    /* промпт будущего провайдера прикладывается к задаче (не логируется) */
+    /* §4.3: изоляция контекста — проект принадлежит только владельцу;
+       история/данные чужого пользователя никогда не попадают в запрос. */
+    const proj = loadAll().projects.find((x) => x.id === req.params.id);
+    if (proj && req.userId) aiSec.assertSessionOwner({ userId: proj.userId }, req.userId);
+    /* БЛОК 4 (§4.1/§4.2): весь свободный текстовый ввод пользователя
+       санитизируется от prompt-injection и очищается от PII до того,
+       как будет подставлен в промпт боевого провайдера. */
+    for (const k of ["instruction", "prompt", "text", "note", "comment", "query"]) {
+      if (typeof payload[k] === "string") payload[k] = aiSec.maskPII(aiSec.sanitizeUserInput(payload[k]));
+    }
+    /* Промпт будущего провайдера прикладывается к задаче (не логируется).
+       Канонический порядок сообщений: system → history(same owner) → user. */
     void PROMPTS[task];
+    void aiSec.buildChatMessages(JSON.stringify(payload));
     if (MOCK_DELAY_MS > 0) await new Promise((r) => setTimeout(r, MOCK_DELAY_MS));
     return await callProvider(task, payload);
   };
+}
+
+/* Санитизация объекта предпочтений проекта: строки проходят анти-инъекцию
+   и маскирование PII (§4.1/§4.2), остальные значения сохраняются как есть. */
+function sanitizePreferences(prefs) {
+  if (!prefs || typeof prefs !== "object") return {};
+  const out = {};
+  for (const [k, v] of Object.entries(prefs)) {
+    if (typeof v === "string") out[k] = aiSec.maskPII(aiSec.sanitizeUserInput(v));
+    else if (Array.isArray(v)) out[k] = v.map((x) => (typeof x === "string" ? aiSec.maskPII(aiSec.sanitizeUserInput(x)) : x));
+    else out[k] = v;
+  }
+  return out;
 }
 
 function wrap(fn) {
