@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { validateINN } from "./inn";
 import { persist } from "zustand/middleware";
 import { api } from "./api";
+/* БЛОК 3 §3.1: токен платёжного метода ЮKassa (виджет-iframe на клиенте) */
+import { getPaymentMethodToken, clearPaymentMethodToken } from "./yookassa";
 import { useTariffStore, applyServerTariff } from "./tariff";
 
 /* ============================================================
@@ -485,13 +487,18 @@ export const useSellerReg = create<SellerRegState>()(
           if (uid2) get().saveProfile(uid2);
           return Promise.resolve({ ok: true, offline: true } as any);
         }
-        return api.createFeePayment(s.legalType as string, method === "card" ? "card" : method, planId)
+        /* БЛОК 3 §3.1: для оплаты картой получаем payment_method_token из
+           виджета ЮKassa (iframe на стороне клиента). Номер карты, CVV и срок
+           действия в наши поля НЕ вводятся и на наш сервер НЕ попадают. */
+        return (method === "card" ? getPaymentMethodToken() : Promise.resolve(null))
+          .then((pmToken) => api.createFeePayment(s.legalType as string, method === "card" ? "card" : method, planId, pmToken))
           .then(async (r) => {
             if (!r || !r.ok || !r.payment) {
               set({ status: "payment", rejectionReason: "Платёж не создан: сервис оплаты недоступен" });
               return { ok: false, error: (r && r.error) || "provider_unavailable" };
             }
             const pid = r.payment.id;
+            clearPaymentMethodToken(); /* токен одноразовый — чистим после создания платежа */
             /* В проде клиент редиректится на confirmation_url и ждёт webhook;
                здесь — опрос статуса платежа до success/fail. */
             const confirmed = await api.confirmFeePayment(pid); /* dev-путь: подтверждение владельцем */

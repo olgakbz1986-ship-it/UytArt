@@ -76,12 +76,31 @@ const TARIFF_SET = z
   .refine((d) => !!d.planId, { path: ["planId"], message: "нужен planId или tariffId из списка тарифов" })
   .refine((d) => d.kind !== "seller" || !!d.legalType, { path: ["legalType"], message: "для seller обязателен legalType" });
 
-/* POST /api/payments/registration-fee */
-const REGISTRATION_FEE = z.object({
-  legalType: z.enum(LEGAL_TYPES),
-  method: methodEnum,
-  planId: z.enum(ALL_PLANS).catch("free"),
-});
+/* Токен платёжного метода ЮKassa (payment_method_token): выдаётся виджетом
+   на стороне клиента; НЕ содержит данных карты. Строгая форма — pm-token-*;
+   служебные значения card/sbp/wallet/yoo_money/cash принимаются только для
+   dev-эмуляции и помечаются на сервере как не-токен (mock-режим). */
+const PAYMENT_METHOD_TOKEN = z
+  .string()
+  .trim()
+  .regex(/^(pm-[a-z0-9]+-[a-z0-9]{6,64}|[a-z_]{3,20})$/, "paymentMethodToken неверного формата")
+  .max(1024);
+
+/* POST /api/payments/registration-fee (БЛОК 3, Пункт 3.1):
+   amount — положительное число; tariffId — строка из списка тарифов;
+   paymentMethodToken — непустая строка (токен ЮKassa, НЕ данные карты). */
+const REGISTRATION_FEE = z
+  .object({
+    legalType: z.enum(LEGAL_TYPES).optional(),
+    tariffId: z.union([z.enum(ALL_PLANS), z.string().trim().min(1).max(64)]).optional(),
+    planId: z.union([z.enum(ALL_PLANS), z.string().trim().min(1).max(64)]).optional(),
+    amount: z.coerce.number().positive("amount должен быть положительным числом").max(1_000_000_000).optional(),
+    /* paymentMethodToken обязателен в прод-потоке; в dev допускается способ без токена */
+    paymentMethodToken: PAYMENT_METHOD_TOKEN.optional(),
+    method: methodEnum,
+  })
+  .refine((d) => !!(d.paymentMethodToken || d.method), { path: ["paymentMethodToken"], message: "нужен paymentMethodToken (токен ЮKassa) или method" })
+  .transform((d) => ({ ...d, planId: d.planId || d.tariffId }));
 
 /* POST /api/subscriptions/seller/create */
 const SUB_CREATE = z.object({
@@ -89,7 +108,8 @@ const SUB_CREATE = z.object({
   legalType: z.enum(LEGAL_TYPES).optional(),
   period: z.enum(["month", "year"]).catch("month"),
   billingCycle: z.enum(["month", "year"]).optional(),
-  paymentMethodToken: optionalText(512),
+  /* §3.1: токен платёжного метода ЮKassa (данные карты не принимаются) */
+  paymentMethodToken: PAYMENT_METHOD_TOKEN.optional(),
 });
 
 /* POST /api/packs/create — packId только из списка пакетов */
@@ -97,6 +117,8 @@ const PACK_CREATE = z.object({
   packId: z.enum(PACK_IDS),
   quantity: z.coerce.number().int().min(1).max(10).catch(1),
   method: methodEnum,
+  /* §3.1: токен платёжного метода ЮKassa (данные карты не принимаются) */
+  paymentMethodToken: PAYMENT_METHOD_TOKEN.optional(),
 });
 
 /* POST /api/limits/consume */
