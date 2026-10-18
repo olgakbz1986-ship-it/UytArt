@@ -308,9 +308,20 @@ function packOfferFor(action) {
 
 function mount(app, ctx) {
   const { guard, db } = ctx;
+  /* Пункт 1.1: единый конфиг секретов (process.env), fallback — server/config.cjs */
+  const cfg = ctx.cfg || require("./config.cjs");
   const FILE = require("path").resolve(__dirname, "dev-db.json");
   const fs = require("fs");
   const isPg = () => db.mode.startsWith("postgres");
+
+  /* Критические эндпоинты (оплата, смена тарифа): если обязательные переменные
+     окружения не заданы — предупреждение в консоль + HTTP 500 misconfigured. */
+  function requireEnv(res, names) {
+    const err = cfg.requireEnv(names);
+    if (!err) return false;
+    res.status(500).json(err);
+    return true;
+  }
 
   const readAll = () => (fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {});
   const writeAll = (d) => fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
@@ -501,8 +512,10 @@ function mount(app, ctx) {
   }
 
   /* ---------- платёжный провайдер (ЮKassa; мок при отсутствии ключей) ---------- */
-  const YKASSA_SHOP_ID = process.env.YKASSA_SHOP_ID || "";
-  const YKASSA_SECRET = process.env.YKASSA_SECRET || "";
+  /* Пункт 1.1: ключи только из process.env (через server/config.cjs), в коде — пусто.
+     Имена: YOOKASSA_SHOP_ID / YOOKASSA_SECRET_KEY (старые YKASSA_* поддерживаются). */
+  const YKASSA_SHOP_ID = cfg.YOOKASSA.shopId || "";
+  const YKASSA_SECRET = cfg.YOOKASSA.secretKey || "";
   async function providerCreatePayment(payment) {
     const idemp = "qf-fee-" + payment.id;
     if (YKASSA_SHOP_ID && YKASSA_SECRET) {
@@ -611,6 +624,9 @@ function mount(app, ctx) {
      клиент не может прислать свою ставку. */
   app.post("/api/tariff/set", guard, async (req, res) => {
     try {
+      /* Пункт 1.1: критический эндпоинт — без настроенного секрета JWT
+         подпись токенов невозможна → 500 misconfigured + предупреждение в лог. */
+      if (requireEnv(res, ["JWT_SECRET"])) return;
       const { kind, planId, legalType } = req.body || {};
       if (kind === "seller") {
         if (!["self_employed", "ip", "ooo"].includes(legalType)) return res.status(400).json({ error: "bad_legal_type" });
@@ -633,6 +649,8 @@ function mount(app, ctx) {
   /* §1.4 Создание платежа разового взноса (5/10/15 тыс. ₽) у провайдера */
   app.post("/api/payments/registration-fee", guard, async (req, res) => {
     try {
+      /* Пункт 1.1: критический эндпоинт оплаты — без секретов сервиса отвечаем 500 */
+      if (requireEnv(res, ["JWT_SECRET"])) return;
       const legalType = String((req.body && req.body.legalType) || "");
       const method = String((req.body && req.body.method) || "card");
       const fee = REGISTRATION_FEES[legalType];
@@ -675,6 +693,8 @@ function mount(app, ctx) {
 
   app.post("/api/subscriptions/seller/create", guard, async (req, res) => {
     try {
+      /* Пункт 1.1: критический эндпоинт оплаты — без секретов сервиса отвечаем 500 */
+      if (requireEnv(res, ["JWT_SECRET"])) return;
       const planId = String((req.body && req.body.planId) || "");
       const period = req.body && req.body.period === "year" ? "year" : "month";
       const billingCycle = req.body && req.body.billingCycle === "yearly" ? "yearly" : period; /* совместимость */
@@ -737,6 +757,8 @@ function mount(app, ctx) {
   /* §4.5 Пакет сверх лимита: +50 слотов товаров 300 ₽/мес, +50 генераций 500 ₽/мес */
   app.post("/api/packs/create", guard, async (req, res) => {
     try {
+      /* Пункт 1.1: критический эндпоинт оплаты — без секретов сервиса отвечаем 500 */
+      if (requireEnv(res, ["JWT_SECRET"])) return;
       const packId = String((req.body && req.body.packId) || "");
       const pack = OVERLIMIT_PACKS[packId];
       if (!pack) return res.status(400).json({ error: "bad_pack" });

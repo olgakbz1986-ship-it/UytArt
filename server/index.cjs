@@ -10,16 +10,25 @@ const fs = require("fs");
 const path = require("path");
 const nodemailer = require("nodemailer");
 
+/* Пункт 1.1: секрет удалён из кода (был захардкожен qf-dev-secret-stable-2026);
+   в dev допустима помеченная заглушка, в production её отсутствие =
+   предупреждение при старте + 500 misconfigured на критических эндпоинтах. */
+const cfg = require("./config.cjs");
 const PORT = process.env.PORT || 8787;
-/* ВАЖНО: секрет должен быть стабильным между перезапусками сервера.
-   Раньше он генерировался случайно при каждом старте — все выданные сессии
-   (включая админскую cookie) становились невалидны после рестарта: вход в
-   кабинет «слетал», и /admin тут же выбрасывало обратно на /auth. */
-const JWT_SECRET = process.env.JWT_SECRET || "qf-dev-secret-stable-2026";
+/* Секрет стабилен между перезапусками только если задан JWT_SECRET в .env
+   (раньше случайная генерация ломала все сессии после рестарта). */
+const JWT_SECRET = cfg.JWT_SECRET;
+const ACCESS_TTL_SEC = cfg.ACCESS_TTL_SEC;   /* access-токен: 15 минут (§1.3) */
+const REFRESH_TTL_SEC = cfg.REFRESH_TTL_SEC; /* refresh-токен: 7 дней  (§1.3) */
 const API_URL = process.env.API_URL || "http://localhost:8787";
-const COOKIE = "qf_session";
+const COOKIE = "qf_session";        /* access-токен (httpOnly) */
+const REF_COOKIE = "qf_refresh";    /* refresh-токен (httpOnly, Path=/api/auth) */
 const MAIL_FROM = process.env.MAIL_FROM || "Quantiform <no-reply@starttechpro.ru>";
 const DAY = 24 * 3600 * 1000;
+const SECURE_COOKIES = process.env.QF_COOKIE_SECURE === "1" || cfg.IS_PROD;
+/* SameSite=Strict по умолчанию (защита от CSRF); QF_COOKIE_SAMESITE=lax —
+   если нужен возврат по top-level redirect от платёжного провайдера. */
+const SAME_SITE = process.env.QF_COOKIE_SAMESITE === "lax" ? "lax" : "strict";
 
 let db;
 if (process.env.DATABASE_URL) {
@@ -54,25 +63,90 @@ if (process.env.DATABASE_URL) {
 
 const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 465), secure: +(process.env.SMTP_PORT || 465) === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }) : null;
 
+/* ---------- Пункт 1.3: двухтокенная схема (JWT 15 мин + refresh 7 дней) ---------- */
+/* Access-токен живёт ACCESS_TTL_SEC (15 минут). Refresh-токен живёт
+   REFRESH_TTL_SEC (7 дней) и хранится ТОЛЬКО в httpOnly-куке qf_refresh —
+   JavaScript клиента его не читает; кука отправляется только на /api/auth/*. */
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
+
+/* Отзыв refresh-токенов (jti): dev — в памяти, prod — таблица PG.
+   Отзыв происходит при logout и при повторном использовании токена
+   (rotation: украденный refresh обнаруживается по уже использованному jti). */
+let revokedRefresh; /* Map<string, expiresAtMs> */
+if (db.mode.startsWith("postgres")) {
+  const { Pool } = require("pg");
+  const rpool = db.pool || new Pool({ connectionString: process.env.DATABASE_URL });
+  rpool.query(`create table if not exists revoked_tokens (
+    jti text primary key, user_id text, expires_at timestamptz not null, created_at timestamptz not null default now()
+  )`).catch((e) => console.error("[AUTH] revoked_tokens:", e.message));
+  const cache = new Map();
+  setInterval(() => { rpool.query("delete from revoked_tokens where expires_at < now()").catch(() => {}); }, 3600000).unref?.();
+  revokedRefresh = {
+    async add(jti, userId, expSec) { cache.set(jti, expSec * 1000); await rpool.query("insert into revoked_tokens (jti,user_id,expires_at) values ($1,$2,to_timestamp($3)) on conflict do nothing", [jti, userId, expSec]).catch(() => {}); },
+    async has(jti) { const c = cache.get(jti); if (c != null) return c > Date.now(); const r = await rpool.query("select 1 from revoked_tokens where jti=$1", [jti]).catch(() => null); return !!(r && r.rowCount); },
+  };
+} else {
+  const mem = new Map();
+  setInterval(() => { const now = Date.now(); for (const [k, v] of mem) if (v < now) mem.delete(k); }, 600000).unref?.();
+  revokedRefresh = { async add(jti, _u, expSec) { mem.set(jti, expSec * 1000); }, async has(jti) { const v = mem.get(jti); return v != null && v > Date.now(); } };
+}
+
+function cookieOpts(maxAgeMs, path) {
+  return { httpOnly: true, sameSite: SAME_SITE, secure: SECURE_COOKIES, path: path || "/", maxAge: maxAgeMs };
+}
+/** Выдаёт пару токенов: access — в теле ответа (память клиента),
+ *  refresh — исключительно в httpOnly-куке (никогда не в теле и не в localStorage). */
+function issueTokens(res, userId) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const access = jwt.sign({ sub: userId, scope: "user", typ: "access" }, JWT_SECRET, { expiresIn: ACCESS_TTL_SEC });
+  const jti = crypto.randomUUID();
+  const refresh = jwt.sign({ sub: userId, scope: "user", typ: "refresh", jti }, JWT_SECRET, { expiresIn: REFRESH_TTL_SEC });
+  res.cookie(REF_COOKIE, refresh, cookieOpts(REFRESH_TTL_SEC * 1000, "/api/auth"));
+  return { access, accessExpiresAt: new Date((nowSec + ACCESS_TTL_SEC) * 1000).toISOString(), expiresIn: ACCESS_TTL_SEC };
+}
+async function revokeToken(tok) {
+  try { const p = jwt.verify(tok, JWT_SECRET, { ignoreExpiration: true }); if (p.jti) await revokedRefresh.add(p.jti, p.sub, Math.floor(new Date(p.exp * 1000).getTime())); } catch { /* невалидный токен отзываем пустяком */ }
+}
+/** Проверка подлинности сессии: сначала access (cookie или Bearer), затем —
+ *  попытка тихой ротации по refresh-куке. Возвращает userId или null. */
+async function resolveSession(req, res) {
+  const t = req.cookies[COOKIE] || (String(req.headers.authorization || "").startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  if (t) { try { const p = jwt.verify(t, JWT_SECRET); if (p.scope === "user") return p.sub; } catch { /* просрочен/невалиден → пробуем refresh */ } }
+  const rt = req.cookies[REF_COOKIE];
+  if (!rt) return null;
+  try {
+    const p = jwt.verify(rt, JWT_SECRET);
+    if (p.scope !== "user" || p.typ !== "refresh") return null;
+    if (await revokedRefresh.has(p.jti)) { await revokeToken(rt); res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth")); return null; }
+    /* rotation: одноразовое использование refresh-токена */
+    await revokedRefresh.add(p.jti, p.sub, p.exp);
+    const pair = issueTokens(res, p.sub);
+    res.set("X-Access-Token", pair.access);
+    req.userId = p.sub;
+    req.accessToken = pair.access;
+    return p.sub;
+  } catch { return null; }
+}
+
 /* Общий контекст для тарифного модуля (ЭТАП 1): tariffView доступен
-   маршрутам авторизации, а serverCheckLimit — потребляющим операциям. */
-const tariffsCtx = { guard: null, db: null };
+   маршрутам авторизации, а serverCheckLimit — потребляющим операциям.
+   cfg — единый источник секретов/настройки (БЛОК 1, Пункт 1.1). */
+const tariffsCtx = { guard: null, db: null, cfg };
 const profileOf = (r) => ({ id: r.id, email: r.email, name: r.name, phone: r.phone, role: r.role, legal_type: r.legal_type, tier: r.tier, avatar_url: r.avatar_url });
-function guard(req, res, next) {
-  const t = req.cookies[COOKIE];
-  if (!t) return res.status(401).json({ error: "no_session" });
-  try { req.userId = jwt.verify(t, JWT_SECRET).sub; next(); } catch { res.status(401).json({ error: "bad_session" }); }
+async function guard(req, res, next) {
+  const uid = await resolveSession(req, res);
+  if (!uid) return res.status(401).json({ error: "no_session" });
+  req.userId = uid;
+  next();
 }
 tariffsCtx.guard = guard;
 tariffsCtx.db = db;
 /* Мягкая авторизация: если токен есть — заполняет req.userId, иначе продолжает как гость.
    Нужен для эндпоинтов с ролевой моделью доступа (владелец/чужой/гость). */
-function softGuard(req, _res, next) {
-  const t = req.cookies ? req.cookies[COOKIE] : null;
-  if (t) { try { req.userId = jwt.verify(t, JWT_SECRET).sub; } catch {} }
+async function softGuard(req, res, next) {
+  try { req.userId = (await resolveSession(req, res)) || undefined; } catch { /* гость */ }
   next();
 }
 async function sendConfirm(email, name, token) {
@@ -120,16 +194,51 @@ app.post("/api/auth/login", async (req, res) => {
     /* Кабинет администратора не упоминается на публичном сайте: служебные email
        получают только пользовательскую сессию. Вход в кабинет — через OTP-поток
        /api/admin/login/* (одноразовый код на почту при каждом входе). */
-    res.cookie(COOKIE, jwt.sign({ sub: u.id, scope: "user" }, JWT_SECRET, { expiresIn: "7d" }), { httpOnly: true, sameSite: "lax", maxAge: 7 * DAY, secure: process.env.NODE_ENV === "production" });
+    /* §1.3: access-токен живёт 15 минут и возвращается в теле ответа;
+       refresh-токен (7 дней) устанавливается ТОЛЬКО httpOnly-кукой qf_refresh
+       (httpOnly + Secure + SameSite=Strict + Path=/api/auth) — в теле его нет. */
+    const pair = issueTokens(res, u.id);
     /* ЭТАП 1 (§1.3): тариф — серверный источник истины; клиент получает его
        при входе ВМЕСТЕ С ПРОФИЛЕМ (localStorage — только кэш). */
     let tariff = null;
     try { tariff = await tariffsCtx.tariffView(u.id); } catch (e) { console.error("[LOGIN TARIFF]", e); }
-    res.json({ ok: true, profile: profileOf(u), tariff });
+    res.json({ ok: true, profile: profileOf(u), tariff, accessToken: pair.access, tokenType: "Bearer", expiresIn: pair.expiresIn, accessExpiresAt: pair.accessExpiresAt });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/auth/logout", (_q, r) => { r.clearCookie(COOKIE); r.json({ ok: true }); });
+/* §1.3 Тихая ротация: читает refresh-токен из httpOnly-куки, проверяет
+   валидность и отзыв, выдаёт новую пару токенов. Невалидный/истёкший refresh
+   → 401, по которому клиент делает редирект на страницу логина. */
+app.post("/api/auth/refresh", async (req, res) => {
+  try {
+    const rt = req.cookies[REF_COOKIE];
+    if (!rt) return res.status(401).json({ error: "no_session" });
+    let p;
+    try { p = jwt.verify(rt, JWT_SECRET); } catch { res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth")); return res.status(401).json({ error: "bad_session" }); }
+    if (p.scope !== "user" || p.typ !== "refresh") return res.status(401).json({ error: "bad_session" });
+    if (await revokedRefresh.has(p.jti)) {
+      /* reuse-detector: токен уже использован — отзываем всю цепочку этой куки */
+      await revokeToken(rt);
+      res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth"));
+      res.clearCookie(COOKIE, cookieOpts(0, "/"));
+      return res.status(401).json({ error: "bad_session" });
+    }
+    await revokedRefresh.add(p.jti, p.sub, p.exp); // rotation: одноразовое использование
+    const u = await db.byId(p.sub);
+    if (!u) return res.status(401).json({ error: "gone" });
+    const pair = issueTokens(res, p.sub);
+    res.json({ ok: true, accessToken: pair.access, tokenType: "Bearer", expiresIn: pair.expiresIn, accessExpiresAt: pair.accessExpiresAt });
+  } catch (e) { console.error("[AUTH REFRESH]", e); res.status(500).json({ error: "server" }); }
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  /* отзыв refresh-токена + очистка обеих кук (path должен совпадать с issue) */
+  const rt = req.cookies[REF_COOKIE];
+  if (rt) await revokeToken(rt);
+  res.clearCookie(COOKIE, cookieOpts(0, "/"));
+  res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth"));
+  res.json({ ok: true });
+});
 app.get("/api/auth/me", guard, async (req, res) => {
   const u = await db.byId(req.userId);
   if (!u) return res.status(404).json({ error: "gone" });
@@ -1110,6 +1219,6 @@ digital.mount(app, { guard, softGuard, db });
 
 /* Кабинет администратора (закрытая приватная зона): /api/admin/* — OTP-вход, RBAC,
    Command Center, Agent Control Plane, Policy Engine, журналы. Никаких публичных ссылок. */
-require("./admin.cjs")(app, { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, path });
+require("./admin.cjs")(app, { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, path, cfg, cookieOpts: (maxAgeMs, p) => ({ httpOnly: true, sameSite: SAME_SITE, secure: SECURE_COOKIES, path: p || "/", maxAge: maxAgeMs }) });
 
 app.listen(PORT, () => console.log("[quantiform-auth] порт " + PORT + " | режим: " + db.mode + (mail ? " | SMTP вкл" : " | SMTP выкл, ссылки в консоль")));
