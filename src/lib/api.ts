@@ -62,9 +62,11 @@ export const api = {
       "/limits/buy-pack", { method: "POST", body: JSON.stringify({ packType, quantity }) }),
 
   /* ---------- РАЗОВЫЙ ВЗНОС 5/10/15 тыс. ₽ (§1.4) ---------- */
-  createFeePayment: (legalType: string, method: string, planId?: string) =>
+  /* БЛОК 3 §3.1: оплата картой идёт ТОЛЬКО токеном paymentMethodToken
+     (виджет ЮKassa на клиенте); номер карты/CVV на сервер не передаются. */
+  createFeePayment: (legalType: string, method: string, planId?: string, paymentMethodToken?: string | null) =>
     req<{ ok: boolean; payment?: { id: string; amount: number; status: string; confirmation_url?: string | null; provider?: string }; error?: string }>(
-      "/payments/registration-fee", { method: "POST", body: JSON.stringify({ legalType, method, planId }) }),
+      "/payments/registration-fee", { method: "POST", body: JSON.stringify({ legalType, method, planId, ...(paymentMethodToken ? { paymentMethodToken } : {}) }) }),
   confirmFeePayment: (id: string) =>
     req<{ ok: boolean; payment?: { id: string; status: string }; receipt?: any; error?: string }>("/payments/" + id + "/confirm", { method: "POST" }),
   failFeePayment: (id: string) =>

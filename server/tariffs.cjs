@@ -534,9 +534,25 @@ function mount(app, ctx) {
      Имена: YOOKASSA_SHOP_ID / YOOKASSA_SECRET_KEY (старые YKASSA_* поддерживаются). */
   const YKASSA_SHOP_ID = cfg.YOOKASSA.shopId || "";
   const YKASSA_SECRET = cfg.YOOKASSA.secretKey || "";
+  /* БЛОК 3, Пункт 3.1: токен платёжного метода (payment_method_token) приходит
+     с клиента — данные карты на наш сервер НЕ попадают (их принимает iframe
+     виджета ЮKassa на стороне клиента). Формат реального токена: pm-XXXX-... */
+  function isRealPmToken(t) {
+    return typeof t === "string" && /^pm-[a-z0-9]+-[a-z0-9]{6,64}$/.test(t);
+  }
+
   async function providerCreatePayment(payment) {
-    const idemp = "qf-fee-" + payment.id;
+    /* Уникальный ключ идемпотентности (UUID): при повторной отправке запроса
+       из-за сбоя сети ЮKassa не создаст платёж дважды. Для одного и того же
+       платежа переиспользуем сохранённый ключ (повторный вызов после сбоя). */
+    const idemp = payment.idempotence_key || ("qf-pay-" + crypto.randomUUID());
+    payment.idempotence_key = idemp;
     if (YKASSA_SHOP_ID && YKASSA_SECRET) {
+      /* В прод-режиме (ключи заданы) обязателен настоящий токен ЮKassa —
+       иначе номер карты был бы собран мимо виджета, что запрещено (§3.1). */
+      if (!isRealPmToken(payment.payment_method_token)) {
+        throw new Error("payment_method_token_required");
+      }
       const resp = await fetch("https://api.yookassa.ru/v3/payments", {
         method: "POST",
         headers: {
@@ -545,16 +561,23 @@ function mount(app, ctx) {
           Authorization: "Basic " + Buffer.from(YKASSA_SHOP_ID + ":" + YKASSA_SECRET).toString("base64"),
         },
         body: JSON.stringify({
-          amount: { value: (payment.amount / 100).toFixed(2), currency: "RUB" },
-          capture: true,
-          description: payment.purpose,
+          amount: { value: (payment.amount / 100).toFixed(2), currency: "RUB" }, /* «значение.копейки», напр. 999.00 */
+          capture: true,                                                          /* немедленное списание */
+          payment_method: { type: "bank_card", token: payment.payment_method_token },
+          description: payment.purpose,                                           /* описание платежа */
           metadata: { payment_id: payment.id, user_id: payment.user_id },
-          confirmation: { return_url: (process.env.API_URL || "http://localhost:8787") + "/plans?paid=" + payment.id },
+          confirmation: { type: "embedded", return_url: (process.env.API_URL || "http://localhost:8787") + "/plans?paid=" + payment.id },
         }),
       });
       if (!resp.ok) throw new Error("yookassa_http_" + resp.status);
       const j = await resp.json();
-      return { provider: "yookassa", provider_payment_id: j.id, confirmation_url: j.confirmation && j.confirmation.confirmation_url };
+      /* Статус провайдера сохраняем на платеже: активация только при succeeded/captured */
+      return {
+        provider: "yookassa",
+        provider_payment_id: j.id,
+        provider_status: j.status,
+        confirmation_url: j.confirmation && j.confirmation.confirmation_url,
+      };
     }
     /* DEV/демо-режим: эмуляция инвойса платёжного провайдера.
        Подтверждение — POST /api/payments/:id/confirm (или webhook-эмуляция). */
@@ -679,15 +702,23 @@ function mount(app, ctx) {
       const method = b.method;
       const fee = REGISTRATION_FEES[legalType];
       if (!fee) return res.status(400).json({ error: "bad_legal_type" });
+      /* §3.1: сумму считает сервер по матрице взносов; клиентский amount
+         (если прислан) обязан совпадать — защита от подмены суммы. */
+      const amount = b.amount != null ? Math.round(b.amount) : fee;
+      if (b.amount != null && amount !== fee) {
+        return res.status(400).json({ error: "amount_mismatch", message: "Сумма взноса определяется сервером (" + fee + " ₽)" });
+      }
       const payment = {
         id: crypto.randomUUID(),
         user_id: req.userId,
         kind: "registration_fee",
         legal_type: legalType,
         plan_id: b.planId || "free",
-        amount: fee,
+        amount,
         currency: "RUB",
         method,
+        /* БЛОК 3 §3.1: токен платёжного метода ЮKassa (данные карты не хранятся) */
+        payment_method_token: b.paymentMethodToken || null,
         purpose: "Регистрационный взнос · " + legalType + " · " + fee.toLocaleString("ru-RU") + " ₽",
         status: "pending",
         created_at: new Date().toISOString(),
@@ -695,10 +726,22 @@ function mount(app, ctx) {
       const prov = await providerCreatePayment(payment);
       payment.provider = prov.provider;
       payment.provider_payment_id = prov.provider_payment_id;
+      payment.provider_status = prov.provider_status || null;
       payment.confirmation_url = prov.confirmation_url || null;
-      savePayment(payment);
-      res.json({ ok: true, payment: { id: payment.id, amount: payment.amount, fee: payment.amount, status: payment.status, confirmation_url: payment.confirmation_url, provider: payment.provider } });
-    } catch (e) { console.error("[FEE PAYMENT CREATE]", e); res.status(502).json({ error: "provider_unavailable" }); }
+      savePayment(payment); /* ключ идемпотентности сохранён внутри payment.idempotence_key */
+      /* Если провайдер уже вернул succeeded — проводим оплату сразу;
+         pending/canceled/failed — без активации тарифа (§3.1). */
+      if (payment.provider_status === "succeeded" || payment.provider_status === "captured") {
+        await finalizePaid(payment);
+      }
+      res.json({ ok: true, payment: { id: payment.id, amount: payment.amount, fee: payment.amount, status: payment.status, confirmation_url: payment.confirmation_url, provider: payment.provider, payment_method_token_used: !!payment.payment_method_token } });
+    } catch (e) {
+      console.error("[FEE PAYMENT CREATE]", e);
+      if (String(e && e.message) === "payment_method_token_required") {
+        return res.status(400).json({ error: "payment_method_token_required", message: "Оплата возможна только токеном платёжного метода ЮKassa (виджет на стороне клиента); данные карты на сервер не передаются" });
+      }
+      res.status(502).json({ error: "provider_unavailable" });
+    }
   });
 
   /* ============================================================
@@ -760,6 +803,8 @@ function mount(app, ctx) {
         amount,
         currency: "RUB",
         method: b.method,
+        /* §3.1: токен платёжного метода ЮKassa вместо данных карты */
+        payment_method_token: b.paymentMethodToken || null,
         purpose: "Подписка · " + lt + "/" + planId + " · " + (isYear ? "год" : "месяц") + (credit ? " (зачёт остатка " + credit + " ₽)" : ""),
         status: "pending",
         created_at: now.toISOString(),
@@ -767,8 +812,12 @@ function mount(app, ctx) {
       const prov = await providerCreatePayment(payment);
       payment.provider = prov.provider;
       payment.provider_payment_id = prov.provider_payment_id;
+      payment.provider_status = prov.provider_status || null;
       payment.confirmation_url = prov.confirmation_url || null;
       savePayment(payment);
+      if (payment.provider_status === "succeeded" || payment.provider_status === "captured") {
+        await finalizePaid(payment); /* §3.1: активация только при успехе провайдера */
+      }
       res.json({
         ok: true,
         quote: {
@@ -802,6 +851,8 @@ function mount(app, ctx) {
         amount: pack.price,
         currency: "RUB",
         method: b.method,
+        /* §3.1: токен платёжного метода ЮKassa вместо данных карты */
+        payment_method_token: b.paymentMethodToken || null,
         purpose: "Пакет сверх лимита · " + pack.title + " · " + pack.price + " ₽",
         status: "pending",
         created_at: new Date().toISOString(),
@@ -809,30 +860,135 @@ function mount(app, ctx) {
       const prov = await providerCreatePayment(payment);
       payment.provider = prov.provider;
       payment.provider_payment_id = prov.provider_payment_id;
+      payment.provider_status = prov.provider_status || null;
       payment.confirmation_url = prov.confirmation_url || null;
       savePayment(payment);
+      if (payment.provider_status === "succeeded" || payment.provider_status === "captured") {
+        await finalizePaid(payment); /* активация пакета только при успехе провайдера */
+      }
       res.json({ ok: true, pack: { id: packId, title: pack.title, slots: pack.slots, price: pack.price }, payment: { id: payment.id, amount: payment.amount, status: payment.status, confirmation_url: payment.confirmation_url, provider: payment.provider } });
     } catch (e) { console.error("[PACK CREATE]", e); res.status(502).json({ error: "provider_unavailable" }); }
   });
 
-  /* §1.4 Webhook успеха провайдера (в prod подписывается секретами ЮKassa;
-     в dev допускается служебное подтверждение от аутентифицированного владельца) */
+  /* ============================================================
+     БЛОК 3, Пункт 3.2: КРИПТОГРАФИЧЕСКАЯ ВЕРИФИКАЦИЯ ВЕБХУКОВ
+     POST /api/webhooks/yookassa — приём уведомлений ЮKassa об изменении
+     статуса платежа (URL регистрируется в личном кабинете ЮKassa).
+     ------------------------------------------------------------
+     · middleware — express.raw(): тело остаётся СЫРЫМ буфером/строкой
+       (express.json() здесь запрещён — ломает проверку подписи);
+     · вычисляем HMAC-SHA256 от сырого тела ключом YOOKASSA_WEBHOOK_SECRET
+       (fallback — секретный ключ магазина; доп. слой — allowlist IP
+       QF_WEBHOOK_IP_ALLOWLIST, см. server/config.cjs);
+     · подпись НЕ совпала → console.warn + HTTP 403, действий нет;
+     · подпись верна → парсим JSON и обрабатываем событие;
+     · payment.succeeded → находим платёж по metadata.payment_id / id
+       провайдера, обновляем статус, активируем тариф, пишем проводку
+       в финансовый журнал и чек (finalizePaid);
+     · всегда отвечаем 200 после обработки — иначе ЮKassa повторяет
+       отправку; повторные доставки идемпотентны (успешный платёж
+       проводится ровно один раз).
+     Примечание: ЮKassa v3 не шлёт HMAC-подпись по умолчанию — секрет
+     включается, когда настроен YOOKASSA_WEBHOOK_SECRET/QF_WEBHOOK_SECRET
+     или allowlist IP; без настройки webhook работает только в dev. */
+  const WEBHOOK_SECRET = cfg.WEBHOOK.secret || "";
+  const WEBHOOK_IPS = new Set((cfg.WEBHOOK.ips || []).map((s) => String(s).trim()));
+
+  function verifyWebhookSignature(rawBody, signatureHeader) {
+    if (!WEBHOOK_SECRET) return null; /* секрет не задан — проверка не применяется (dev) */
+    if (!signatureHeader) return false;
+    const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(rawBody, "utf8").digest("hex");
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(String(signatureHeader).replace(/^sha256=/i, "").trim(), "utf8");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+
+  function handleProviderEvent(evt) {
+    /* Возвращает { result } для ответа клиенту; бросает ошибку при сбое обработки */
+    const event = String(evt && evt.event || "");
+    const obj = (evt && evt.object) || evt || {};
+    const pid = (obj.metadata && obj.metadata.payment_id) || obj.payment_id;
+    const providerId = obj.id;
+    const status = obj.status;
+    const p = (pid && findPayment(pid)) || (providerId && (() => {
+      const d = readAll();
+      return Object.values(d.payments || {}).find((x) => x.provider_payment_id === providerId) || null;
+    })()) || null;
+    if (!p) return { result: { ok: true, ignored: "payment_not_found" }, code: 404 };
+    /* Идемпотентность: успех уже проведён — просто подтверждаем доставку */
+    if (p.status === "succeeded") return { result: { ok: true, idempotent: true, status: p.status }, code: 200 };
+    /* Событие успеха платежа (payment.succeeded / payment.waiting_capture) */
+    if (status === "succeeded" || status === "captured" || event === "payment.succeeded") {
+      return { finalize: p, code: 200 };
+    }
+    if (status === "canceled" || event === "payment.canceled" || event === "payment.waiting_for_capture") {
+      /* pending/canceled/failed — БЕЗ активации тарифа (§3.1) */
+      if (event !== "payment.waiting_for_capture") {
+        p.status = "failed";
+        p.provider_status = status || event;
+        p.failed_at = new Date().toISOString();
+        savePayment(p);
+      }
+      return { result: { ok: true, status: p.status }, code: 200 };
+    }
+    return { result: { ok: true, ignored: event || status || "unknown_event" }, code: 200 };
+  }
+
+  app.post("/api/webhooks/yookassa", express_raw(), async (req, res) => {
+    try {
+      /* 1) allowlist IP провайдера (если настроен) */
+      if (WEBHOOK_IPS.size) {
+        const ip = String(req.ip || "").replace(/^::ffff:/, "");
+        if (!WEBHOOK_IPS.has(ip)) {
+          console.warn("[WEBHOOK] Отклонено: IP " + ip + " не в allowlist ЮKassa");
+          return res.status(403).json({ error: "forbidden_ip" });
+        }
+      }
+      /* 2) HMAC-SHA256 от СЫРОГО тела (заголовок: X-Content-Signature /
+         X-Signature / Signature / X-Content-SHA-256 — любой из поддерживается) */
+      const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : String(req.body || "");
+      const sig = req.headers["x-content-signature"] || req.headers["x-signature"] ||
+        req.headers["signature"] || req.headers["x-content-sha-256"];
+      const okSig = verifyWebhookSignature(raw, sig);
+      if (okSig === false) {
+        console.warn("[WEBHOOK] HMAC-подпись не совпала — запрос отклонён (возможная подделка уведомления)");
+        return res.status(403).json({ error: "bad_signature" });
+      }
+      /* 3) парсинг и обработка события */
+      let evt;
+      try { evt = JSON.parse(raw || "{}"); } catch (_) { return res.status(400).json({ error: "bad_json" }); }
+      const handled = handleProviderEvent(evt);
+      if (handled.finalize) {
+        const receipt = await finalizePaid(handled.finalize); /* журнал + чек + активация тарифа */
+        return res.status(200).json({ ok: true, status: "succeeded", receipt_id: receipt && receipt.id });
+      }
+      return res.status(handled.code).json(handled.result);
+    } catch (e) {
+      console.error("[YOOKASSA WEBHOOK]", e);
+      /* 5xx заставляет ЮKassa повторить доставку — это ожидаемо для сбоя обработки */
+      res.status(500).json({ error: "server" });
+    }
+  });
+
+  /* §1.4 Webhook успеха провайдера (legacy/dev-путь; прод-контур — выше).
+     Подпись проверяется так же, если секрет настроен. */
   app.post("/api/payments/webhook", express_raw(), async (req, res) => {
     try {
-      const evt = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      const pid = (evt && evt.object && evt.object.metadata && evt.object.metadata.payment_id) || (evt && evt.payment_id);
-      const status = (evt && evt.object && evt.object.status) || (evt && evt.status);
-      const p = pid ? findPayment(pid) : null;
-      if (!p) return res.status(404).json({ error: "payment_not_found" });
-      if (p.status === "succeeded") return res.json({ ok: true, idempotent: true });
-      if (status === "succeeded" || status === "captured") {
-        const receipt = await finalizePaid(p);
-        return res.json({ ok: true, status: "succeeded", receipt });
+      const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : String(req.body || "");
+      const sig = req.headers["x-content-signature"] || req.headers["x-signature"] ||
+        req.headers["signature"] || req.headers["x-content-sha-256"];
+      const okSig = verifyWebhookSignature(raw, sig);
+      if (okSig === false) {
+        console.warn("[WEBHOOK] legacy: HMAC-подпись не совпала — 403");
+        return res.status(403).json({ error: "bad_signature" });
       }
-      p.status = "failed";
-      p.failed_at = new Date().toISOString();
-      savePayment(p);
-      res.json({ ok: true, status: "failed" });
+      const evt = raw ? JSON.parse(raw) : {};
+      const handled = handleProviderEvent(evt);
+      if (handled.finalize) {
+        const receipt = await finalizePaid(handled.finalize);
+        return res.status(200).json({ ok: true, status: "succeeded", receipt });
+      }
+      return res.status(handled.code).json(handled.result);
     } catch (e) { console.error("[PAYMENT WEBHOOK]", e); res.status(500).json({ error: "server" }); }
   });
 
@@ -1005,6 +1161,11 @@ function mount(app, ctx) {
       /* Пункт 2.1: Zod-валидация до бизнес-логики */
       const b = zod(vld.BUY_PACK, req.body, res);
       if (!b) return;
+      /* БЛОК 3 §3.1: в прод-режиме (ключи ЮKassa заданы) карта оплачивается
+         только токеном paymentMethodToken — данные карты на сервер не приходят */
+      if (cfg.YOOKASSA.configured && !isRealPmToken(b.paymentMethodToken)) {
+        return res.status(400).json({ ok: false, error: "payment_method_token_required", message: "Оплата картой возможна только токеном платёжного метода ЮKassa" });
+      }
       const packType = b.packType;
       const quantity = b.quantity;
       const packId = packType === "products" ? "plus-products-50" : packType === "generations" ? "plus-ai-gens-50" : null;
@@ -1022,6 +1183,8 @@ function mount(app, ctx) {
         amount,
         currency: "RUB",
         method: b.method,
+        /* §3.1: токен платёжного метода ЮKassa вместо данных карты */
+        payment_method_token: b.paymentMethodToken || null,
         purpose: "Пакет сверх лимита · +" + quantity + " " + (packType === "products" ? "слотов товаров" : "AI-генераций") + " · " + amount + " ₽",
         status: "pending",
         created_at: new Date().toISOString(),
@@ -1029,6 +1192,7 @@ function mount(app, ctx) {
       const prov = await providerCreatePayment(payment);
       payment.provider = prov.provider;
       payment.provider_payment_id = prov.provider_payment_id;
+      payment.provider_status = prov.provider_status || null;
       payment.confirmation_url = prov.confirmation_url || null;
       savePayment(payment);
       /* В демо-режиме (mock-провайдер) платёж подтверждается сразу;
@@ -1556,10 +1720,21 @@ function mount(app, ctx) {
   ctx.subscriptionOf = subscriptionOf;
 }
 
-/* webhook принимает и raw-body (подпись провайдера), и JSON */
+/* webhook принимает и raw-body (подпись провайдера), и JSON.
+   БЛОК 3, Пункт 3.2: сырое тело нужно для проверки HMAC-SHA256 —
+   express.json() парсит тело и делает проверку подписи невозможной.
+   express_raw(): если тело УЖЕ сохранено сырым Buffer-ом middleware
+   верификатора (req.rawBody / req.body как Buffer) — используем его;
+   иначе читаем поток как СЫРОЙ Buffer (express.raw). */
 function express_raw() {
   const express = require("express");
-  return [express.text({ type: "*/*" })];
+  return [
+    (req, _res, next) => {
+      if (Buffer.isBuffer(req.rawBody)) { req.body = req.rawBody; return next(); }
+      if (Buffer.isBuffer(req.body)) return next();
+      express.raw({ type: "*/*", limit: "1mb" })(req, _res, next);
+    },
+  ];
 }
 
 module.exports = {

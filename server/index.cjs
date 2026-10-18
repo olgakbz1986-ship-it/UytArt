@@ -68,6 +68,10 @@ const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.
    REFRESH_TTL_SEC (7 дней) и хранится ТОЛЬКО в httpOnly-куке qf_refresh —
    JavaScript клиента его не читает; кука отправляется только на /api/auth/*. */
 const app = express();
+/* БЛОК 3, Пункт 3.2: тело webhook-эндпоинтов должно оставаться СЫРЫМ
+   (Buffer) для проверки HMAC-SHA256 — express.json() здесь запрещён.
+   express.raw() монтируется ДО глобального json-парсера только на эти пути. */
+app.use("/api/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
 
