@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
 import { useAppStore } from "../lib/store";
-import { useTariffStore, LimitReachedError } from "../lib/tariff";
+import { useTariffStore, LimitReachedError, type TariffAction } from "../lib/tariff";
+import OverlimitPackModal from "./OverlimitPackModal";
 import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
 import { Modal, Btn, Field, Badge } from "./ui";
@@ -41,7 +42,7 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
   /* §2.4/§2.5: платная стена при исчерпании серверного лимита */
-  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number } | null>(null);
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: TariffAction } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const acc = useSellerAccount();
   const sellerReg = useSellerReg();
@@ -112,7 +113,7 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
       await useTariffStore.getState().assertLimit("ai_card_gen");
     } catch (e) {
       if (e instanceof LimitReachedError) {
-        setLimitWall({ title: "Лимит AI-генераций исчерпан", limit: e.limit, used: e.used });
+        setLimitWall({ title: "Лимит AI-генераций исчерпан", limit: e.limit, used: e.used, action: "ai_card_gen" });
         return;
       }
       setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
@@ -140,7 +141,7 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
         await useTariffStore.getState().assertLimit("product_create");
       } catch (e) {
         if (e instanceof LimitReachedError) {
-          setLimitWall({ title: "Лимит товаров исчерпан", limit: e.limit, used: e.used });
+          setLimitWall({ title: "Лимит товаров исчерпан", limit: e.limit, used: e.used, action: "product_create" });
           return;
         }
         setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
@@ -596,10 +597,23 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
             <p className="text-[12.5px] text-ink-mute mb-5">Можно докупить пакет сверх лимита (+50 слотов за 300 ₽ / +50 генераций за 500 ₽) или перейти на тариф выше.</p>
             <div className="flex gap-2 justify-center">
               <Btn variant="ghost" onClick={() => setLimitWall(null)}>Закрыть</Btn>
+              {limitWall.action && (
+                <Btn onClick={() => setLimitWall({ ...limitWall, action: undefined })}>Докупить пакет</Btn>
+              )}
               <Link to="/plans" onClick={() => setLimitWall(null)} className="inline-flex items-center h-10 px-5 rounded-[10px] bg-accent text-white text-sm font-bold hover:bg-accent-deep transition-colors">Перейти на следующий тариф</Link>
             </div>
           </div>
         </div>
+      )}
+
+      {/* §4.5: покупка пакета сверх лимита прямо в момент отказа */}
+      {limitWall?.action && (
+        <OverlimitPackModal
+          open
+          action={limitWall.action}
+          reason={limitWall.title}
+          onClose={() => setLimitWall(null)}
+        />
       )}
     </Modal>
   );

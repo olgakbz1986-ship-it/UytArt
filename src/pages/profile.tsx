@@ -15,6 +15,7 @@ import { ChatModal } from "../components/chat";
 import MarketOrderDetail from "../components/MarketOrderDetail";
 import { ReviewModal, TicketModal } from "../components/review";
 import { BuyerPremiumSection } from "../components/PremiumBlocks";
+import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
 
 type Tab = "orders" | "agent" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
 
@@ -361,7 +362,12 @@ export default function ProfilePage() {
 
       {/* ЗАКАЗЫ */}
       {tab === "agent" && (
-        <div className="fade-up"><AgentPanel /></div>
+        <div className="fade-up">
+          {/* §2.8: счётчики потребления + предупреждение при 80% лимита */}
+          <LimitWarning actions={DEFAULT_WATCHED} refreshKey={tab} />
+          <LimitCounters actions={DEFAULT_WATCHED} refreshKey={tab} />
+          <AgentPanel />
+        </div>
       )}
 
       {tab === "orders" && (

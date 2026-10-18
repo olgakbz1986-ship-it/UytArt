@@ -58,7 +58,7 @@ export default function OverlimitPackModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Докупить сверх лимита" width={440}>
+    <Modal open={open} onClose={onClose} title="Докупить сверх лимита">
       {done ? (
         <div className="text-center py-2">
           <p className="text-[34px] mb-2">✅</p>
@@ -86,7 +86,7 @@ export default function OverlimitPackModal({
               Тарифы выше
             </Link>
             {pack && (
-              <Btn loading={busy} onClick={() => void buy()}>
+              <Btn disabled={busy} onClick={() => void buy()}>
                 Купить за {pack.price} ₽
               </Btn>
             )}
