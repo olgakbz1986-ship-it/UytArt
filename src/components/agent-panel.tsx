@@ -76,8 +76,11 @@ export default function AgentPanel() {
         setTimeout(() => {
           say(`Нашёл ${found.length} похожих позиций. Если нужно точь-в-точь, могу оформить индивидуальный заказ.`);
         }, 8500);
-        const id = addTask({ kind: "search", title: "Визуальный поиск", payload: { query: text, count: 4, products: found.map((p: any) => p.id), photo } });
-        updateTask(id, { status: "working", steps: ["Принято к исполнению"] });
+        void (async () => {
+          const id = await addTask({ kind: "search", title: "Визуальный поиск", payload: { query: text, count: 4, products: found.map((p: any) => p.id), photo } });
+          if (!id) return; /* §2.3: сервер отклонил задачу — лимит параллельных задач исчерпан, уведомление уже показано */
+          updateTask(id, { status: "working", steps: ["Принято к исполнению"] });
+        })();
       } else if (/ремонт|интерьер|проект/i.test(text)) {
         say("Понял, это проект. Уточняю стиль, бюджет и объём — соберу концепт и корзину.");
       } else if (/возврат|доставка|оплат/i.test(text)) {
@@ -197,8 +200,11 @@ export default function AgentPanel() {
             });
             useMarketStore.setState((st: any) => ({ orders: st.orders.map((o: any, i: number) => (i === 0 ? { ...o, status: "draft" } : o)) }));
             const orderId = (useMarketStore.getState() as any).orders[0]?.id;
-            const tid = addTask({ kind: "custom", title: "Индивидуальный заказ", payload: { orderId } });
-            updateTask(tid, { status: "awaiting_confirm", steps: ["Черновик создан на бирже"] });
+            void (async () => {
+              const tid = await addTask({ kind: "custom", title: "Индивидуальный заказ", payload: { orderId } });
+              if (!tid) return; /* §2.3: лимит задач агента — задача не создана */
+              updateTask(tid, { status: "awaiting_confirm", steps: ["Черновик создан на бирже"] });
+            })();
             say("Черновик создан на бирже — откройте вкладку «Индивидуальные заказы», проверьте состав и фото. Подтверждение отправки мастерам придёт в колокольчик.");
             useNotifyStore.getState().push({ kind: "confirm", title: "Агент: черновик индивидуального заказа", text: "Нажмите на уведомление, чтобы проверить и доработать черновик на бирже, или подтвердите отправку мастерам.", actionLabel: "Отправить мастерам", actionType: "agent_custom_send", payload: { orderId }, deepLink: "/market?focus=" + orderId });
           }} className="w-full mt-3 h-10 rounded-[10px] bg-accent text-ink text-[13px] font-bold hover:bg-accent-deep cursor-pointer">

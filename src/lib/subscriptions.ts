@@ -110,7 +110,7 @@ interface SubState {
   priceWatches: PriceWatch[];
   setBuyerPlan: (accountId: string, p: BuyerPlanId) => void;
   getBuyerPlan: (accountId: string) => BuyerPlanId;
-  consumeAiGen: (accountId: string) => boolean;
+  consumeAiGen: (accountId: string, cost?: number) => Promise<boolean>;
   aiGensLeft: (accountId: string) => number;
   addConcept: (c: Omit<Concept, "id" | "createdAt">) => void;
   removeConcept: (id: string) => void;
@@ -134,12 +134,18 @@ export const useSubStore = create<SubState>()(
       
       getBuyerPlan: (accountId) => get().buyerPlanByAccount[accountId] || "free",
 
-      consumeAiGen: (accountId) => {
+      consumeAiGen: async (accountId, cost = 1) => {
+        /* §1.5/§2.1: сервер — источник истины о лимите AI-генераций;
+           локальный счётчик только зеркалится для отображения остатка. */
+        try {
+          const { useTariffStore } = await import("./tariff");
+          await useTariffStore.getState().assertLimit("ai_gen", cost);
+        } catch { return false; }
         const plan = buyerLimits(get().getBuyerPlan(accountId));
         const month = currentMonth();
         const used = get().aiGensUsed[month] || 0;
-        if (used >= plan.aiGens) return false;
-        set((s) => ({ aiGensUsed: { ...s.aiGensUsed, [month]: used + 1 } }));
+        if (used + cost > plan.aiGens && Number.isFinite(plan.aiGens)) return false;
+        set((s) => ({ aiGensUsed: { ...s.aiGensUsed, [month]: Math.min(used + cost, Number.isFinite(plan.aiGens) ? plan.aiGens : used + cost) } }));
         return true;
       },
       aiGensLeft: (accountId) => {

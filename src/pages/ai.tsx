@@ -69,7 +69,8 @@ export default function AiPage() {
       }
       return false;
     }
-    for (let i = 0; i < cost; i++) consumeAiGen(accountId);
+    /* зеркалим серверный учёт в локальный счётчик для отображения остатка */
+    void consumeAiGen(accountId, cost);
     return true;
   };
 

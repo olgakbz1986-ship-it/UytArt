@@ -97,9 +97,12 @@ export default function AgentPanelSeller() {
     if (!st) return;
     const trend = st.market.length > 20 ? "up" : st.market.length > 8 ? "flat" : "down";
     const text = trend === "up" ? `Спрос в нише «${st.cat}» растёт (${st.market.length} активных предложений) — пора расширять ассортимент.` : trend === "down" ? `Ниша «${st.cat}» узкая (${st.market.length} предложений) — рассмотрите скидку или новые теги.` : `Спрос в нише «${st.cat}» стабилен (${st.market.length} предложений). Держим ритм.`;
-    const id = addTask({ kind: "analytics", title: "Мониторинг спроса: " + st.cat, payload: { text } });
-    updateTask(id, { status: "working", steps: ["Мониторинг запущен"] });
-    say("Запустил мониторинг спроса по вашей нише — отчёт придёт в уведомления.");
+    void (async () => {
+      const id = await addTask({ kind: "analytics", title: "Мониторинг спроса: " + st.cat, payload: { text } });
+      if (!id) return; /* §2.3: лимит задач агента исчерпан — мониторинг не запущен */
+      updateTask(id, { status: "working", steps: ["Мониторинг запущен"] });
+      say("Запустил мониторинг спроса по вашей нише — отчёт придёт в уведомления.");
+    })();
   };
 
   const send = () => {

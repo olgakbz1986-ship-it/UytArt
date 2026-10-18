@@ -123,7 +123,20 @@ export const useAgentStore = create<AgentState>()(
           return { ...x, updatedAt: Date.now(), title: isFirst && text ? text.slice(0, 40) : x.title, messages: [...x.messages, msg] };
         }) };
       }),
-      addTask: (t) => {
+      addTask: async (t) => {
+        /* §1.5/§2.3: серверная проверка лимита параллельных задач (3/10/∞)
+           перед постановкой КАЖДОЙ задачи; обход через кэш невозможен. */
+        const activeTasks = get().tasks.filter((x) => x.status === "queued" || x.status === "working").length;
+        try {
+          const { useTariffStore } = await import("./tariff");
+          await useTariffStore.getState().assertLimit("agent_task", 1, { activeTasks });
+        } catch (e: any) {
+          if (e && e.name === "LimitReachedError") {
+            const { useNotifyStore } = await import("./notify");
+            useNotifyStore.getState().push({ kind: "alert", title: "Лимит задач агента исчерпан", text: `Активных задач: ${e.used} из ${Number.isFinite(e.limit) ? e.limit : "∞"}. Дождитесь выполнения или улучшите тариф (/plans).` });
+          }
+          return null;
+        }
         const id = "t-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
         set((s) => ({ tasks: [{ ...t, id, startedAt: Date.now(), status: "queued", steps: [] }, ...s.tasks] }));
         return id;
