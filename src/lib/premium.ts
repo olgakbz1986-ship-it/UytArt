@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAppStore } from "./store";
@@ -95,26 +96,40 @@ export function currentBuyerFeatures(): BuyerFeatures {
   return buyerFeaturesOf(useSubStore.getState().getBuyerPlan(uid));
 }
 
-/* Хук-обёртки для компонентов (реактивные) */
+/* Хук-обёртки для компонентов (реактивные).
+   ВАЖНО: подписка выполняется ОДИН раз через useAppStore.subscribe на уровне
+   модуля — внутри хуков никаких вызовов хуков быть не должно (правило React),
+   иначе компонент падает с "Invalid hook call". */
+type FeatureListener = () => void;
+const featureListeners = new Set<FeatureListener>();
+let lastSellerF: SellerFeatures = currentSellerFeatures();
+let lastBuyerF: BuyerFeatures = currentBuyerFeatures();
+useAppStore.subscribe(() => {
+  const ns = currentSellerFeatures();
+  const nb = currentBuyerFeatures();
+  const changed =
+    (Object.keys(ALL_OFF) as (keyof SellerFeatures)[]).some((k) => ns[k] !== lastSellerF[k]) ||
+    (Object.keys(nb) as (keyof BuyerFeatures)[]).some((k) => nb[k] !== lastBuyerF[k]);
+  if (changed) { lastSellerF = ns; lastBuyerF = nb; featureListeners.forEach((l) => l()); }
+});
+
 export function useSellerFeatures(): SellerFeatures {
-  const uid = useAppStore((s) => s.session?.userId || "guest");
-  const se = useSellerAccount((s) => s.planIdsByAccount[uid]?.self_employed || "free");
-  const ip = useSellerAccount((s) => s.planIdsByAccount[uid]?.ip || "free");
-  const ooo = useSellerAccount((s) => s.planIdsByAccount[uid]?.ooo || "free");
-  const merge = () => {
-    let best: SellerFeatures = { ...ALL_OFF };
-    ([[ "self_employed", se ], [ "ip", ip ], [ "ooo", ooo ]] as [SellerLegalType, string][]).forEach(([t, p]) => {
-      const f = sellerFeaturesOf(t, p);
-      for (const k of Object.keys(ALL_OFF) as (keyof SellerFeatures)[]) if (f[k]) best[k] = true;
-    });
-    return best;
-  };
-  return merge();
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const l: FeatureListener = () => bump((n) => n + 1);
+    featureListeners.add(l);
+    return () => { featureListeners.delete(l); };
+  }, []);
+  return lastSellerF;
 }
 export function useBuyerFeatures(): BuyerFeatures {
-  const uid = useAppStore((s) => s.session?.userId || "guest");
-  const plan = useSubStore((s) => s.getBuyerPlan(uid));
-  return buyerFeaturesOf(plan);
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const l: FeatureListener = () => bump((n) => n + 1);
+    featureListeners.add(l);
+    return () => { featureListeners.delete(l); };
+  }, []);
+  return lastBuyerF;
 }
 
 /* ---------- helpers ---------- */
