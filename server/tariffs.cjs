@@ -53,6 +53,91 @@ const BUYER_PLANS = {
 /* Разовые регистрационные взносы по типу юрлица: 5 / 10 / 15 тыс. ₽ */
 const REGISTRATION_FEES = { self_employed: 5000, ip: 10000, ooo: 15000 };
 
+/* ============================================================
+   ЭТАП 4 (§4.1–§4.6): РЕВИЗИЯ ЦЕН И ПОЛИТИКА МОНЕТИЗАЦИИ
+   ------------------------------------------------------------
+   · Новые месячные цены действуют для НОВЫХ подписок;
+     действующие подписчики платят legacyPrice до истечения
+     дедушкиной оговорки (ИП — 3 мес., ООО — 6 мес., §4.3).
+   · Самозанятые (0/300/600/1200) и покупатели (0/500/1000/1500)
+     не изменяются (§4.6).
+   ============================================================ */
+const YEAR_DISCOUNT = 0.2; /* единая формула годовой цены: −20% (§3.2/§4.2) */
+const yearPriceOf = (monthly) => (monthly === 0 ? 0 : Math.round((monthly * 12 * (1 - YEAR_DISCOUNT)) / 10) * 10);
+
+const SELLER_PLAN_PRICES = {
+  self_employed: [
+    { id: "free", price: 0 },
+    { id: "master", price: 300 },
+    { id: "profi", price: 600 },
+    { id: "top", price: 1200 },
+  ],
+  ip: [
+    { id: "free", price: 0 },
+    { id: "business", price: 999, legacyPrice: 800 },
+    { id: "business-pro", price: 1999, legacyPrice: 1800 },
+    { id: "business-premium", price: 4999, legacyPrice: 4000 },
+  ],
+  ooo: [
+    { id: "free", price: 0 },
+    { id: "corp", price: 4999, legacyPrice: 2500 },
+    { id: "corp-pro", price: 14999, legacyPrice: 6000 },
+    { id: "corp-premium", price: 49999, legacyPrice: 15000 },
+  ],
+};
+const BUYER_PLAN_PRICES = { free: 0, start: 500, designer: 1000, premium: 1500 }; /* §4.6 — без изменений */
+const GRANDFATHER_MONTHS = { ip: 3, ooo: 6 }; /* §4.3 */
+const PRICE_REVISION_NOTICE_DAYS = 30;        /* §4.3: уведомление за 30 дней */
+const PRICE_REVISION_EFFECTIVE_AT = process.env.QF_PRICE_REVISION_AT || "2026-10-18T00:00:00.000Z"; /* дата ревизии */
+
+/* Пакеты сверх лимитов (§4.5): +50 слотов товаров за 300 ₽/мес,
+   +50 AI-генераций за 500 ₽/мес. */
+const OVERLIMIT_PACKS = {
+  "plus-products-50": { kind: "product_slots", slots: 50, price: 300, title: "+50 слотов товаров на месяц" },
+  "plus-ai-gens-50": { kind: "ai_gen_packs", slots: 50, price: 500, title: "+50 AI-генераций на месяц" },
+};
+function packForAction(action) {
+  if (action === "product_create") return "plus-products-50";
+  if (action === "ai_card_gen" || action === "ai_gen" || action === "interior_project") return "plus-ai-gens-50";
+  return null;
+}
+
+function planRow(legalType, planId) {
+  const list = SELLER_PLAN_PRICES[legalType] || [];
+  return list.find((p) => p.id === planId) || null;
+}
+
+/* Цена тарифа с учётом дедушкиной оговорки (§4.3):
+   sub = { activeSinceIso, grandfatherFromIso } или null (новая подписка). */
+function sellerPlanPrice(legalType, planId, sub, at) {
+  const row = planRow(legalType, planId);
+  if (!row) return { amount: 0, listPrice: 0, grandfathered: false, grandfatherUntil: null, noticeAt: null };
+  const months = GRANDFATHER_MONTHS[legalType];
+  if (!row.legacyPrice || !months || !sub || !sub.activeSinceIso) {
+    return { amount: row.price, listPrice: row.price, grandfathered: false, grandfatherUntil: null, noticeAt: null };
+  }
+  const from = new Date(Math.max(new Date(sub.activeSinceIso).getTime(), new Date(sub.grandfatherFromIso || PRICE_REVISION_EFFECTIVE_AT).getTime()));
+  const until = new Date(from.getTime());
+  until.setUTCMonth(until.getUTCMonth() + months);
+  const now = at || new Date();
+  if (now >= until) {
+    return { amount: row.price, listPrice: row.price, grandfathered: false, grandfatherUntil: until.toISOString(), noticeAt: null };
+  }
+  const notice = new Date(until.getTime() - PRICE_REVISION_NOTICE_DAYS * 24 * 60 * 60 * 1000);
+  return { amount: row.legacyPrice, listPrice: row.price, grandfathered: true, grandfatherUntil: until.toISOString(), noticeAt: notice.toISOString() };
+}
+
+/* Пропорциональный перерасчёт (§4.4). */
+function periodRemainingFraction(startIso, endIso, at) {
+  const a = new Date(startIso).getTime(), b = new Date(endIso).getTime();
+  if (!(b > a)) return 0;
+  const t = Math.min(Math.max((at || new Date()).getTime(), a), b);
+  return Math.max(0, Math.min(1, (b - t) / (b - a)));
+}
+function upgradeCredit(oldPrice, startIso, endIso, at) {
+  return Math.round(oldPrice * periodRemainingFraction(startIso, endIso, at));
+}
+
 const PLAN_LEVEL = {
   free: 0,
   master: 1, business: 1, corp: 1,
@@ -81,6 +166,14 @@ function sellerLimitsOf(legalType, planId) {
 
 function buyerLimitsOf(planId) {
   return BUYER_PLANS[planId] || BUYER_PLANS.free;
+}
+
+/** §4.5: пакет-предложение в момент отказа по лимиту. */
+function packOfferFor(action) {
+  const id = packForAction(action);
+  if (!id) return null;
+  const p = OVERLIMIT_PACKS[id];
+  return { packId: id, title: p.title, price: p.price, slots: p.slots };
 }
 
 function mount(app, ctx) {
@@ -153,15 +246,66 @@ function mount(app, ctx) {
     /* §1.2: комиссия профиля продавца пересчитывается ИЗ МАТРИЦЫ при каждом
        чтении/смене тарифа — базовая ставка типа юрлица не хранится «навсегда». */
     try { syncProfileCommission(uid, lt, sp, rate); } catch (e) { console.error("[COMMISSION SYNC]", e); }
+    /* ЭТАП 4 (§4.3): цена текущего тарифа с дедушкиной оговоркой —
+       считается на сервере по данным подписки в базе, а не на клиенте. */
+    const subs = subscriptionOf(uid);
+    const priceInfo = sellerPlanPrice(lt, sp, subs.paid ? { activeSinceIso: subs.paid.periodStart, grandfatherFromIso: subs.grandfatherFrom } : null);
     return {
       accountId: String(uid),
       legalType: lt,
       sellerPlanId: sp,
       buyerPlanId: bp,
       commissionRate: rate,
-      limits: { seller: sellerLimitsOf(lt, sp), buyer: buyerLimitsOf(bp) },
+      limits: { seller: sellerLimitsOfWithPacks(lt, sp, uid), buyer: buyerLimitsOf(bp) },
+      pricing: {
+        monthlyAmount: priceInfo.amount,
+        listPrice: priceInfo.listPrice,
+        yearPrice: yearPriceOf(priceInfo.amount),
+        grandfathered: priceInfo.grandfathered,
+        grandfatherUntil: priceInfo.grandfatherUntil,
+        revisionNoticeAt: priceInfo.noticeAt,
+      },
+      subscription: subs, /* §4.4: оплаченный период / дата окончания доступа */
       updatedAt: row.updated_at,
     };
+  }
+
+  /* ---------- ЭТАП 4: подписки и пакеты сверх лимитов ---------- */
+  function subscriptionsSeg() {
+    const d = readAll();
+    if (!d.subscriptions) d.subscriptions = {}; /* uid -> { paid, packs, grandfatherFrom } */
+    return d;
+  }
+  function subscriptionOf(uid) {
+    const d = subscriptionsSeg();
+    return d.subscriptions[String(uid)] || { paid: null, packs: {}, grandfatherFrom: PRICE_REVISION_EFFECTIVE_AT };
+  }
+  function saveSubscription(uid, sub) {
+    const d = subscriptionsSeg();
+    d.subscriptions[String(uid)] = sub;
+    writeAll(d);
+  }
+  /** Активные бусты пакетов этого месяца: { product_slots: N, ai_gen_packs: N } */
+  function packBoosts(uid) {
+    const sub = subscriptionOf(uid);
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const out = { product_slots: 0, ai_gen_packs: 0 };
+    for (const [packId, info] of Object.entries(sub.packs || {})) {
+      if (!OVERLIMIT_PACKS[packId]) continue;
+      const until = (info && info.until) || "";
+      if (until.slice(0, 7) >= monthKey && new Date(until).getTime() > Date.now()) {
+        out[OVERLIMIT_PACKS[packId].kind] += OVERLIMIT_PACKS[packId].slots;
+      }
+    }
+    return out;
+  }
+  /* Лимит продавца = сетка тарифа + активные купленные пакты (§4.5:
+     пакеты реально открывают лимит, причём на СЕРВЕРЕ). */
+  function sellerLimitsOfWithPacks(legalType, planId, uid) {
+    const base = sellerLimitsOf(legalType, planId);
+    const b = packBoosts(uid);
+    const add = (v, n) => (!Number.isFinite(v) ? v : v + n);
+    return { maxProducts: add(base.maxProducts, b.product_slots), aiCardGens: add(base.aiCardGens, b.ai_gen_packs) };
   }
 
   /* Пересчёт и запись комиссии в профиль продавца (реестр профилей на сервере). */
@@ -249,22 +393,73 @@ function mount(app, ctx) {
     return { provider: "mock", provider_payment_id: "mock_" + payment.id.slice(0, 8), confirmation_url: "/api/payments/" + payment.id + "/confirm" };
   }
 
-  /* Успешная оплата: проводка дохода + чек + пересчёт комиссии профиля (§1.2). */
+  /* Успешная оплата: проводка дохода + чек + пересчёт комиссии профиля (§1.2).
+     ЭТАП 4: подписки на тарифы и пакеты сверх лимитов проводят доход,
+     выпускают чек и АКТИВИРУЮТ подписку/пакет в базе. */
   async function finalizePaid(p) {
     p.status = "succeeded";
     p.paid_at = new Date().toISOString();
     savePayment(p);
     financeLedgerPush(p.user_id, {
-      type: "registration_fee_income",
+      type: p.kind === "seller_subscription" ? "subscription_income" : p.kind === "overlimit_pack" ? "pack_income" : "registration_fee_income",
       amount: p.amount,
       payment_id: p.id,
-      comment: "Разовый регистрационный взнос · " + p.legal_type + " · способ: " + p.method,
+      comment: (p.kind === "seller_subscription" ? "Подписка на тариф" : p.kind === "overlimit_pack" ? "Пакет сверх лимита" : "Разовый регистрационный взнос")
+        + " · " + p.legal_type + " · способ: " + p.method + (p.credit_applied ? " · зачтено: " + p.credit_applied + " ₽" : ""),
     });
     const receipt = financeIssueReceipt(p.user_id, p);
+    if (p.kind === "seller_subscription") {
+      await activateSubscription(p);
+    } else if (p.kind === "overlimit_pack") {
+      activatePack(p);
+    }
     /* Пересчёт комиссии профиля из матрицы комиссий по ОПЛАЧЕННОМУ тарифу */
     const rate = commissionRateOf(p.legal_type, p.plan_id || "free");
     if (rate != null) await upsertTariffRow(p.user_id, { legal_type: p.legal_type, commission_rate: rate });
     return receipt;
+  }
+
+  /* §4.1/§4.3/§4.4: активация оплаченной подписки продавца.
+     Апгрейд — новый период начинается сразу (остаток зачтён в сумме платежа);
+     Даунгрейд — доступ к прежнему тарифу сохраняется до конца уже
+     оплаченного периода, смена плана откладывается (pendingPlan). */
+  async function activateSubscription(p) {
+    const sub = subscriptionOf(p.user_id);
+    const now = new Date();
+    const months = p.period === "year" ? 12 : 1;
+    const prev = sub.paid;
+    if (prev && prev.planId !== "free" && (PLAN_LEVEL[p.plan_id] ?? 0) < (PLAN_LEVEL[prev.planId] ?? 0) && new Date(prev.periodEnd) > now) {
+      /* даунгрейд: фиксируем дату окончания оплаченного доступа (§4.4) */
+      sub.pendingDowngrade = { planId: p.plan_id, accessUntil: prev.periodEnd, paidAt: p.paid_at, paymentId: p.id };
+    } else {
+      const periodStart = now.toISOString();
+      sub.paid = {
+        planId: p.plan_id,
+        period: p.period,
+        amount: p.amount,
+        listPrice: p.list_price,
+        grandfathered: !!p.grandfathered,
+        creditApplied: p.credit_applied || 0,
+        periodStart,
+        periodEnd: addMonthsIso(periodStart, months),
+        paymentId: p.id,
+        paidAt: p.paid_at,
+      };
+      delete sub.pendingDowngrade;
+    }
+    saveSubscription(p.user_id, sub);
+    await upsertTariffRow(p.user_id, { seller_plan_id: p.plan_id });
+  }
+  /* §4.5: активация пакета сверх лимита на текущий месяц */
+  function activatePack(p) {
+    const sub = subscriptionOf(p.user_id);
+    if (!sub.packs) sub.packs = {};
+    const until = addMonthsIso(new Date().toISOString(), 1);
+    const cur = sub.packs[p.pack_id];
+    const from = cur && cur.until && new Date(cur.until) > new Date() ? cur.until : new Date().toISOString();
+    sub.packs[p.pack_id] = { until: addMonthsIso(from, 1), lastPaymentId: p.id, activatedAt: p.paid_at };
+    void until;
+    saveSubscription(p.user_id, sub);
   }
 
   /* ============================== API ============================== */
@@ -325,6 +520,110 @@ function mount(app, ctx) {
       savePayment(payment);
       res.json({ ok: true, payment: { id: payment.id, amount: payment.amount, fee: payment.amount, status: payment.status, confirmation_url: payment.confirmation_url, provider: payment.provider } });
     } catch (e) { console.error("[FEE PAYMENT CREATE]", e); res.status(502).json({ error: "provider_unavailable" }); }
+  });
+
+  /* ============================================================
+     ЭТАП 4 (§4.1–§4.5): ПОДПИСКА НА ТАРИФ ПРОДАВЦА — реальная оплата
+     ------------------------------------------------------------
+     Цена считается НА СЕРВЕРЕ: новые подписки — новая цена (§4.1/§4.2);
+     действующие — legacyPrice до конца дедушкиного срока (§4.3).
+     Апгрейд: зачитывается остаток оплаченного периода пропорционально (§4.4).
+     Даунгрейд: доступ фиксируется до конца уже оплаченного периода (§4.4).
+     ============================================================ */
+  function addMonthsIso(iso, months) {
+    const d = new Date(iso);
+    d.setUTCMonth(d.getUTCMonth() + months);
+    return d.toISOString();
+  }
+
+  app.post("/api/subscriptions/seller/create", guard, async (req, res) => {
+    try {
+      const planId = String((req.body && req.body.planId) || "");
+      const period = req.body && req.body.period === "year" ? "year" : "month";
+      const billingCycle = req.body && req.body.billingCycle === "yearly" ? "yearly" : period; /* совместимость */
+      const isYear = billingCycle === "year";
+      const t = await tariffView(req.userId);
+      const lt = t.legalType;
+      const row = planRow(lt, planId);
+      if (!row) return res.status(400).json({ error: "bad_plan" });
+      const sub = subscriptionOf(req.userId);
+      if (planId === t.sellerPlanId && sub.paid && sub.paid.planId === planId && new Date(sub.paid.periodEnd) > new Date()) {
+        return res.status(409).json({ error: "already_active" });
+      }
+      /* §4.3: «действующий подписчик» = есть успешная подписка на платный тариф */
+      const isExisting = !!(sub.paid && sub.paid.planId !== "free");
+      const priceInfo = sellerPlanPrice(lt, planId, isExisting ? { activeSinceIso: sub.paid.periodStart, grandfatherFromIso: sub.grandfatherFrom } : null);
+      let amount = isYear ? yearPriceOf(priceInfo.amount) : priceInfo.amount;
+      let credit = 0;
+      const now = new Date();
+      /* §4.4 апгрейд: пропорциональный зачёт неиспользованного остатка текущего периода */
+      const upgrading = sub.paid && (PLAN_LEVEL[planId] ?? 0) > (PLAN_LEVEL[sub.paid.planId] ?? 0);
+      if (upgrading && sub.paid.periodEnd && new Date(sub.paid.periodEnd) > now) {
+        const oldPriceInfo = sellerPlanPrice(lt, sub.paid.planId, { activeSinceIso: sub.paid.periodStart, grandfatherFromIso: sub.grandfatherFrom });
+        credit = upgradeCredit(oldPriceInfo.amount, sub.paid.periodStart, sub.paid.periodEnd, now);
+        amount = Math.max(0, amount - credit);
+      }
+      const payment = {
+        id: crypto.randomUUID(),
+        user_id: req.userId,
+        kind: "seller_subscription",
+        legal_type: lt,
+        plan_id: planId,
+        period: isYear ? "year" : "month",
+        list_price: isYear ? yearPriceOf(priceInfo.listPrice) : priceInfo.listPrice,
+        grandfathered: priceInfo.grandfathered,
+        credit_applied: credit,
+        amount,
+        currency: "RUB",
+        method: String((req.body && req.body.method) || "card"),
+        purpose: "Подписка · " + lt + "/" + planId + " · " + (isYear ? "год" : "месяц") + (credit ? " (зачёт остатка " + credit + " ₽)" : ""),
+        status: "pending",
+        created_at: now.toISOString(),
+      };
+      const prov = await providerCreatePayment(payment);
+      payment.provider = prov.provider;
+      payment.provider_payment_id = prov.provider_payment_id;
+      payment.confirmation_url = prov.confirmation_url || null;
+      savePayment(payment);
+      res.json({
+        ok: true,
+        quote: {
+          planId, period: payment.period, listPrice: payment.list_price, amount,
+          grandfathered: priceInfo.grandfathered, grandfatherUntil: priceInfo.grandfatherUntil,
+          revisionNoticeAt: priceInfo.noticeAt, creditApplied: credit,
+        },
+        payment: { id: payment.id, amount: payment.amount, status: payment.status, confirmation_url: payment.confirmation_url, provider: payment.provider },
+      });
+    } catch (e) { console.error("[SUB CREATE]", e); res.status(502).json({ error: "provider_unavailable" }); }
+  });
+
+  /* §4.5 Пакет сверх лимита: +50 слотов товаров 300 ₽/мес, +50 генераций 500 ₽/мес */
+  app.post("/api/packs/create", guard, async (req, res) => {
+    try {
+      const packId = String((req.body && req.body.packId) || "");
+      const pack = OVERLIMIT_PACKS[packId];
+      if (!pack) return res.status(400).json({ error: "bad_pack" });
+      const payment = {
+        id: crypto.randomUUID(),
+        user_id: req.userId,
+        kind: "overlimit_pack",
+        pack_id: packId,
+        legal_type: (await tariffView(req.userId)).legalType,
+        plan_id: null,
+        amount: pack.price,
+        currency: "RUB",
+        method: String((req.body && req.body.method) || "card"),
+        purpose: "Пакет сверх лимита · " + pack.title + " · " + pack.price + " ₽",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      };
+      const prov = await providerCreatePayment(payment);
+      payment.provider = prov.provider;
+      payment.provider_payment_id = prov.provider_payment_id;
+      payment.confirmation_url = prov.confirmation_url || null;
+      savePayment(payment);
+      res.json({ ok: true, pack: { id: packId, title: pack.title, slots: pack.slots, price: pack.price }, payment: { id: payment.id, amount: payment.amount, status: payment.status, confirmation_url: payment.confirmation_url, provider: payment.provider } });
+    } catch (e) { console.error("[PACK CREATE]", e); res.status(502).json({ error: "provider_unavailable" }); }
   });
 
   /* §1.4 Webhook успеха провайдера (в prod подписывается секретами ЮKassa;
@@ -407,7 +706,8 @@ function mount(app, ctx) {
     return { id: p.id, amount: p.amount, fee: p.amount, status: p.status, method: p.method, confirmation_url: p.confirmation_url || null, paid_at: p.paid_at || null, provider: p.provider };
   }
 
-  /* §1.5 Серверная проверка лимита: читает тариф ИЗ БАЗЫ (не из клиента). */
+  /* §4.5 Серверная проверка лимита: читает тариф ИЗ БАЗЫ (не из клиента),
+     лимит продавца включает купленные пакеты сверх лимита (§4.5). */
   async function serverCheckLimit(uid, action, meta) {
     meta = meta || {};
     const t = await tariffView(uid);
@@ -422,17 +722,17 @@ function mount(app, ctx) {
         if (!Number.isFinite(limit)) return { allowed: true, limit, used };
         const products = (d.products || []).filter((p) => String(p.ownerId || p.owner_id) === String(uid) && !p.archived && !p.isDraft);
         const count = products.length;
-        return { allowed: count < limit, limit, used: count, reason: count >= limit ? "Лимит товаров тарифа исчерпан (" + limit + "). Улучшите тариф." : null };
+        return { allowed: count < limit, limit, used: count, reason: count >= limit ? "Лимит товаров тарифа исчерпан (" + limit + "). Улучшите тариф." : null, offer: count >= limit ? packOfferFor(action) : null };
       }
       case "ai_card_gen": {
         const limit = t.limits.seller.aiCardGens;
         if (!Number.isFinite(limit)) return { allowed: true, limit, used };
-        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит AI-генераций на месяц исчерпан (" + limit + ")." : null };
+        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит AI-генераций на месяц исчерпан (" + limit + ")." : null, offer: used >= limit ? packOfferFor(action) : null };
       }
       case "ai_gen": {
         const limit = t.limits.buyer.aiGens;
         if (!Number.isFinite(limit)) return { allowed: true, limit, used };
-        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит AI-генераций покупателя исчерпан (" + limit + ")." : null };
+        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит AI-генераций покупателя исчерпан (" + limit + ")." : null, offer: used >= limit ? packOfferFor(action) : null };
       }
       case "market_order": {
         const limit = t.limits.buyer.marketOrders;
@@ -472,10 +772,47 @@ function mount(app, ctx) {
     try {
       const action = String((req.body && req.body.action) || "");
       const r = await serverCheckLimit(req.userId, action, {});
-      if (!r.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: r.reason, limit: r.limit, used: r.used });
+      if (!r.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: r.reason, limit: r.limit, used: r.used, offer: r.offer || null });
       await serverConsumeLimit(req.userId, action);
       res.json({ ok: true, consumed: true, limit: r.limit, used: r.used + 1 });
     } catch (e) { console.error("[LIMITS CONSUME]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ============================================================
+     ЭТАП 4 (§4.1–§4.6): ПУБЛИЧНЫЙ ЦЕННИК и УВЕДОМЛЕНИЯ
+     ============================================================ */
+
+  /* Прайс-лист: новые цены (list), старые (legacy) и годовые по −20% */
+  app.get("/api/tariffs/pricing", (_q, r) => {
+    const out = { effectiveAt: PRICE_REVISION_EFFECTIVE_AT, yearDiscount: YEAR_DISCOUNT, seller: {}, buyer: BUYER_PLAN_PRICES, grandfatherMonths: GRANDFATHER_MONTHS, noticeDays: PRICE_REVISION_NOTICE_DAYS, overlimitPacks: OVERLIMIT_PACKS };
+    for (const [lt, list] of Object.entries(SELLER_PLAN_PRICES)) {
+      out.seller[lt] = list.map((p) => ({ id: p.id, price: p.price, legacyPrice: p.legacyPrice ?? null, yearPrice: yearPriceOf(p.price), yearLegacyPrice: p.legacyPrice != null ? yearPriceOf(p.legacyPrice) : null }));
+    }
+    r.json({ ok: true, pricing: out });
+  });
+
+  /* §4.3: уведомления аккаунта (в т.ч. «изменение цены за 30 дней») */
+  app.get("/api/notifications", guard, async (req, res) => {
+    try {
+      const t = await tariffView(req.userId);
+      const items = [];
+      const pr = t.pricing;
+      if (pr.grandfathered && pr.revisionNoticeAt && new Date(pr.revisionNoticeAt) <= new Date()) {
+        items.push({
+          id: "price-revision-" + t.accountId,
+          type: "price_revision",
+          title: "Изменение стоимости подписки",
+          body: "С 18.10.2026 действует новая цена тарифа. Для действующих подписчиков сохранена старая цена до " +
+            new Date(pr.grandfatherUntil).toLocaleDateString("ru-RU") + " (дедушкина оговорка). " +
+            "Новая цена — " + pr.listPrice.toLocaleString("ru-RU") + " ₽/мес. Настоящее уведомление направлено не менее чем за 30 дней.",
+          sent_at: pr.revisionNoticeAt,
+          applies_at: pr.grandfatherUntil,
+        });
+      }
+      const d = readAll();
+      for (const n of ((d.notifications && d.notifications[String(req.userId)]) || [])) items.push(n);
+      res.json({ ok: true, notifications: items });
+    } catch (e) { console.error("[NOTIFICATIONS]", e); res.status(500).json({ error: "server" }); }
   });
 
   /* Синхронизация статуса регистрации: active ТОЛЬКО если за аккаунтом
@@ -498,6 +835,14 @@ function mount(app, ctx) {
   ctx.serverConsumeLimit = serverConsumeLimit;
   ctx.commissionRateOf = commissionRateOf;
   ctx.REGISTRATION_FEES = REGISTRATION_FEES;
+  /* ЭТАП 4: доступ к политике цен и подпискам для других модулей сервера */
+  ctx.SELLER_PLAN_PRICES = SELLER_PLAN_PRICES;
+  ctx.BUYER_PLAN_PRICES = BUYER_PLAN_PRICES;
+  ctx.OVERLIMIT_PACKS = OVERLIMIT_PACKS;
+  ctx.GRANDFATHER_MONTHS = GRANDFATHER_MONTHS;
+  ctx.PRICE_REVISION_NOTICE_DAYS = PRICE_REVISION_NOTICE_DAYS;
+  ctx.sellerPlanPrice = sellerPlanPrice;
+  ctx.subscriptionOf = subscriptionOf;
 }
 
 /* webhook принимает и raw-body (подпись провайдера), и JSON */
@@ -515,4 +860,15 @@ module.exports = {
   commissionRateOf,
   sellerLimitsOf,
   buyerLimitsOf,
+  /* ЭТАП 4. РЕВИЗИЯ ЦЕН И ПОЛИТИКА МОНЕТИЗАЦИИ */
+  SELLER_PLAN_PRICES,
+  BUYER_PLAN_PRICES,
+  OVERLIMIT_PACKS,
+  GRANDFATHER_MONTHS,
+  PRICE_REVISION_NOTICE_DAYS,
+  PRICE_REVISION_EFFECTIVE_AT,
+  yearPriceOf,
+  sellerPlanPrice,
+  periodRemainingFraction,
+  upgradeCredit,
 };
