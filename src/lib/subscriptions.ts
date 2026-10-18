@@ -30,6 +30,19 @@ export const currentMonth = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
+/* ============================================================
+   ЭТАП 3 (§3.1): ЕДИНАЯ ТАБЛИЦА ЛИМИТОВ — источник истины для
+   всех экранов тарифов. Семь противоречий текста карточек устранены:
+     · Мастер:        500 товаров (было 30), 100 генераций (было 10)
+     · Профи:         2000 товаров (было 100)
+     · ИП Бесплатный: 50 товаров (было 20)
+     · Бизнес:        500 товаров (было 100), 100 генераций (было 30)
+     · Бизнес-Про:    2000 товаров (было 500), команда 15 (было 3)
+     · Бизнес-Премиум:безлимитная команда (было 10)
+   Унификация бейджей (§3.1): самозанятые — «Проверенный мастер»,
+   юридические лица (ИП/ООО) — «Официальный бренд».
+   ============================================================ */
+
 /* ---------- лимиты продавцов по юрлицу и тарифу ---------- */
 export interface SellerLimits {
   maxProducts: number;
@@ -53,9 +66,10 @@ const UNLIM = Infinity;
 export const SELLER_LIMITS: Record<SellerLegalType, Record<string, SellerLimits>> = {
   self_employed: {
     free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+    /* §3.1: самозанятые — верхний бейдж «Проверенный мастер» */
     master: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
     "master-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
-    "master-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
+    "master-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Проверенный мастер" },
   },
   ip: {
     free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
