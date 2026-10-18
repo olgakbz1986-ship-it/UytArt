@@ -55,6 +55,12 @@ export const api = {
     req<{ ok: boolean; consumed?: boolean; limit?: number; used?: number; error?: string; reason?: string; offer?: { packId: string; title: string; price: number; slots: number } | null }>(
       "/limits/consume", { method: "POST", body: JSON.stringify({ action, meta: meta || {} }) }),
 
+  /* §4.5/Задача 10: покупка пакета сверх лимита на сервере.
+     POST /api/limits/buy-pack { packType: "products"|"generations", quantity } */
+  buyLimitPack: (packType: "products" | "generations", quantity = 50) =>
+    req<{ ok: boolean; newLimit?: number; paymentId?: string; receipt?: any; error?: string }>(
+      "/limits/buy-pack", { method: "POST", body: JSON.stringify({ packType, quantity }) }),
+
   /* ---------- РАЗОВЫЙ ВЗНОС 5/10/15 тыс. ₽ (§1.4) ---------- */
   createFeePayment: (legalType: string, method: string, planId?: string) =>
     req<{ ok: boolean; payment?: { id: string; amount: number; status: string; confirmation_url?: string | null; provider?: string }; error?: string }>(

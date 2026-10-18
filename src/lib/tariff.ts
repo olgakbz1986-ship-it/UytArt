@@ -56,6 +56,9 @@ interface TariffState {
   /** Проверка + списание на сервере. Бросает ошибку с платной стеной,
    *  если лимит исчерпан — операция НЕ выполняется. */
   assertLimit: (action: LimitAction, cost?: number, meta?: Record<string, unknown>) => Promise<LimitCheckResult>;
+  /** §4.5/Задача 10: покупка пакета сверх лимита (+50 слотов товаров за 300 ₽,
+   *  +50 генераций за 500 ₽). Лимит открывается НА СЕРВЕРЕ в базе; кэш сбрасывается. */
+  buyOverlimitPack: (packType: "products" | "generations") => Promise<{ ok: boolean; newLimit: number }>;
 }
 
 /** Ошибка лимита: UI показывает по ней платную стену с апгрейдом. */
@@ -146,6 +149,16 @@ export const useTariffStore = create<TariffState>()(
         }
         const chk = await get().checkLimit(action, meta);
         return chk || { allowed: true, limit: -1, used: -1 };
+      },
+
+      buyOverlimitPack: async (packType) => {
+        /* §4.5/Задача 10: серверный POST /api/limits/buy-pack принимает
+           { packType, quantity }; создаёт платёж, в демо подтверждает его,
+           начисляет слоты в базу и возвращает новый лимит. */
+        const r = await api.buyLimitPack(packType, 50);
+        if (!r || r.ok !== true) throw new Error((r && (r as any).error) || "Пакет не приобретён, попробуйте позже");
+        await get().refresh();
+        return { ok: true, newLimit: Number(r.newLimit) || 0 };
       },
     }),
     { name: "qf-tariff-cache-v1", partialize: (s) => ({ tariff: s.tariff, syncedAt: s.syncedAt }) }
