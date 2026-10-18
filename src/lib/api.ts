@@ -47,10 +47,13 @@ export const api = {
   tariffFees: () => req<{ ok: boolean; fees: Record<string, number>; commissions: Record<string, Record<string, number>> }>("/tariffs/fees"),
 
   /* ---------- ЛИМИТЫ: серверная проверка/потребление (§1.5) ---------- */
-  limitCheck: (action: string) =>
-    req<{ ok: boolean; allowed?: boolean; limit?: number; used?: number; reason?: string | null }>("/limits/check?action=" + encodeURIComponent(action)),
-  limitConsume: (action: string) =>
-    req<{ ok: boolean; consumed?: boolean; limit?: number; used?: number; error?: string; reason?: string }>("/limits/consume", { method: "POST", body: JSON.stringify({ action }) }),
+  limitCheck: (action: string, meta?: Record<string, unknown>) =>
+    req<{ ok: boolean; allowed?: boolean; limit?: number; used?: number; reason?: string | null }>(
+      "/limits/check?action=" + encodeURIComponent(action) + (meta ? "&meta=" + encodeURIComponent(JSON.stringify(meta)) : "")
+    ),
+  limitConsume: (action: string, meta?: Record<string, unknown>) =>
+    req<{ ok: boolean; consumed?: boolean; limit?: number; used?: number; error?: string; reason?: string; offer?: { packId: string; title: string; price: number; slots: number } | null }>(
+      "/limits/consume", { method: "POST", body: JSON.stringify({ action, meta: meta || {} }) }),
 
   /* ---------- РАЗОВЫЙ ВЗНОС 5/10/15 тыс. ₽ (§1.4) ---------- */
   createFeePayment: (legalType: string, method: string, planId?: string) =>

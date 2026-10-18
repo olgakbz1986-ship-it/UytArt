@@ -52,10 +52,10 @@ interface TariffState {
    *  только когда данных о тарифе нет вообще (§1.1). */
   commissionPercent: () => number;
   /** Серверная проверка лимита перед потребляющей операцией (§1.5). */
-  checkLimit: (action: LimitAction) => Promise<LimitCheckResult | null>;
+  checkLimit: (action: LimitAction, meta?: Record<string, unknown>) => Promise<LimitCheckResult | null>;
   /** Проверка + списание на сервере. Бросает ошибку с платной стеной,
    *  если лимит исчерпан — операция НЕ выполняется. */
-  assertLimit: (action: LimitAction, cost?: number) => Promise<LimitCheckResult>;
+  assertLimit: (action: LimitAction, cost?: number, meta?: Record<string, unknown>) => Promise<LimitCheckResult>;
 }
 
 /** Ошибка лимита: UI показывает по ней платную стену с апгрейдом. */
@@ -63,12 +63,14 @@ export class LimitReachedError extends Error {
   action: LimitAction;
   limit: number;
   used: number;
-  constructor(action: LimitAction, limit: number, used: number, reason?: string) {
+  offer: { packId: string; title: string; price: number; slots: number } | null; /* §4.5: пакет сверх лимита */
+  constructor(action: LimitAction, limit: number, used: number, reason?: string, offer?: { packId: string; title: string; price: number; slots: number } | null) {
     super(reason || "Лимит тарифа исчерпан");
     this.name = "LimitReachedError";
     this.action = action;
     this.limit = limit;
     this.used = used;
+    this.offer = offer || null;
   }
 }
 
@@ -119,9 +121,9 @@ export const useTariffStore = create<TariffState>()(
         return t.commissionRate;
       },
 
-      checkLimit: async (action) => {
+      checkLimit: async (action, meta) => {
         try {
-          const r = await api.limitCheck(action);
+          const r = await api.limitCheck(action, meta);
           if (!r || !r.ok) return null;
           return { allowed: !!r.allowed, limit: Number(r.limit), used: Number(r.used), reason: r.reason };
         } catch {
@@ -129,20 +131,20 @@ export const useTariffStore = create<TariffState>()(
         }
       },
 
-      assertLimit: async (action, cost = 1) => {
+      assertLimit: async (action, cost = 1, meta) => {
         /* Каждая потребляющая операция спрашивает СЕРВЕР (§1.5).
            Ответ сервера — истина; кэш localStorage не проверяется вовсе. */
         for (let i = 0; i < (cost > 1 ? cost : 1); i++) {
-          const r = await api.limitConsume(action);
+          const r = await api.limitConsume(action, meta);
           if (!r || r.ok !== true) {
-            const lim = r && Number(r.limit) || 0;
-            const used = r && Number(r.used) || 0;
-            throw new LimitReachedError(action, lim, used, r && r.reason);
+            const lim = (r && Number(r.limit)) || 0;
+            const used = (r && Number(r.used)) || 0;
+            throw new LimitReachedError(action, lim, used, r && r.reason, (r as any) && (r as any).offer);
           }
           /* синхронизируем кэш тарифа после успешного потребления */
           get().refresh().catch(() => {});
         }
-        const chk = await get().checkLimit(action);
+        const chk = await get().checkLimit(action, meta);
         return chk || { allowed: true, limit: -1, used: -1 };
       },
     }),
