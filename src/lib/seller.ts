@@ -56,29 +56,118 @@ export const sellerTypeInfo = (t: SellerLegalType | null) => SELLER_TYPES.find((
    двенадцати тарифов продавцов: yearPrice = round(price*12*0.8/10)*10.
    §3.1: тексты фич приведены в соответствие таблице лимитов
    (SELLER_LIMITS в subscriptions.ts) — противоречий больше нет. */
-export interface SellerPlan { id: string; name: string; price: number; features: string[]; }
+export interface SellerPlan { id: string; name: string; price: number; legacyPrice?: number; features: string[]; }
 export const YEAR_DISCOUNT = 0.2; /* 20% при оплате за год */
 export const yearPriceOf = (monthly: number) => (monthly === 0 ? 0 : Math.round((monthly * 12 * (1 - YEAR_DISCOUNT)) / 10) * 10);
+
+/* ============================================================
+   ЭТАП 4 (§4.1–§4.3): РЕВИЗИЯ ЦЕН
+   ------------------------------------------------------------
+   · Новые цены действуют для НОВЫХ подписок.
+   · legacyPrice — старая цена для «дедушкиной оговорки» (§4.3):
+     действующие подписчики ИП сохраняют её 3 месяца, ЮЛ (ООО) —
+     6 месяцев; самозанятые в перечне пересмотра не участвуют.
+   · §4.6: цены покупателей (0/500/1000/1500) и самозанятых
+     (0/300/600/1200) НЕ ИЗМЕНЕНЫ.
+   ============================================================ */
+export const GRANDFATHER_MONTHS: Partial<Record<SellerLegalType, number>> = { ip: 3, ooo: 6 };
+export const PRICE_REVISION_NOTICE_DAYS = 30; /* уведомление об изменении цены за 30 дней (§4.3) */
+
 export const SELLER_PLANS: Record<SellerLegalType, SellerPlan[]> = {
+  /* §4.6: линейка самозанятых 0 / 300 / 600 / 1200 — без изменений */
   self_employed: [
     { id: "free", name: "Бесплатный", price: 0, features: ["AI-агент: диалог и правила сервиса", "До 50 товаров", "Ручное создание карточек", "Базовая статистика (просмотры)", "Биржа заказов — общая очередь"] },
     { id: "master", name: "Мастер", price: 300, features: ["AI-агент: рекомендации цен и скидок", "До 500 товаров", "AI-генерация карточек (100/мес)", "Расширенная статистика", "Небольшой приоритет на бирже", "Команда до 5 сотрудников", "Комиссия 9% вместо 10%"] },
     { id: "profi", name: "Профи", price: 600, features: ["AI-агент: мониторинг биржи и черновики откликов", "До 2000 товаров", "Безлимитная AI-генерация", "Воронки продаж и рекомендации по ценам", "Приоритетный показ на бирже", "Комплекты товаров со скидкой", "Команда до 15 сотрудников", "Комиссия 8%"] },
     { id: "top", name: "Топ-мастер", price: 1200, features: ["AI-агент-партнёр: безлимит задач и авто-аналитика недели", "Безлимит товаров", "Все AI-инструменты", "Прогнозы продаж", "Максимальный приоритет в поиске", "Бейдж «Проверенный мастер»", "Безлимитная команда", "Персональные подборки кураторов", "Комиссия 7%"] },
   ],
+  /* §4.1: Бизнес 999 ₽, Бизнес-Про 1 999 ₽, Бизнес-Премиум 4 999 ₽ */
   ip: [
     { id: "free", name: "Бесплатный", price: 0, features: ["AI-агент: диалог и правила сервиса", "До 50 товаров", "Ручное создание карточек", "Базовая статистика", "Биржа заказов — общая очередь"] },
-    { id: "business", name: "Бизнес", price: 800, features: ["AI-агент: рекомендации цен и скидок", "До 500 товаров", "AI-генерация карточек (100/мес)", "Расширенная статистика", "Приоритет на бирже", "Массовое редактирование цен", "Команда до 5 сотрудников", "Комиссия 11% вместо 12%"] },
-    { id: "business-pro", name: "Бизнес Про", price: 1800, features: ["AI-агент: мониторинг биржи и черновики откликов", "До 2000 товаров", "Безлимитная AI-генерация", "Воронки и рекомендации", "Максимальный приоритет на бирже", "Команда до 15 сотрудников", "Комиссия 10%"] },
-    { id: "business-premium", name: "Бизнес Премиум", price: 4000, features: ["AI-агент-партнёр: безлимит задач и авто-аналитика недели", "Безлимит товаров", "A/B-тестирование карточек", "Бейдж «Официальный бренд»", "Безлимитная команда", "Приоритет на главной и в категориях", "Персональный менеджер", "Закрытые B2B-заказы", "Комиссия 9%"] },
+    { id: "business", name: "Бизнес", price: 999, legacyPrice: 800, features: ["AI-агент: рекомендации цен и скидок", "До 500 товаров", "AI-генерация карточек (100/мес)", "Расширенная статистика", "Приоритет на бирже", "Массовое редактирование цен", "Команда до 5 сотрудников", "Комиссия 11% вместо 12%"] },
+    { id: "business-pro", name: "Бизнес Про", price: 1999, legacyPrice: 1800, features: ["AI-агент: мониторинг биржи и черновики откликов", "До 2000 товаров", "Безлимитная AI-генерация", "Воронки и рекомендации", "Максимальный приоритет на бирже", "Команда до 15 сотрудников", "Комиссия 10%"] },
+    { id: "business-premium", name: "Бизнес Премиум", price: 4999, legacyPrice: 4000, features: ["AI-агент-партнёр: безлимит задач и авто-аналитика недели", "Безлимит товаров", "A/B-тестирование карточек", "Бейдж «Официальный бренд»", "Безлимитная команда", "Приоритет на главной и в категориях", "Персональный менеджер", "Закрытые B2B-заказы", "Комиссия 9%"] },
   ],
+  /* §4.2: Корпоративный 4 999 ₽, Корпоративный-Про 14 999 ₽, Корпоративный-Премиум 49 999 ₽; годовые — по формуле −20% */
   ooo: [
     { id: "free", name: "Бесплатный", price: 0, features: ["AI-агент: диалог и правила сервиса", "До 50 товаров", "Ручное создание карточек", "Базовая статистика", "Биржа заказов — общая очередь", "Без командного доступа"] },
-    { id: "corp", name: "Корпоративный", price: 2500, features: ["AI-агент: рекомендации цен и скидок", "До 500 товаров", "AI-генерация карточек (100/мес)", "Расширенная статистика", "Приоритет на бирже", "Команда до 5 сотрудников", "Импорт товаров из файлов", "Бренд-витрина", "Комиссия 14% вместо 15%"] },
-    { id: "corp-pro", name: "Корпоративный Про", price: 6000, features: ["AI-агент: мониторинг биржи и черновики откликов", "До 2000 товаров", "Безлимитная AI-генерация", "Сегментация клиентов", "Максимальный приоритет на бирже", "Команда до 15 сотрудников", "B2B-программы и закрытые тендеры", "Комиссия 13%"] },
-    { id: "corp-premium", name: "Корпоративный Премиум", price: 15000, features: ["AI-агент-партнёр: безлимит задач и авто-аналитика недели", "Безлимит товаров", "Кастомные отчёты", "Бейдж «Официальный бренд»", "Безлимитная команда", "Менеджер и поддержка 24/7", "Топ-позиции категорий", "Промо в рассылках", "White-label с кастомным доменом", "Комиссия 11%"] },
+    { id: "corp", name: "Корпоративный", price: 4999, legacyPrice: 2500, features: ["AI-агент: рекомендации цен и скидок", "До 500 товаров", "AI-генерация карточек (100/мес)", "Расширенная статистика", "Приоритет на бирже", "Команда до 5 сотрудников", "Импорт товаров из файлов", "Бренд-витрина", "Комиссия 14% вместо 15%"] },
+    { id: "corp-pro", name: "Корпоративный Про", price: 14999, legacyPrice: 6000, features: ["AI-агент: мониторинг биржи и черновики откликов", "До 2000 товаров", "Безлимитная AI-генерация", "Сегментация клиентов", "Максимальный приоритет на бирже", "Команда до 15 сотрудников", "B2B-программы и закрытые тендеры", "Комиссия 13%"] },
+    { id: "corp-premium", name: "Корпоративный Премиум", price: 49999, legacyPrice: 15000, features: ["AI-агент-партнёр: безлимит задач и авто-аналитика недели", "Безлимит товаров", "Кастомные отчёты", "Бейдж «Официальный бренд»", "Безлимитная команда", "Менеджер и поддержка 24/7", "Топ-позиции категорий", "Промо в рассылках", "White-label с кастомным доменом", "Комиссия 11%"] },
   ],
 };
+
+/* ---------- ЭТАП 4 (§4.3): ДЕДУШКИНА ОГОВОРКА ----------
+   Для НОВОЙ подписки всегда новая цена; для действующего подписчика —
+   старая цена (legacyPrice) до истечения grace-периода
+   (ИП — 3 мес., ООО — 6 мес. с даты фиксации grandfatherFrom). */
+
+/* Чистая функция расчёта цены со сроками дедушкиной оговорки. */
+export function planPriceWithGrandfather(
+  type: SellerLegalType,
+  planId: string,
+  sub: { activeSinceIso?: string | null; grandfatherFromIso?: string | null } | null,
+  at: Date = new Date(),
+): { amount: number; listPrice: number; grandfathered: boolean; grandfatherUntil: string | null; noticeAt: string | null; monthsLeft: number } {
+  const plan = sellerPlanById(type, planId);
+  const list = plan ? plan.price : 0;
+  if (!plan || plan.price === 0 || !plan.legacyPrice || plan.legacyPrice === plan.price) {
+    return { amount: list, listPrice: list, grandfathered: false, grandfatherUntil: null, noticeAt: null, monthsLeft: 0 };
+  }
+  const months = GRANDFATHER_MONTHS[type];
+  if (!months || !sub || !sub.activeSinceIso) {
+    return { amount: list, listPrice: list, grandfathered: false, grandfatherUntil: null, noticeAt: null, monthsLeft: 0 };
+  }
+  /* дата фиксации старой цены: момент вступления ревизии в силу или
+     начало подписки — что раньше; если подписчик активен с более ранней
+     даты, grace считается от даты ревизии (§4.3) */
+  const from = new Date(Math.max(new Date(sub.activeSinceIso).getTime(), new Date(sub.grandfatherFromIso || sub.activeSinceIso).getTime()));
+  const until = new Date(from.getTime());
+  until.setMonth(until.getMonth() + months);
+  if (at >= until) {
+    return { amount: list, listPrice: list, grandfathered: false, grandfatherUntil: until.toISOString(), noticeAt: null, monthsLeft: 0 };
+  }
+  const notice = new Date(until.getTime());
+  notice.setDate(notice.getDate() - PRICE_REVISION_NOTICE_DAYS); /* уведомление за 30 дней */
+  const monthsLeft = Math.max(0, Math.ceil((until.getTime() - at.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+  return { amount: plan.legacyPrice, listPrice: list, grandfathered: true, grandfatherUntil: until.toISOString(), noticeAt: notice.toISOString(), monthsLeft };
+}
+
+/* ---------- ЭТАП 4 (§4.4): ПРОПОРЦИОНАЛЬНЫЙ ПЕРЕРАСЧЁТ ----------
+   upgradeCredit: при апгрейде зачитывается неиспользованный остаток
+   оплаченного периода (пропорционально дням).
+   downgradeAccessUntil: при даунгрейде доступ до новой тарифной сетки
+   фиксируется до конца уже оплаченного периода. */
+export function periodRemainingFraction(periodStartIso: string, periodEndIso: string, at: Date = new Date()): number {
+  const a = new Date(periodStartIso).getTime();
+  const b = new Date(periodEndIso).getTime();
+  if (!(b > a)) return 0;
+  const t = Math.min(Math.max(at.getTime(), a), b);
+  return Math.max(0, Math.min(1, (b - t) / (b - a)));
+}
+export function upgradeCredit(oldPrice: number, periodStartIso: string, periodEndIso: string, at: Date = new Date()): number {
+  return Math.round(oldPrice * periodRemainingFraction(periodStartIso, periodEndIso, at));
+}
+export function proratedUpgradeCharge(oldPrice: number, newPrice: number, periodStartIso: string, periodEndIso: string, at: Date = new Date()): number {
+  const credit = upgradeCredit(oldPrice, periodStartIso, periodEndIso, at);
+  return Math.max(0, newPrice - credit);
+}
+export function downgradeAccessUntil(periodEndIso: string): string | null {
+  const d = new Date(periodEndIso);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/* ---------- ЭТАП 4 (§4.5): ПАКЕТЫ СВЕРХ ЛИМИТОВ ---------- */
+export const OVERLIMIT_PACKS = {
+  product_slots: { packId: "plus-products-50", action: "product_slots", slots: 50, price: 300, title: "+50 слотов товаров", unit: "мес" },
+  ai_gens: { packId: "plus-ai-gens-50", action: "ai_gen_packs", slots: 50, price: 500, title: "+50 AI-генераций", unit: "мес" },
+} as const;
+/** Что предложить в момент отказа по лимиту (§4.5). */
+export function overlimitOfferFor(action: string): { packId: string; title: string; price: number; slots: number } | null {
+  if (action === "product_create") return { packId: "plus-products-50", title: "Пакет +50 слотов товаров", price: 300, slots: 50 };
+  if (action === "ai_card_gen" || action === "ai_gen" || action === "interior_project") return { packId: "plus-ai-gens-50", title: "Пакет +50 AI-генераций", price: 500, slots: 50 };
+  return null;
+}
 export const sellerPlanById = (t: SellerLegalType, id: string) => (SELLER_PLANS[t] || []).find((p) => p.id === id);
 
 /* ---------- матрица комиссий по типу юрлица и тарифу ---------- */
