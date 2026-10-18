@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, FileSpreadsheet, Globe2, Send, Sparkles, Trophy, Upload, Users, Vip, FlaskConical, Briefcase, Headphones, Megaphone, CheckCircle2, Lock } from "lucide-react";
+import { BarChart3, FileSpreadsheet, Globe2, Send, Sparkles, Trophy, Upload, Users, Crown, FlaskConical, Briefcase, Headphones, Megaphone, CheckCircle2, Lock } from "lucide-react";
 import { Badge, Btn, Modal } from "./ui";
 import { CATEGORIES } from "../data/seed";
 import { useAppStore } from "../lib/store";
@@ -451,7 +451,7 @@ export function SellerPremiumSection() {
   if (!anyOn) return null; /* бесплатные тарифы: раздел скрыт полностью */
   return (
     <div className="space-y-4 mt-6">
-      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Vip size={19} className="text-accent" /> Премиум-функции тарифа</h2>
+      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Crown size={19} className="text-accent" /> Премиум-функции тарифа</h2>
       <div className="grid lg:grid-cols-2 gap-4">
         {f.weeklyReport && <WeeklyReportBlock />}
         {f.curatorPicks && <CuratorPicksBlock />}
@@ -478,7 +478,7 @@ export function SellerPremiumBlocksLite() {
   if (!anyOn) return null;
   return (
     <div className="mt-8 space-y-4">
-      <h3 className="font-display font-bold text-[18px] text-ink flex items-center gap-2"><Vip size={17} className="text-accent" /> Премиум-функции тарифа</h3>
+      <h3 className="font-display font-bold text-[18px] text-ink flex items-center gap-2"><Crown size={17} className="text-accent" /> Премиум-функции тарифа</h3>
       <div className="grid lg:grid-cols-2 gap-4">
         <WeeklyReportBlock />
         <CuratorPicksBlock />
@@ -553,7 +553,7 @@ export function CuratorBlock() {
 export function VipBadgeChip() {
   const f = useBuyerFeatures();
   if (!f.vipBadge) return null;
-  return <Badge tone="premium" className="shrink-0"><Vip size={11} /> VIP</Badge>;
+  return <Badge tone="premium" className="shrink-0"><Crown size={11} /> VIP</Badge>;
 }
 
 function LockedFeatureStub({ label, need }: { label: string; need: string }) {
@@ -572,7 +572,7 @@ export function BuyerPremiumSection() {
   if (!(f.premiumSales || f.curator)) return null;
   return (
     <div className="space-y-4 mt-6">
-      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Vip size={19} className="text-accent" /> Премиум для вас</h2>
+      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Crown size={19} className="text-accent" /> Премиум для вас</h2>
       <PremiumSalesBlock />
       <CuratorBlock />
       {f.curator && thisWeekPicksForBuyer(f).length > 0 && (
