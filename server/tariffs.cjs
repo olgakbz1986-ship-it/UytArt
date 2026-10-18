@@ -14,6 +14,10 @@
          ИЗ БАЗЫ, а не из клиентского состояния.
    ============================================================ */
 const crypto = require("crypto");
+/* БЛОК 2, Пункт 2.1: централизованная валидация входных данных (Zod).
+   Паттерн: safeParse В САМОМ НАЧАЛЕ обработчика, до бизнес-логики;
+   при success=false → 400 + массив ошибок; дальше — только v.data. */
+const vld = require("./validators.cjs");
 
 /* ---------- матрицы (полные копии клиентских, сервер — истина) ---------- */
 const COMMISSION_MATRIX = {
@@ -308,6 +312,20 @@ function packOfferFor(action) {
 
 function mount(app, ctx) {
   const { guard, db } = ctx;
+
+  /* БЛОК 2, Пункт 2.1: хелпер валидации — вызывается ПЕРВОЙ строкой каждого
+     обработчика, принимающего данные клиента. safeParse → при !success сразу
+     400 + массив ошибок; при success возвращает проверенные данные (v.data). */
+  function zod(schema, payload, res) {
+    const r = schema.safeParse(payload ?? {});
+    if (!r.success) {
+      const errors = (r.error?.issues || []).map((e) => ({ path: (e.path || []).join("."), message: e.message, code: e.code || "invalid" }));
+      res.status(400).json({ error: "validation", message: "Данные не прошли проверку", errors });
+      return null;
+    }
+    return r.data;
+  }
+
   /* Пункт 1.1: единый конфиг секретов (process.env), fallback — server/config.cjs */
   const cfg = ctx.cfg || require("./config.cjs");
   const FILE = require("path").resolve(__dirname, "dev-db.json");
@@ -624,10 +642,13 @@ function mount(app, ctx) {
      клиент не может прислать свою ставку. */
   app.post("/api/tariff/set", guard, async (req, res) => {
     try {
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.TARIFF_SET, req.body, res);
+      if (!b) return;
       /* Пункт 1.1: критический эндпоинт — без настроенного секрета JWT
          подпись токенов невозможна → 500 misconfigured + предупреждение в лог. */
       if (requireEnv(res, ["JWT_SECRET"])) return;
-      const { kind, planId, legalType } = req.body || {};
+      const { kind, planId, legalType } = b;
       if (kind === "seller") {
         if (!["self_employed", "ip", "ooo"].includes(legalType)) return res.status(400).json({ error: "bad_legal_type" });
         const row = COMMISSION_MATRIX[legalType];
@@ -649,10 +670,13 @@ function mount(app, ctx) {
   /* §1.4 Создание платежа разового взноса (5/10/15 тыс. ₽) у провайдера */
   app.post("/api/payments/registration-fee", guard, async (req, res) => {
     try {
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.REGISTRATION_FEE, req.body, res);
+      if (!b) return;
       /* Пункт 1.1: критический эндпоинт оплаты — без секретов сервиса отвечаем 500 */
       if (requireEnv(res, ["JWT_SECRET"])) return;
-      const legalType = String((req.body && req.body.legalType) || "");
-      const method = String((req.body && req.body.method) || "card");
+      const legalType = b.legalType;
+      const method = b.method;
       const fee = REGISTRATION_FEES[legalType];
       if (!fee) return res.status(400).json({ error: "bad_legal_type" });
       const payment = {
@@ -660,7 +684,7 @@ function mount(app, ctx) {
         user_id: req.userId,
         kind: "registration_fee",
         legal_type: legalType,
-        plan_id: (req.body && req.body.planId) || "free",
+        plan_id: b.planId || "free",
         amount: fee,
         currency: "RUB",
         method,
@@ -693,11 +717,14 @@ function mount(app, ctx) {
 
   app.post("/api/subscriptions/seller/create", guard, async (req, res) => {
     try {
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.SUB_CREATE, req.body, res);
+      if (!b) return;
       /* Пункт 1.1: критический эндпоинт оплаты — без секретов сервиса отвечаем 500 */
       if (requireEnv(res, ["JWT_SECRET"])) return;
-      const planId = String((req.body && req.body.planId) || "");
-      const period = req.body && req.body.period === "year" ? "year" : "month";
-      const billingCycle = req.body && req.body.billingCycle === "yearly" ? "yearly" : period; /* совместимость */
+      const planId = b.planId;
+      const period = b.period === "year" ? "year" : "month";
+      const billingCycle = b.billingCycle === "yearly" ? "yearly" : period; /* совместимость */
       const isYear = billingCycle === "year";
       const t = await tariffView(req.userId);
       const lt = t.legalType;
@@ -732,7 +759,7 @@ function mount(app, ctx) {
         credit_applied: credit,
         amount,
         currency: "RUB",
-        method: String((req.body && req.body.method) || "card"),
+        method: b.method,
         purpose: "Подписка · " + lt + "/" + planId + " · " + (isYear ? "год" : "месяц") + (credit ? " (зачёт остатка " + credit + " ₽)" : ""),
         status: "pending",
         created_at: now.toISOString(),
@@ -757,9 +784,12 @@ function mount(app, ctx) {
   /* §4.5 Пакет сверх лимита: +50 слотов товаров 300 ₽/мес, +50 генераций 500 ₽/мес */
   app.post("/api/packs/create", guard, async (req, res) => {
     try {
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.PACK_CREATE, req.body, res);
+      if (!b) return;
       /* Пункт 1.1: критический эндпоинт оплаты — без секретов сервиса отвечаем 500 */
       if (requireEnv(res, ["JWT_SECRET"])) return;
-      const packId = String((req.body && req.body.packId) || "");
+      const packId = b.packId;
       const pack = OVERLIMIT_PACKS[packId];
       if (!pack) return res.status(400).json({ error: "bad_pack" });
       const payment = {
@@ -771,7 +801,7 @@ function mount(app, ctx) {
         plan_id: null,
         amount: pack.price,
         currency: "RUB",
-        method: String((req.body && req.body.method) || "card"),
+        method: b.method,
         purpose: "Пакет сверх лимита · " + pack.title + " · " + pack.price + " ₽",
         status: "pending",
         created_at: new Date().toISOString(),
@@ -949,10 +979,13 @@ function mount(app, ctx) {
   });
   app.post("/api/limits/consume", guard, async (req, res) => {
     try {
-      const action = String((req.body && req.body.action) || "");
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.LIMIT_CONSUME, req.body, res);
+      if (!b) return;
+      const action = b.action;
       /* meta передаётся клиентом как подсказка (например activeTasks для agent_task);
          лимит и решение — всегда на сервере (§1.5) */
-      const meta = (req.body && req.body.meta) || {};
+      const meta = b.meta || {};
       const r = await serverCheckLimit(req.userId, action, meta);
       if (!r.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: r.reason, limit: r.limit, used: r.used, offer: r.offer || null });
       await serverConsumeLimit(req.userId, action);
@@ -969,8 +1002,11 @@ function mount(app, ctx) {
      и возвращаем { ok: true, newLimit }. */
   app.post("/api/limits/buy-pack", guard, async (req, res) => {
     try {
-      const packType = String((req.body && req.body.packType) || "");
-      const quantity = Math.max(1, Math.min(1000, Number((req.body && req.body.quantity) || 50)));
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.BUY_PACK, req.body, res);
+      if (!b) return;
+      const packType = b.packType;
+      const quantity = b.quantity;
       const packId = packType === "products" ? "plus-products-50" : packType === "generations" ? "plus-ai-gens-50" : null;
       if (!packId) return res.status(400).json({ ok: false, error: "bad_pack_type" });
       const pack = OVERLIMIT_PACKS[packId];
@@ -985,7 +1021,7 @@ function mount(app, ctx) {
         plan_id: t.sellerPlanId,
         amount,
         currency: "RUB",
-        method: String((req.body && req.body.method) || "card"),
+        method: b.method,
         purpose: "Пакет сверх лимита · +" + quantity + " " + (packType === "products" ? "слотов товаров" : "AI-генераций") + " · " + amount + " ₽",
         status: "pending",
         created_at: new Date().toISOString(),
@@ -1050,7 +1086,10 @@ function mount(app, ctx) {
      есть успешный платёж взноса его правовой формы (§1.4). */
   app.post("/api/seller/registration-status", guard, async (req, res) => {
     try {
-      const legalType = String((req.body && req.body.legalType) || "");
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.REG_STATUS, req.body, res);
+      if (!b) return;
+      const legalType = b.legalType;
       if (!REGISTRATION_FEES[legalType]) return res.status(400).json({ error: "bad_legal_type" });
       const d = readAll();
       const paid = Object.values(d.payments || {}).some((p) => String(p.user_id) === String(req.userId) && p.kind === "registration_fee" && p.legal_type === legalType && p.status === "succeeded");
@@ -1100,12 +1139,15 @@ function mount(app, ctx) {
   /* ---------- §5.1: цифровой куратор — приоритетная ветка агента + эскалация ---------- */
   app.post("/api/curator/escalate", guard, async (req, res) => {
     try {
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.ESCALATE, req.body, res);
+      if (!b) return;
       const g = await requireFeature(req.userId, "buyer", "curator");
       if (!g.ok) return res.status(403).json(g);
       const item = {
         id: "esc-" + crypto.randomUUID().slice(0, 8),
         user_id: String(req.userId),
-        question: String((req.body && req.body.question) || ""),
+        question: b.question,
         channel: "curator_priority",
         sla_minutes: 30,
         status: "queued",
@@ -1168,13 +1210,16 @@ function mount(app, ctx) {
   /* ---------- §5.2/§5.6: мини-сайт мастерской / white-label домен ---------- */
   app.post("/api/seller/site", guard, async (req, res) => {
     try {
+      /* Пункт 2.1: Zod-валидация до бизнес-логики */
+      const b = zod(vld.SITE, req.body, res);
+      if (!b) return;
       const t = await tariffView(req.userId);
       const isSelf = t.legalType === "self_employed";
       const key = isSelf ? "masterSite" : "whiteLabel"; /* §5.2: у самозанятых вместо белого ярлыка — мини-сайт */
       const g = await requireFeature(req.userId, "seller", key);
       if (!g.ok) return res.status(403).json(g);
       const domainBase = process.env.QF_PLATFORM_DOMAIN || "quantiform.ru";
-      const slug = String((req.body && req.body.subdomain) || (t.accountId)).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30) || "shop";
+      const slug = b.subdomain || String(t.accountId).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30) || "shop";
       const site = {
         mode: isSelf ? "master_mini_site" : "white_label",
         url: "https://" + slug + "." + domainBase,
