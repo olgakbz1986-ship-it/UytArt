@@ -57,8 +57,8 @@ export const sellerTypeInfo = (t: SellerLegalType | null) => SELLER_TYPES.find((
    §3.1: тексты фич приведены в соответствие таблице лимитов
    (SELLER_LIMITS в subscriptions.ts) — противоречий больше нет. */
 export interface SellerPlan { id: string; name: string; price: number; legacyPrice?: number; features: string[]; }
-export const YEAR_DISCOUNT = 0.2; /* 20% при оплате за год */
-export const yearPriceOf = (monthly: number) => (monthly === 0 ? 0 : Math.round((monthly * 12 * (1 - YEAR_DISCOUNT)) / 10) * 10);
+export const YEAR_DISCOUNT = 0.8; /* коэффициент годовой цены: −20% скидка */
+export const yearPriceOf = (monthly: number) => (monthly === 0 ? 0 : Math.round(monthly * 12 * YEAR_DISCOUNT / 10) * 10);
 
 /* ============================================================
    ЭТАП 4 (§4.1–§4.3): РЕВИЗИЯ ЦЕН

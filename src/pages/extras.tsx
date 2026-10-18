@@ -24,7 +24,7 @@ import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from ".
 import { useAppStore } from "../lib/store";
 import { useMarketProducts, sellerProfileOf } from "../lib/market";
 import {
-  useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById,
+  useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById, yearPriceOf,
   SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX, previewLegalTypeChange, LegalTypePreview, SellerProfile,
 } from "../lib/seller";
 import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
@@ -80,6 +80,19 @@ export const useMarketStore = create<MarketState>()(
         /* Правило владения: владелец записывается в момент создания —
            активный авторизованный пользователь. Гость создать заказ не может. */
         const uid = useAppStore.getState().session?.userId || "";
+        /* §1.5/§2.2: СЕРВЕРНАЯ проверка лимита активных индивидуальных заказов
+           (1 / 3 / 10 / ∞ по тарифу покупателя) до создания заказа. */
+        try {
+          const { useTariffStore, LimitReachedError } = await import("../lib/tariff");
+          await useTariffStore.getState().assertLimit("market_order");
+        } catch (e: any) {
+          if (e && e.name === "LimitReachedError") {
+            useNotifyStore.getState().push({ kind: "alert", title: "Лимит активных заказов исчерпан", text: `Активных заказов: ${e.used} из ${Number.isFinite(e.limit) ? e.limit : "∞"}. Улучшите тариф покупателя, чтобы создавать больше заказов (/plans).`, actionLabel: "Улучшить тариф", deepLink: "/plans" });
+          } else {
+            useNotifyStore.getState().push({ kind: "alert", title: "Сервер недоступен", text: "Не удалось проверить лимит заказов. Попробуйте позже." });
+          }
+          return;
+        }
         const verdict = moderateOrder(o);
         const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: (verdict.issues.length ? "moderation" : "published") as any, responses: 0, myOwn: !!uid, ownerId: uid || undefined, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings };
         set((s) => ({ orders: [newOrder, ...s.orders] }));
@@ -811,6 +824,16 @@ export function PlansPage() {
               Тарифы для <strong className="text-ink">{sellerTypeInfo(effectiveSellerType)?.label}</strong>
             </p>
           )}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
+              {([["month", "Месяц"], ["year", "Год −20%"]] as const).map(([id, label]) => (
+                <button key={id} onClick={() => setPeriod(id)}
+                  className={`h-10 px-6 rounded-[10px] text-[13px] font-bold transition-all cursor-pointer ${period === id ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {SELLER_PLANS[effectiveSellerType].map((plan, i) => {
               const active = acc.getPlan(session?.userId || "guest", effectiveSellerType) === plan.id;
@@ -818,7 +841,8 @@ export function PlansPage() {
               return (
                 <div key={plan.id} className="bg-surface rounded-2xl shadow-card p-6 flex flex-col fade-up" style={{ animationDelay: `${i * 60}ms` }}>
                   <h2 className="font-display font-bold text-[18px] text-ink">{plan.name}</h2>
-                  <p className="font-display font-extrabold text-[26px] text-ink mt-2">{plan.price === 0 ? "0 ₽" : `${plan.price} ₽/мес`}</p>
+                  {/* §3.2/§4: переключатель Месяц/Год −20%, годовая цена через yearPriceOf */}
+                  <p className="font-display font-extrabold text-[26px] text-ink mt-2">{plan.price === 0 ? "0 ₽" : period === "year" ? `${yearPriceOf(plan.price)} ₽/год` : `${plan.price} ₽/мес`}</p>
                   <p className="text-[11.5px] text-ink-mute mt-1">Товаров: {fmtLimit(limits.maxProducts)} · AI: {fmtLimit(limits.aiCardGens)}/мес</p>
                   <ul className="mt-4 space-y-2 flex-1">
                     {plan.features.map((f) => (
