@@ -901,7 +901,13 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   const [pwd2, setPwd2] = useState("");
 
   const finish = async (method: string) => {
-    s.payFee(method);
+    /* §1.4: сначала — реальная оплата разового взноса; без успешного платежа
+       регистрация НЕ переходит в активный статус */
+    const payRes = await s.payFee(method);
+    if (!payRes.ok && !payRes.offline) {
+      useNotifyStore.getState().push({ kind: "alert", title: "Оплата взноса не прошла", text: payRes.error === "payment_not_confirmed" ? "Платёж не подтверждён провайдером. Попробуйте ещё раз или выберите другой способ." : "Сервис оплаты недоступен: " + (payRes.error || "сеть") });
+      return;
+    }
     const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd, role: "seller", legalType: s.legalType || "self_employed" });
     { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[s.email.trim().toLowerCase()] = pwd; localStorage.setItem(vk, JSON.stringify(vv)); }
     if (regRes.ok && regRes.needConfirm) {

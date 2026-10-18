@@ -1004,14 +1004,14 @@ app.post("/api/products", guard, async (req, res) => {
     if (idx >= 0) {
       /* Обновлять товар может только его владелец (существующий ownerId) либо создатель. */
       const curOwner = d.products[idx].ownerId || d.products[idx].owner_id;
-      if (curOwner && String(curOwner) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
+      if (curOwner && String(curOwner) !== String(req.userId)) return res.status(403).json({ error: "not_owner" });
       d.products[idx] = Object.assign({}, d.products[idx], p, { ownerId: req.userId, updated_at: new Date().toISOString() });
     } else {
       d.products.push(Object.assign({}, p, { ownerId: req.userId, created_at: new Date().toISOString() }));
     }
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    r.json({ ok: true });
-  } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
+    res.json({ ok: true });
+  } catch (e) { console.error("[PRODUCTS ERROR]", e); res.status(500).json({ error: "server" }); }
 });
 
 app.delete("/api/products/:id", guard, (req, r) => {

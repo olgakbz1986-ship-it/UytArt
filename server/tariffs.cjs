@@ -150,6 +150,9 @@ function mount(app, ctx) {
     const sp = row.seller_plan_id || "free";
     const bp = row.buyer_plan_id || "free";
     const rate = commissionRateOf(lt, sp); /* null только если данных о тарифе нет */
+    /* §1.2: комиссия профиля продавца пересчитывается ИЗ МАТРИЦЫ при каждом
+       чтении/смене тарифа — базовая ставка типа юрлица не хранится «навсегда». */
+    try { syncProfileCommission(uid, lt, sp, rate); } catch (e) { console.error("[COMMISSION SYNC]", e); }
     return {
       accountId: String(uid),
       legalType: lt,
@@ -159,6 +162,19 @@ function mount(app, ctx) {
       limits: { seller: sellerLimitsOf(lt, sp), buyer: buyerLimitsOf(bp) },
       updatedAt: row.updated_at,
     };
+  }
+
+  /* Пересчёт и запись комиссии в профиль продавца (реестр профилей на сервере). */
+  function syncProfileCommission(uid, legalType, sellerPlanId, rate) {
+    if (isPg()) return; /* prod: колонка commission_rate в account_tariffs — истина */
+    if (rate == null) return; /* данных о тарифе нет — комиссию НЕ трогаем */
+    const d = readAll();
+    if (!d.profilesByAccount) return;
+    const prof = d.profilesByAccount[String(uid)];
+    if (prof && prof.commissionRate !== rate) {
+      prof.commissionRate = rate;
+      writeAll(d);
+    }
   }
 
   /* ---------- финансовый журнал и чеки (сегмент finance) ---------- */
@@ -474,7 +490,10 @@ function mount(app, ctx) {
     } catch (e) { console.error("[REG STATUS]", e); res.status(500).json({ error: "server" }); }
   });
 
-  /* Экспорт для других модулей сервера (digital.cjs и пр.) */
+  /* Экспорт для других модулей сервера (index.cjs, digital.cjs и пр.) */
+  ctx.tariffView = tariffView;
+  ctx.getTariffRow = getTariffRow;
+  ctx.upsertTariffRow = upsertTariffRow;
   ctx.serverCheckLimit = serverCheckLimit;
   ctx.serverConsumeLimit = serverConsumeLimit;
   ctx.commissionRateOf = commissionRateOf;

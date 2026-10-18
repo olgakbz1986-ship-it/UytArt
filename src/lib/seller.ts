@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { validateINN } from "./inn";
 import { persist } from "zustand/middleware";
+import { api } from "./api";
+import { useTariffStore, applyServerTariff } from "./tariff";
 
 /* ============================================================
    Раздельные регистрации продавцов: самозанятый / ИП / ООО
@@ -250,7 +252,9 @@ interface SellerRegState {
   approveModeration: () => void;
   rejectModeration: (reason: string) => void;
   retryDocuments: () => void;
-  payFee: (method: string) => void;
+  /* §1.4: оплата разового взноса — реальный платёж; возвращает результат,
+     статус «active» выставляется только при успешной оплате на сервере */
+  payFee: (method: string) => Promise<{ ok: boolean; offline?: boolean; error?: string; paymentId?: string; receipt?: any }>;
   resetFlow: () => void;
   /* Загрузить в активный стор профиль аккаунта uid (при входе/переключении) */
   loadProfile: (uid: string) => void;
@@ -337,20 +341,67 @@ export const useSellerReg = create<SellerRegState>()(
         }),
       retryDocuments: () => set({ status: "docs", docs: {} }),
       payFee: (method) => {
-        set((s) => {
-          const info = sellerTypeInfo(s.legalType);
-          return {
+        /* §1.2: комиссия профиля пересчитывается ИЗ МАТРИЦЫ по текущему
+           тарифу, а не берётся как базовая ставка типа юрлица навсегда. */
+        const s = get();
+        const info = sellerTypeInfo(s.legalType);
+        const uid = activeUserId();
+        const planId = uid ? useSellerAccount.getState().getPlan(uid, s.legalType || "self_employed") : "free";
+        const matrixRate = getCommissionRate(s.legalType, planId);
+        set({
+          status: "payment" as const,
+          payMethod: method,
+          commissionRate: matrixRate,
+        });
+        /* ЭТАП 1 (§1.4): реальная оплата разового взноса 5/10/15 тыс. ₽.
+           Регистрация переходит в «active» ТОЛЬКО после успешного платежа,
+           подтверждённого сервером (платёжный провайдер → журнал → чек). */
+        const fee = info?.fee ?? 0;
+        if (!api || !uid || fee <= 0) {
+          /* Офлайн-демо без сервера: локальный режим сохранён */
+          set((st) => ({
             status: "active" as const,
             submittedAt: new Date().toISOString(),
-            payMethod: method,
-            commissionRate: info?.commission ?? 15,
-            slug: slugify(s.shopName),
-            production_city: (s.city || "").trim(), production_region: (s.city || "").trim(),
-          };
-        });
-        /* Регистрация завершена — фиксируем профиль в реестре под id аккаунта */
-        const uid = activeUserId();
-        if (uid) get().saveProfile(uid);
+            slug: slugify(st.shopName),
+            production_city: (st.city || "").trim(), production_region: (st.city || "").trim(),
+          }));
+          const uid2 = activeUserId();
+          if (uid2) get().saveProfile(uid2);
+          return Promise.resolve({ ok: true, offline: true } as any);
+        }
+        return api.createFeePayment(s.legalType as string, method === "card" ? "card" : method, planId)
+          .then(async (r) => {
+            if (!r || !r.ok || !r.payment) {
+              set({ status: "payment", rejectionReason: "Платёж не создан: сервис оплаты недоступен" });
+              return { ok: false, error: (r && r.error) || "provider_unavailable" };
+            }
+            const pid = r.payment.id;
+            /* В проде клиент редиректится на confirmation_url и ждёт webhook;
+               здесь — опрос статуса платежа до success/fail. */
+            const confirmed = await api.confirmFeePayment(pid); /* dev-путь: подтверждение владельцем */
+            if (!confirmed || !confirmed.ok || confirmed.payment?.status !== "succeeded") {
+              set({ rejectionReason: "Оплата взноса не подтверждена" });
+              return { ok: false, error: "payment_not_confirmed", paymentId: pid };
+            }
+            /* Сервер подтвердил успех: активация + синхронизация тарифа/комиссии (§1.2/§1.3) */
+            const st = await api.registrationStatus(s.legalType as string).catch(() => null);
+            set((x) => ({
+              status: st && st.active ? ("active" as const) : ("payment" as const),
+              submittedAt: new Date().toISOString(),
+              payMethod: method,
+              slug: slugify(x.shopName),
+              production_city: (x.city || "").trim(), production_region: (x.city || "").trim(),
+            }));
+            const t = await api.tariff().catch(() => null);
+            if (t && t.ok && t.tariff) applyServerTariff(t.tariff);
+            const uid3 = activeUserId();
+            if (uid3) get().saveProfile(uid3);
+            return { ok: true, paymentId: pid, receipt: (confirmed as any).receipt || null };
+          })
+          .catch((e) => {
+            set({ rejectionReason: "Ошибка оплаты взноса" });
+            return { ok: false, error: String(e) };
+          });
       },
       resetFlow: () =>
         set({

@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAppStore } from "./store";
-import { useSellerReg, useSellerAccount, COMMISSION_MATRIX } from "./seller";
+import { useSellerReg, useSellerAccount } from "./seller";
+import { useTariffStore } from "./tariff";
 
 /* ============================================================
    ФИНАНСОВОЕ ЯДРО Quantiform
@@ -86,7 +87,12 @@ export const useFinance = create<FinanceState>()(
 
         const release = (h: EscrowHold, trigger: string) => {
           const acc = useSellerAccount.getState() as any;
-          const rate = (COMMISSION_MATRIX as any)[reg.legalType || "self_employed"]?.[acc.planId || "free"] ?? 15;
+          /* §1.1: ставка берётся ШТАТНЫМ вызовом получения тарифа аккаунта
+             с сервера (useTariffStore.commissionPercent), а не чтением
+             несуществующего поля идентификатора тарифа. Резервные 15% —
+             только при полном отсутствии данных о тарифе. */
+          let rate = useTariffStore.getState().commissionPercent();
+          if (!Number.isFinite(rate)) rate = 15;
           const d = deliveries.find((x) => x.orderId === h.orderId);
           const D = d ? d.cost : 0;
           const K = Math.round((h.amount * rate) / 100);
