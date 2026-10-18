@@ -1,0 +1,185 @@
+{
+  "digital": {
+    "products": [
+      {
+        "id": "demo-prompt-1",
+        "ownerId": "demo-seller-1",
+        "type": "prompt",
+        "title": "Набор промтов «Интерьер-стилист»",
+        "description": "25 протестированных системных промтов для генерации дизайн-концепций интерьеров. Работают с GPT-4 и YandexGPT.",
+        "price": 990,
+        "licenseType": "personal",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.8,
+          "salesCount": 12
+        },
+        "testDriveLimit": 2,
+        "status": "published",
+        "systemPrompt": "Ты — интерьерный стилист. Отвечай лаконично, предлагай палитру и материалы.",
+        "exampleInputs": [
+          "Гостиная 18 м², северная сторона"
+        ],
+        "exampleOutputs": [
+          "Тёплый минимализм: дуб, лён, латунь…"
+        ],
+        "targetAI": "gpt4",
+        "createdAt": "2026-10-18T12:59:54.436Z",
+        "updatedAt": "2026-10-18T12:59:54.436Z"
+      },
+      {
+        "id": "demo-agent-1",
+        "ownerId": "demo-seller-1",
+        "type": "agent",
+        "title": "ИИ-агент «Менеджер маркетплейса»",
+        "description": "Готовый агент для мониторинга цен и автоответов покупателям. Конфигурация + инструкция запуска.",
+        "price": 4900,
+        "licenseType": "commercial",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.6,
+          "salesCount": 5
+        },
+        "testDriveLimit": 2,
+        "status": "published",
+        "agentConfig": {
+          "tools": [
+            "price_monitor",
+            "reply_agent"
+          ],
+          "loop": "react"
+        },
+        "modelProvider": "local",
+        "requiresHosting": false,
+        "monthlyTokenLimit": 1000000,
+        "createdAt": "2026-10-18T12:59:54.436Z",
+        "updatedAt": "2026-10-18T12:59:54.436Z"
+      },
+      {
+        "id": "demo-site-1",
+        "ownerId": "demo-seller-1",
+        "type": "site",
+        "title": "Шаблон «Магазин мастера»",
+        "description": "Лендинг-шаблон портфолио мастера на React + Tailwind. Исходный код включён.",
+        "price": 3500,
+        "licenseType": "resell",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.9,
+          "salesCount": 30
+        },
+        "testDriveLimit": 0,
+        "status": "published",
+        "techStack": [
+          "React",
+          "Tailwind"
+        ],
+        "includesSourceCode": true,
+        "demoUrl": "https://example.com/demo",
+        "createdAt": "2026-10-18T12:59:54.436Z",
+        "updatedAt": "2026-10-18T12:59:54.436Z"
+      }
+    ],
+    "purchases": [],
+    "versions": [],
+    "subscriptions": [],
+    "testDrives": {},
+    "securityLogs": [],
+    "blockedIps": {}
+  },
+  "users": [
+    {
+      "id": "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745",
+      "email": "smoke1792328419638192433@mail.test",
+      "password_hash": "$2b$10$c0DjhcrjoXVwxLOUwXrziu3DtG7PHT0cw8CHPG8wa.WiTFngz4Y9y",
+      "name": "Smoke Test",
+      "phone": "",
+      "role": "seller",
+      "legal_type": "self_employed",
+      "tier": "free",
+      "avatar_url": null,
+      "email_confirmed": true,
+      "confirm_token": "cbc55e5c-ace5-45bf-a6ae-7954cfd0b32c",
+      "confirm_expires": 1792414819644
+    }
+  ],
+  "tariffs": {
+    "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745": {
+      "user_id": "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745",
+      "legal_type": "self_employed",
+      "seller_plan_id": "top",
+      "buyer_plan_id": "free",
+      "commission_rate": 7,
+      "updated_at": "2026-10-18T13:00:20.097Z"
+    }
+  },
+  "payments": {
+    "98baa8b6-6048-4de6-bf8d-e2bebfca4e79": {
+      "id": "98baa8b6-6048-4de6-bf8d-e2bebfca4e79",
+      "user_id": "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745",
+      "kind": "registration_fee",
+      "legal_type": "self_employed",
+      "plan_id": "free",
+      "amount": 5000,
+      "currency": "RUB",
+      "method": "card",
+      "purpose": "Регистрационный взнос · self_employed · 5 000 ₽",
+      "status": "succeeded",
+      "created_at": "2026-10-18T13:00:19.933Z",
+      "provider": "mock",
+      "provider_payment_id": "mock_98baa8b6",
+      "confirmation_url": "/api/payments/98baa8b6-6048-4de6-bf8d-e2bebfca4e79/confirm",
+      "paid_at": "2026-10-18T13:00:20.012Z"
+    }
+  },
+  "finance": {
+    "ledger": [
+      {
+        "id": "fl-3b537feb-e983-4015-81ac-42c34e09bc30",
+        "account_id": "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745",
+        "ts": "2026-10-18T13:00:20.012Z",
+        "type": "registration_fee_income",
+        "amount": 5000,
+        "payment_id": "98baa8b6-6048-4de6-bf8d-e2bebfca4e79",
+        "comment": "Разовый регистрационный взнос · self_employed · способ: card"
+      }
+    ],
+    "receipts": [
+      {
+        "id": "rcp-327ae006-65bc-4512-acdb-375a6bab4f97",
+        "fn_number": "9958604450",
+        "fd_number": 501750,
+        "type": "income",
+        "tax_system": "НПД",
+        "fiscal_provider": "mock-fn",
+        "amount": 5000,
+        "payment_method": "card",
+        "purpose": "Регистрационный взнос · self_employed · 5 000 ₽",
+        "account_id": "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745",
+        "payment_id": "98baa8b6-6048-4de6-bf8d-e2bebfca4e79",
+        "issued_at": "2026-10-18T13:00:20.013Z"
+      }
+    ]
+  },
+  "products": [
+    {
+      "id": "prod-smoke-1",
+      "title": "Test Table",
+      "price": 5000,
+      "ownerId": "8f74a4e0-5b4c-4f47-a6fc-06308f7c5745",
+      "created_at": "2026-10-18T13:00:20.273Z"
+    }
+  ]
+}

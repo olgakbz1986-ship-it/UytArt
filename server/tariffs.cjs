@@ -888,7 +888,19 @@ function mount(app, ctx) {
       case "price_watch": {
         const limit = t.limits.buyer.priceWatches;
         if (!Number.isFinite(limit)) return { allowed: true, limit, used };
-        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит отслеживаемых товаров исчерпан (" + limit + ")." : null };
+        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит отслеживаемых товаров исчерпан (" + limit + ")." : null, offer: used >= limit ? packOfferFor(action) : null };
+      }
+      case "agent_task": {
+        /* §2.3: лимит ПАРАЛЛЕЛЬНЫХ задач агента — 3 / 10 / безлимит по тарифу
+           покупателя (free/start — 3, designer — 10, premium — безлимит). */
+        const BUYER_LEVEL = { free: 0, start: 1, designer: 2, premium: 3 };
+        const lvl = BUYER_LEVEL[t.buyerPlanId] != null ? BUYER_LEVEL[t.buyerPlanId] : 0;
+        const limit = [3, 3, 10, Infinity][Math.min(lvl, 3)];
+        if (!Number.isFinite(limit)) return { allowed: true, limit, used };
+        /* используем счётчик активных (queued/working) задач, который клиент
+           синхронизирует через meta.activeTasks; сервер — источник лимита */
+        const active = Number(meta && meta.activeTasks) || used;
+        return { allowed: active < limit, limit, used: active, reason: active >= limit ? "Достигнут лимит параллельных задач агента (" + limit + "). Дождитесь выполнения или улучшите тариф." : null, offer: active >= limit ? packOfferFor("ai_gen") : null };
       }
       default:
         return { allowed: false, reason: "unknown_action" };
@@ -916,7 +928,10 @@ function mount(app, ctx) {
   app.post("/api/limits/consume", guard, async (req, res) => {
     try {
       const action = String((req.body && req.body.action) || "");
-      const r = await serverCheckLimit(req.userId, action, {});
+      /* meta передаётся клиентом как подсказка (например activeTasks для agent_task);
+         лимит и решение — всегда на сервере (§1.5) */
+      const meta = (req.body && req.body.meta) || {};
+      const r = await serverCheckLimit(req.userId, action, meta);
       if (!r.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: r.reason, limit: r.limit, used: r.used, offer: r.offer || null });
       await serverConsumeLimit(req.userId, action);
       res.json({ ok: true, consumed: true, limit: r.limit, used: r.used + 1 });

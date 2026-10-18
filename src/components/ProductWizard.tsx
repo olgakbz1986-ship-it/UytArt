@@ -2,6 +2,7 @@ import {  useState, useRef, useEffect } from "react";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
 import { useAppStore } from "../lib/store";
+import { useTariffStore, LimitReachedError } from "../lib/tariff";
 import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
 import { Modal, Btn, Field, Badge } from "./ui";
