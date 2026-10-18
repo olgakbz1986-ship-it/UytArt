@@ -5,7 +5,7 @@ import { Product, PRODUCTS, aiPickProducts, fmt, fmtDate } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits, selectAiLeft, fmtLimit } from "../lib/subscriptions";
-import { useTariffStore, LimitReachedError, type TariffAction } from "../lib/tariff";
+import { useTariffStore, LimitReachedError, type LimitAction } from "../lib/tariff";
 import OverlimitPackModal from "../components/OverlimitPackModal";
 import { Badge, Btn, ProductImg } from "../components/ui";
 
@@ -46,7 +46,7 @@ export default function AiPage() {
   const [searching, setSearching] = useState(false);
   const [limitHit, setLimitHit] = useState(false);
   /* §2.1: платная стена с деталями серверного лимита */
-  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: TariffAction } | null>(null);
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: LimitAction } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

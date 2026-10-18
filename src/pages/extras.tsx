@@ -37,6 +37,7 @@ import { Markdown } from "../components/markdown";
 ;
 import { SellerAvatar } from "../components/SellerAvatar";
 import { SellerPremiumBlocksLite } from "../components/PremiumBlocks";
+import LimitWarning, { LimitCounters, SELLER_WATCHED } from "../components/LimitWarning";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -1532,6 +1533,11 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {tab === "products" && (
         <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
+          {/* §2.8: счётчики потребления продавца + предупреждение при 80% лимита */}
+          <div className="lg:col-span-full">
+            <LimitCounters actions={SELLER_WATCHED} refreshKey={tab} />
+            <LimitWarning actions={SELLER_WATCHED} refreshKey={tab} />
+          </div>
           <div className="relative rounded-2xl bg-gradient-to-br from-surface via-surface to-surface/60 p-8 flex flex-col items-center justify-center text-center overflow-hidden border border-line-soft/30">
             {/* Декоративный glow */}
             <div className="absolute -top-20 -right-20 w-40 h-40 bg-accent/5 rounded-full blur-3xl"></div>

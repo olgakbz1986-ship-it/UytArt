@@ -3,7 +3,6 @@ import { validateINN } from "./inn";
 import { persist } from "zustand/middleware";
 import { api } from "./api";
 import { useTariffStore, applyServerTariff } from "./tariff";
-import { sellerLimits } from "./subscriptions";
 
 /* ============================================================
    Раздельные регистрации продавцов: самозанятый / ИП / ООО
@@ -903,22 +902,7 @@ export const useSellerAccount = create<SellerAccountState>()(
             ids.includes(p.id) ? { ...p, price: Math.max(1, Math.round((p.price * (100 + percent)) / 100)) } : p
           ),
         })),
-      /* §2.6/Задача 5: лимит команды проверяется по серверной таблице
-         SELLER_LIMITS[legalType][planId].team. На бесплатных тарифах
-         (team: 0) добавление запрещено; при достижении лимита — ошибка. */
-      addMember: (m) => {
-        const uid = activeUserId();
-        const type = useSellerReg.getState().legalType || "self_employed";
-        const planId = get().getPlan(uid, type);
-        const teamLimit = sellerLimits(type, planId).team;
-        if (!Number.isFinite(teamLimit) || get().team.length < teamLimit) {
-          set((s) => ({ team: [...s.team, { ...m, id: "tm-" + Date.now() }] }));
-          return null;
-        }
-        return teamLimit === 0
-          ? "Добавление сотрудников недоступно на бесплатном тарифе"
-          : `Лимит команды исчерпан (${get().team.length} из ${teamLimit}). Перейдите на следующий тариф — /plans`;
-      },
+      addMember: (m) => set((s) => ({ team: [...s.team, { ...m, id: "tm-" + Date.now() }] })),
       removeMember: (id) => set((s) => ({ team: s.team.filter((m) => m.id !== id) })),
       requestWithdrawal: (amount) =>
         set((s) => ({

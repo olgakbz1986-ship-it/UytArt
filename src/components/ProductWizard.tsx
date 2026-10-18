@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
 import { useAppStore } from "../lib/store";
-import { useTariffStore, LimitReachedError, type TariffAction } from "../lib/tariff";
+import { useTariffStore, LimitReachedError, type LimitAction } from "../lib/tariff";
 import OverlimitPackModal from "./OverlimitPackModal";
 import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
@@ -42,7 +42,7 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
   /* §2.4/§2.5: платная стена при исчерпании серверного лимита */
-  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: TariffAction } | null>(null);
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: LimitAction } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const acc = useSellerAccount();
   const sellerReg = useSellerReg();
