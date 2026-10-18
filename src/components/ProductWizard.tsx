@@ -1,4 +1,5 @@
 import {  useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
 import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
 import { useAppStore } from "../lib/store";
@@ -39,6 +40,8 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(empty);
   const [generating, setGenerating] = useState(false);
+  /* §2.4/§2.5: платная стена при исчерпании серверного лимита */
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const acc = useSellerAccount();
   const sellerReg = useSellerReg();
@@ -77,7 +80,14 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editId]);
   const month = new Date().toISOString().slice(0, 7);
-  const aiLeft = Math.max(0, 10 - (acc.aiCardGens[month] || 0));
+  /* §2.5: остаток AI-генераций карточек — из СЕРВЕРНОГО тарифа (кэш), а не хардкод 10 */
+  const tariffCache = useTariffStore((s) => s.tariff);
+  const cardGenLimit = tariffCache?.limits?.seller?.aiCardGens ?? Infinity;
+  const productLimit = tariffCache?.limits?.seller?.maxProducts ?? Infinity;
+  const aiLeft = Number.isFinite(cardGenLimit)
+    ? Math.max(0, cardGenLimit - (acc.aiCardGens[month] || 0))
+    : cardGenLimit;
+  const productsUsed = acc.products.length;
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
@@ -95,9 +105,21 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
     });
   };
 
-  const generateAi = () => {
+  const generateAi = async () => {
+    if (generating) return;
+    /* §1.5/§2.5: СЕРВЕРНАЯ проверка и списание перед запуском AI */
+    try {
+      await useTariffStore.getState().assertLimit("ai_card_gen");
+    } catch (e) {
+      if (e instanceof LimitReachedError) {
+        setLimitWall({ title: "Лимит AI-генераций исчерпан", limit: e.limit, used: e.used });
+        return;
+      }
+      setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
+      return;
+    }
+    acc.consumeAiCardGen(month); /* зеркалим локальный счётчик для отображения остатка */
     setGenerating(true);
-    acc.consumeAiCardGen(month);
     setTimeout(() => {
       const cover = draft.media[0]?.url;
       const bullets = [
@@ -111,7 +133,20 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
     }, 1500);
   };
 
-  const publish = () => {
+  const publish = async () => {
+    /* §1.5/§2.4: СЕРВЕРНАЯ проверка лимита товаров перед публикацией (редактирование не тратит слот) */
+    if (!editItem) {
+      try {
+        await useTariffStore.getState().assertLimit("product_create");
+      } catch (e) {
+        if (e instanceof LimitReachedError) {
+          setLimitWall({ title: "Лимит товаров исчерпан", limit: e.limit, used: e.used });
+          return;
+        }
+        setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
+        return;
+      }
+    }
     const data = {
       sellerCity: draft.sellerCity || sellerReg.city || "",
       deliveryZone: draft.deliveryZone || { mode: "nationwide" },
@@ -468,7 +503,7 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
               <div className="bg-ai-soft/40 border border-ai/30 rounded-xl p-4">
                 <p className="text-[13px] text-ink mb-3">
                   <Sparkles size={14} className="inline text-ai mr-1" />
-                  AI соберёт карточку из ваших данных. Осталось генераций: <b>{aiLeft}/10</b>
+                  AI соберёт карточку из ваших данных. Осталось генераций: <b>{Number.isFinite(aiLeft) ? aiLeft : "∞"} / {Number.isFinite(cardGenLimit) ? cardGenLimit : "∞"}</b>
                 </p>
                 <Btn variant="dark" className="w-full" disabled={generating || aiLeft === 0} onClick={generateAi}>
                   <Wand2 size={15} /> {generating ? "Генерирую…" : aiLeft === 0 ? "Лимит исчерпан" : "Сгенерировать карточку"}
@@ -540,9 +575,32 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
               <Sparkles size={13} className={draft.aiCover ? "text-ai" : "text-ink-mute"} />
               <span>{draft.aiCover ? "AI-карточка готова" : "AI не запущен"}</span>
             </div>
+            {/* §2.4: счётчик размещённых товаров против лимита тарифа */}
+            <div className="flex items-center gap-2">
+              <Package size={13} className={Number.isFinite(productLimit) && productsUsed >= productLimit ? "text-error" : "text-ink-mute"} />
+              <span>Товары: {productsUsed} из {Number.isFinite(productLimit) ? productLimit : "∞"}</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* §2.1/§2.4/§2.5: платная стена с переходом на следующий тариф */}
+      {limitWall && (
+        <div className="absolute inset-0 z-20 bg-dark/40 rounded-2xl flex items-center justify-center p-6">
+          <div className="bg-surface rounded-2xl shadow-card max-w-sm w-full p-6 text-center fade-up">
+            <p className="text-[34px] mb-2">🔒</p>
+            <h4 className="font-display font-bold text-[18px] text-ink mb-1">{limitWall.title}</h4>
+            {limitWall.limit >= 0 && (
+              <p className="text-[13px] text-ink-soft mb-4">Использовано: {limitWall.used} из {Number.isFinite(limitWall.limit) ? limitWall.limit : "∞"} по тарифу.</p>
+            )}
+            <p className="text-[12.5px] text-ink-mute mb-5">Можно докупить пакет сверх лимита (+50 слотов за 300 ₽ / +50 генераций за 500 ₽) или перейти на тариф выше.</p>
+            <div className="flex gap-2 justify-center">
+              <Btn variant="ghost" onClick={() => setLimitWall(null)}>Закрыть</Btn>
+              <Link to="/plans" onClick={() => setLimitWall(null)} className="inline-flex items-center h-10 px-5 rounded-[10px] bg-accent text-white text-sm font-bold hover:bg-accent-deep transition-colors">Перейти на следующий тариф</Link>
+            </div>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
