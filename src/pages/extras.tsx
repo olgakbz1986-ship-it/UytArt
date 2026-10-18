@@ -36,6 +36,7 @@ import MarketOrderDetail from "../components/MarketOrderDetail";
 import { Markdown } from "../components/markdown";
 ;
 import { SellerAvatar } from "../components/SellerAvatar";
+import { SellerPremiumBlocksLite } from "../components/PremiumBlocks";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -2047,6 +2048,10 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                 </div>
                 {acc.team.length >= plan.team && <p className="text-[12px] font-semibold text-error mt-2.5">Достигнут лимит команды для вашего тарифа.</p>}
               </div>
+
+              {/* ЭТАП 5 §5.2–§5.6: премиум-функции кабинета продавца (видны платным тарифам;
+                  закрытые блоки показывают заглушку «Доступно на тарифе X») */}
+              <SellerPremiumBlocksLite />
             </>
           )}
         

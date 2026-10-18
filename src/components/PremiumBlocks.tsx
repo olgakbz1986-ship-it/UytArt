@@ -453,8 +453,35 @@ export function SellerPremiumSection() {
     <div className="space-y-4 mt-6">
       <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Vip size={19} className="text-accent" /> Премиум-функции тарифа</h2>
       <div className="grid lg:grid-cols-2 gap-4">
-        {f.weeklyReport !== undefined && <WeeklyReportBlock />}
-        {f.curatorPicks !== undefined && <CuratorPicksBlock />}
+        {f.weeklyReport && <WeeklyReportBlock />}
+        {f.curatorPicks && <CuratorPicksBlock />}
+        {f.abTest && <AbTestBlock />}
+        {f.b2bClosed && <B2bOrdersBlock />}
+        {f.importFile && <ImportBlock />}
+        {f.brandStore && <BrandStoreBlock />}
+        {f.segmentation && <SegmentsBlock />}
+        {f.managerLine && <ManagerLineBlock />}
+        {f.customReports && <CustomReportsBlock />}
+        {f.whiteLabel && <WhiteLabelBlock />}
+        {f.topPositions && <TopPositionsBlock />}
+        {f.promoMailout && <PromoBlock />}
+      </div>
+    </div>
+  );
+}
+
+/* Универсальная секция: показывает только те блоки, которые открыты
+   текущему продавцу; для остальных — заглушку «Доступно на тарифе X». */
+export function SellerPremiumBlocksLite() {
+  const f = useSellerFeatures();
+  const anyOn = Object.values(f).some((v) => v === true);
+  if (!anyOn) return null;
+  return (
+    <div className="mt-8 space-y-4">
+      <h3 className="font-display font-bold text-[18px] text-ink flex items-center gap-2"><Vip size={17} className="text-accent" /> Премиум-функции тарифа</h3>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <WeeklyReportBlock />
+        <CuratorPicksBlock />
         <AbTestBlock />
         <B2bOrdersBlock />
         <ImportBlock />
