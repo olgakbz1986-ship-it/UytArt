@@ -5,6 +5,7 @@ import { Product, PRODUCTS, aiPickProducts, fmt, fmtDate } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits, selectAiLeft, fmtLimit } from "../lib/subscriptions";
+import { useTariffStore, LimitReachedError } from "../lib/tariff";
 import { Badge, Btn, ProductImg } from "../components/ui";
 
 type Mode = "chat" | "room" | "photo";
@@ -43,23 +44,40 @@ export default function AiPage() {
   const [photoImg, setPhotoImg] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [limitHit, setLimitHit] = useState(false);
+  /* §2.1: платная стена с деталями серверного лимита */
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, thinking]);
 
-  const tryConsume = () => {
-    const ok = consumeAiGen(accountId);
-    setLimitHit(!ok);
-    return ok;
+  /* §1.5/§2.1: СЕРВЕРНАЯ проверка и списание (cost — генераций).
+     Локальный счётчик только зеркалится для отображения остатка. */
+  const tryConsume = async (cost = 1, action: "ai_gen" | "interior_project" = "ai_gen") => {
+    try {
+      await useTariffStore.getState().assertLimit(action, cost);
+    } catch (e) {
+      if (e instanceof LimitReachedError) {
+        setLimitWall({
+          title: action === "interior_project" ? "Проект интерьера требует 3 генерации — лимит исчерпан" : "Лимит AI-генераций исчерпан",
+          limit: e.limit, used: e.used,
+        });
+        setLimitHit(true);
+      } else {
+        setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
+      }
+      return false;
+    }
+    for (let i = 0; i < cost; i++) consumeAiGen(accountId);
+    return true;
   };
 
   /* ---------- чат ---------- */
-  const send = () => {
+  const send = async () => {
     const q = input.trim();
     if (!q || thinking) return;
-    if (!tryConsume()) return;
+    if (!(await tryConsume(1))) return;
     setMessages((m) => [...m, { role: "user", text: q }]);
     setInput("");
     setThinking(true);
@@ -80,9 +98,15 @@ export default function AiPage() {
     setSpotsReady(false);
     setSpotOpen(null);
   };
-  const analyzeRoom = () => {
+  const analyzeRoom = async () => {
     if (scanning || spotsReady || !roomUrl) return;
-    if (!tryConsume()) return;
+    /* §2.1: проект интерьера списывает ТРИ генерации с предупреждением до запуска */
+    const need = 3;
+    if (Number.isFinite(aiGensLeft) && aiGensLeft < need) {
+      const go = window.confirm(`Проект интерьера спишет ${need} генерации (у вас осталось ${aiGensLeft}). Продолжить?`);
+      if (!go) return;
+    }
+    if (!(await tryConsume(need, "interior_project"))) return;
     setScanning(true);
     setTimeout(() => { setScanning(false); setSpotsReady(true); }, 1600);
   };
@@ -97,8 +121,10 @@ export default function AiPage() {
   };
 
   /* ---------- поиск по фото ---------- */
-  const onPhotoFile = (f: File | undefined) => {
+  const onPhotoFile = async (f: File | undefined) => {
     if (!f) return;
+    /* §2.1: фото-поиск — точка входа генерации, гейтится сервером */
+    if (!(await tryConsume(1))) return;
     setPhotoImg(URL.createObjectURL(f));
     setSearching(true);
     setResults([]);
@@ -123,6 +149,24 @@ export default function AiPage() {
         <div className="flex items-center gap-2.5 bg-premium-soft border border-premium/40 rounded-[10px] px-4 py-3 mb-6 fade-up">
           <Sparkles size={16} className="text-[#a07c50] shrink-0" />
           <p className="text-[13px] text-ink flex-1">Лимит AI-генераций на этот месяц исчерпан. <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link></p>
+        </div>
+      )}
+
+      {/* §2.1: платная стена с предложением апгрейда/пакета сверх лимита */}
+      {limitWall && (
+        <div className="fixed inset-0 z-50 bg-dark/50 flex items-center justify-center p-6" onClick={() => setLimitWall(null)}>
+          <div className="bg-surface rounded-2xl shadow-lift max-w-sm w-full p-6 text-center pop-in" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[34px] mb-2">🔒</p>
+            <h4 className="font-display font-bold text-[18px] text-ink mb-1">{limitWall.title}</h4>
+            {limitWall.limit >= 0 && (
+              <p className="text-[13px] text-ink-soft mb-4">Использовано: {limitWall.used} из {Number.isFinite(limitWall.limit) ? limitWall.limit : "∞"} по текущему тарифу.</p>
+            )}
+            <p className="text-[12.5px] text-ink-mute mb-5">Доступен пакет «+50 AI-генераций за 500 ₽/мес» или переход на тариф выше со скидкой на заказы.</p>
+            <div className="flex gap-2 justify-center">
+              <Btn variant="ghost" onClick={() => setLimitWall(null)}>Закрыть</Btn>
+              <Link to="/plans" onClick={() => setLimitWall(null)} className="inline-flex items-center h-10 px-5 rounded-[10px] bg-accent text-white text-sm font-bold hover:bg-accent-deep transition-colors">Перейти на следующий тариф</Link>
+            </div>
+          </div>
         </div>
       )}
 
