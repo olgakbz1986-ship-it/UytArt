@@ -26,6 +26,7 @@ if (process.env.DATABASE_URL) {
   const { Pool } = require("pg");
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSL === "require" ? { rejectUnauthorized: false } : undefined });
   db = {
+    pool,
     mode: "postgres (Yandex)",
     byEmail: async (e) => (await pool.query("select * from users where email=$1", [e])).rows[0] || null,
     byId: async (id) => (await pool.query("select * from users where id=$1", [id])).rows[0] || null,
@@ -56,12 +57,17 @@ const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
+/* Общий контекст для тарифного модуля (ЭТАП 1): tariffView доступен
+   маршрутам авторизации, а serverCheckLimit — потребляющим операциям. */
+const tariffsCtx = { guard: null, db: null };
 const profileOf = (r) => ({ id: r.id, email: r.email, name: r.name, phone: r.phone, role: r.role, legal_type: r.legal_type, tier: r.tier, avatar_url: r.avatar_url });
 function guard(req, res, next) {
   const t = req.cookies[COOKIE];
   if (!t) return res.status(401).json({ error: "no_session" });
   try { req.userId = jwt.verify(t, JWT_SECRET).sub; next(); } catch { res.status(401).json({ error: "bad_session" }); }
 }
+tariffsCtx.guard = guard;
+tariffsCtx.db = db;
 /* Мягкая авторизация: если токен есть — заполняет req.userId, иначе продолжает как гость.
    Нужен для эндпоинтов с ролевой моделью доступа (владелец/чужой/гость). */
 function softGuard(req, _res, next) {
@@ -115,7 +121,11 @@ app.post("/api/auth/login", async (req, res) => {
        получают только пользовательскую сессию. Вход в кабинет — через OTP-поток
        /api/admin/login/* (одноразовый код на почту при каждом входе). */
     res.cookie(COOKIE, jwt.sign({ sub: u.id, scope: "user" }, JWT_SECRET, { expiresIn: "7d" }), { httpOnly: true, sameSite: "lax", maxAge: 7 * DAY, secure: process.env.NODE_ENV === "production" });
-    res.json({ ok: true, profile: profileOf(u) });
+    /* ЭТАП 1 (§1.3): тариф — серверный источник истины; клиент получает его
+       при входе ВМЕСТЕ С ПРОФИЛЕМ (localStorage — только кэш). */
+    let tariff = null;
+    try { tariff = await tariffsCtx.tariffView(u.id); } catch (e) { console.error("[LOGIN TARIFF]", e); }
+    res.json({ ok: true, profile: profileOf(u), tariff });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });
 
@@ -123,7 +133,9 @@ app.post("/api/auth/logout", (_q, r) => { r.clearCookie(COOKIE); r.json({ ok: tr
 app.get("/api/auth/me", guard, async (req, res) => {
   const u = await db.byId(req.userId);
   if (!u) return res.status(404).json({ error: "gone" });
-  res.json({ ok: true, profile: profileOf(u) });
+  let tariff = null;
+  try { tariff = await tariffsCtx.tariffView(req.userId); } catch (e) { console.error("[ME TARIFF]", e); }
+  res.json({ ok: true, profile: profileOf(u), tariff });
 });
 app.patch("/api/profile", guard, async (req, res) => {
   const u = await db.update(req.userId, { name: req.body.name !== undefined ? String(req.body.name).trim() : undefined, phone: req.body.phone !== undefined ? String(req.body.phone).trim() : undefined });
@@ -269,8 +281,17 @@ app.post("/api/agent/negotiate", async (req, res) => {
 // ==========================================
 // API БИРЖИ ЗАКАЗОВ (Phase 1)
 // ==========================================
+/* ЭТАП 1: тарифное ядро — серверный источник истины о тарифах,
+   оплата разовых взносов (5/10/15 тыс. ₽), журнал + чеки, дубль лимитов. */
+const tariffs = require("./tariffs.cjs");
+tariffs.mount(app, tariffsCtx);
+
 app.post("/api/orders", guard, async (req, res) => {
   try {
+    /* ЭТАП 1 (§1.5): лимит активных индивидуальных заказов проверяется на
+       сервере по тарифу ИЗ БАЗЫ — правка localStorage клиента ничего не даёт. */
+    const lim = await tariffsCtx.serverCheckLimit(req.userId, "market_order", {});
+    if (!lim.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: lim.reason || ("Лимит активных заказов тарифа исчерпан (" + lim.limit + ")") });
     const b = req.body || {};
     const now = new Date().toISOString();
     const images = Array.isArray(b.images) ? b.images : Array.isArray(b.attachments) ? b.attachments : [];
@@ -964,14 +985,21 @@ app.get("/api/products", (_q, r) => {
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/products", guard, (req, r) => {
+app.post("/api/products", guard, async (req, res) => {
   try {
     const p = req.body || {};
-    if (!p.id) return r.status(400).json({ error: "no_id" });
+    if (!p.id) return res.status(400).json({ error: "no_id" });
     /* Правило владения товара: ownerId всегда берётся из токена сессии.
        Клиент не может присвоить товар другому пользователю или создать анонимный товар. */
     const { FILE, fs, d } = devDbRead();
     if (!d.products) d.products = [];
+    /* ЭТАП 1 (§1.5): лимит товаров тарифа проверяется на сервере по базе,
+       а не по клиентскому состоянию (обход через localStorage невозможен). */
+    const isNew = !d.products.find((x) => x.id === p.id);
+    if (isNew) {
+      const lim = await tariffsCtx.serverCheckLimit(req.userId, "product_create", {});
+      if (!lim.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: lim.reason || ("Лимит товаров тарифа исчерпан (" + lim.limit + ")") });
+    }
     const idx = d.products.findIndex((x) => x.id === p.id);
     if (idx >= 0) {
       /* Обновлять товар может только его владелец (существующий ownerId) либо создатель. */
