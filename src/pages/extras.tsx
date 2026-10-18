@@ -1277,6 +1277,7 @@ export function SellerDashboardPage() {
   const [editProductId, setEditProductId] = useState<string | null>(null);
   const [bulk, setBulk] = useState<string[]>([]);
   const [teamMember, setTeamMember] = useState({ name: "", email: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
+  const [teamErr, setTeamErr] = useState("");
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const finance = useFinance();
   const available = selectAvailable(finance);
@@ -2044,8 +2045,9 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
                   <select className="field" value={teamMember.role} onChange={(e) => setTeamMember({ ...teamMember, role: e.target.value as typeof teamMember.role })}>
                     <option>Менеджер</option><option>Мастер</option><option>Кладовщик</option>
                   </select>
-                  <Btn disabled={!teamMember.name.trim() || acc.team.length >= plan.team} onClick={() => { acc.addMember(teamMember); setTeamMember({ name: "", email: "", role: "Менеджер" }); }}>Добавить</Btn>
+                  <Btn disabled={!teamMember.name.trim() || acc.team.length >= plan.team} onClick={() => { const err = acc.addMember(teamMember); if (err) { setTeamErr(err); return; } setTeamErr(""); setTeamMember({ name: "", email: "", role: "Менеджер" }); }}>Добавить</Btn>
                 </div>
+                {teamErr && <p className="text-[12px] font-semibold text-error mt-2.5">{teamErr}</p>}
                 {acc.team.length >= plan.team && <p className="text-[12px] font-semibold text-error mt-2.5">Достигнут лимит команды для вашего тарифа.</p>}
               </div>
 

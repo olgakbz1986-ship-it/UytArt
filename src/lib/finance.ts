@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { useAppStore } from "./store";
 import { useSellerReg, useSellerAccount } from "./seller";
 import { useTariffStore } from "./tariff";
+import { useSubStore, currentMonth } from "./subscriptions";
 
 /* ============================================================
    ФИНАНСОВОЕ ЯДРО Quantiform
@@ -21,9 +22,9 @@ export const PAYOUT_METHOD_META: Record<PayoutMethodType, { title: string; hint:
 };
 
 export interface PayoutMethod { id: string; type: PayoutMethodType; mask: string; }
-export interface LedgerEntry { id: string; ts: string; type: "hold" | "release_seller" | "release_platform" | "release_cdek" | "payout_hold" | "payout_paid" | "refund"; amount: number; orderId?: string; comment: string; }
+export interface LedgerEntry { id: string; ts: string; type: "hold" | "release_seller" | "release_platform" | "release_cdek" | "delivery_subsidy" | "payout_hold" | "payout_paid" | "refund"; amount: number; orderId?: string; comment: string; }
 export interface EscrowHold { orderId: string; amount: number; status: "held" | "released" | "refunded" | "frozen"; createdAt: string; releasedAt?: string; trigger?: string; }
-export interface DeliveryRec { orderId: string; from: string; to: string; weight: number; cost: number; status: "in_transit" | "at_pvz" | "issued"; atPvzAt: number; issuedAt: number; track: string; }
+export interface DeliveryRec { orderId: string; from: string; to: string; weight: number; cost: number; status: "in_transit" | "at_pvz" | "issued"; atPvzAt: number; issuedAt: number; track: string; subsidy?: number; /* §3.4: субсидия платформы (премиум-доставка) */ }
 export interface PayoutReq { id: string; amount: number; methodId: string; status: "processing" | "paid"; createdAt: string; paidAt?: string; }
 export interface DisputeRec { orderId: string; reason: string; status: "open" | "resolved_release" | "resolved_refund"; ts: string; }
 
@@ -53,6 +54,31 @@ export function cdekRate(from: string, to: string, weight: number): number {
 }
 
 const uid = (p: string) => p + "-" + Math.random().toString(36).slice(2, 9);
+
+/* ============================================================
+   §3.4/Задача 7: БЕСПЛАТНАЯ ДОСТАВКА ПРЕМИУМА
+   Не более 2 заказов в месяц по федеральному округу продавца;
+   далее — по себестоимости (полный тариф СДЭК). Субсидия
+   отражается отдельной проводкой финансового журнала
+   с типом "delivery_subsidy".
+   ============================================================ */
+export const PREMIUM_FREE_DELIVERY_LIMIT = 2;
+
+export function premiumDeliveryForOrder(opts: {
+  accountId: string;
+  fromCity: string;
+  toCity: string;
+  weight: number;
+}): { price: number; subsidy: number; free: boolean } {
+  const full = cdekRate(opts.fromCity, opts.toCity, opts.weight);
+  let plan: string = "free";
+  try { plan = useSubStore.getState().getBuyerPlan(opts.accountId); } catch { /* noop */ }
+  if (plan !== "premium") return { price: full, subsidy: 0, free: false };
+  const month = currentMonth();
+  const used = useSubStore.getState().premiumFreeDeliveries[month] || 0;
+  if (used >= PREMIUM_FREE_DELIVERY_LIMIT) return { price: full, subsidy: 0, free: false };
+  return { price: 0, subsidy: full, free: true };
+}
 
 interface FinanceState {
   ledger: LedgerEntry[];
@@ -103,6 +129,11 @@ export const useFinance = create<FinanceState>()(
           ledger.push({ id: uid("l"), ts: h.releasedAt, type: "release_seller", amount: seller, orderId: h.orderId, comment: "Выплата мастеру (цена − СДЭК − комиссия)" });
           ledger.push({ id: uid("l"), ts: h.releasedAt, type: "release_platform", amount: K, orderId: h.orderId, comment: "Комиссия платформы по тарифу" });
           ledger.push({ id: uid("l"), ts: h.releasedAt, type: "release_cdek", amount: D, orderId: h.orderId, comment: "Стоимость доставки СДЭК" });
+          /* §3.4/Задача 7: субсидия бесплатной премиум-доставки — отдельная проводка */
+          const sub = d && d.subsidy ? d.subsidy : 0;
+          if (sub > 0) {
+            ledger.push({ id: uid("l"), ts: h.releasedAt, type: "delivery_subsidy", amount: -sub, orderId: h.orderId, comment: "Субсидия платформы: бесплатная доставка Премиум (2/мес по федеральному округу)" });
+          }
           useSellerAccount.setState((st: any) => ({
             transactions: [{ id: uid("t"), date: h.releasedAt, kind: "sale", orderId: h.orderId, productPrice: h.amount, commissionAmount: K, sellerPayout: seller }, ...st.transactions],
           }));
@@ -122,7 +153,13 @@ export const useFinance = create<FinanceState>()(
               const weight = mine.reduce((a: number, i: any) => a + (i.qty || 1) * 0.8, 0);
               const to = o.city || (o.address && o.address.city) || "";
               const created = new Date(hold.createdAt).getTime();
-              deliveries.push({ orderId: o.id, from: reg.city || "", to, weight: Math.round(weight * 10) / 10, cost: cdekRate(reg.city || "", to, weight), status: "in_transit", atPvzAt: created + 4 * 864e5, issuedAt: created + 5 * 864e5, track: "CDEK-" + String(o.id).slice(-6).toUpperCase() });
+              /* §3.4/Задача 7: бесплатная доставка Премиума — до 2 заказов в месяц;
+                 cost для продавца остаётся себестоимостью, subsidy — расход платформы */
+              const fullCost = cdekRate(reg.city || "", to, weight);
+              const cityOf = (s: string) => String(s || "").split(",")[0].trim();
+              const prem = premiumDeliveryForOrder({ accountId: useAppStore.getState().session?.userId || "guest", fromCity: reg.city || "", toCity: cityOf(to), weight });
+              deliveries.push({ orderId: o.id, from: reg.city || "", to, weight: Math.round(weight * 10) / 10, cost: fullCost, subsidy: prem.free ? prem.subsidy : undefined, status: "in_transit", atPvzAt: created + 4 * 864e5, issuedAt: created + 5 * 864e5, track: "CDEK-" + String(o.id).slice(-6).toUpperCase() });
+              if (prem.free) useSubStore.getState().consumePremiumFreeDelivery();
             }
             changed = true;
           }
