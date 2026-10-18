@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Modal, Btn } from "./ui";
-import { useTariffStore, type TariffAction } from "../lib/tariff";
+import { useTariffStore, type LimitAction } from "../lib/tariff";
 
 /**
  * §4.5: Модалка покупки пакета сверх лимита.
@@ -17,13 +17,13 @@ export interface PackInfo {
   price: number;
 }
 
-const PACK_BY_ACTION: Partial<Record<TariffAction, PackInfo>> = {
+const PACK_BY_ACTION: Partial<Record<LimitAction, PackInfo>> = {
   product_create: { title: "+50 слотов товаров", desc: "К 50 товарам вашего тарифа на месяц. Автопродление, отмена в любой момент.", price: 300 },
   ai_card_gen: { title: "+50 AI-генераций карточек", desc: "Сверх месячного пакета генераций. Списание — по факту запуска.", price: 500 },
   ai_gen: { title: "+50 AI-генераций", desc: "Фото-поиск, концепты, проекты интерьера — сверх пакета тарифа.", price: 500 },
 };
 
-export function packForAction(action: TariffAction): PackInfo | null {
+export function packForAction(action: LimitAction): PackInfo | null {
   return PACK_BY_ACTION[action] ?? null;
 }
 
@@ -34,7 +34,7 @@ export default function OverlimitPackModal({
   onClose,
 }: {
   open: boolean;
-  action: TariffAction;
+  action: LimitAction;
   reason?: string;
   onClose: () => void;
 }) {
