@@ -14,6 +14,13 @@ const nodemailer = require("nodemailer");
    в dev допустима помеченная заглушка, в production её отсутствие =
    предупреждение при старте + 500 misconfigured на критических эндпоинтах. */
 const cfg = require("./config.cjs");
+
+/* §5.1 Структурированное логирование (pino): все security-события пишутся
+   в JSON-формате для внешних систем мониторинга. Маскирование PII
+   (email/телефоны/карты) настроено внутри logger.cjs; пароли, полные токены
+   и номера карт в логи не попадают никогда. */
+const log = require("./logger.cjs");
+
 const PORT = process.env.PORT || 8787;
 /* Секрет стабилен между перезапусками только если задан JWT_SECRET в .env
    (раньше случайная генерация ломала все сессии после рестарта). */
@@ -68,6 +75,67 @@ const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.
    REFRESH_TTL_SEC (7 дней) и хранится ТОЛЬКО в httpOnly-куке qf_refresh —
    JavaScript клиента его не читает; кука отправляется только на /api/auth/*. */
 const app = express();
+
+/* ================= БЛОК 2, Пункт 2.3: Helmet + CORS (до всех роутов) =================
+   helmet() добавляет защитные HTTP-заголовки: Content-Security-Policy,
+   X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security и др.
+   CSP через helmet отключён — политикой управляет мета-тег в index.html
+   (там же подключаются YooKassa widget и Supabase-домены). */
+const helmet = require("helmet");
+const cors = require("cors");
+app.use(helmet({
+  contentSecurityPolicy: false,          /* см. мета-тег CSP в index.html */
+  crossOriginResourcePolicy: { policy: "cross-origin" }, /* статика/загрузки с клиента */
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+}));
+/* CORS: строгий whitelist. В продакшене НИКОГДА "*" в origin.
+   credentials включены — нужны httpOnly-куки с refresh-токеном (§1.3). */
+const DEV_ORIGINS = ["http://localhost:3000", "http://192.168.0.109:3000", "http://localhost:5173", "http://127.0.0.1:5173"];
+const PROD_ORIGINS = ["https://quantiform.ru", "https://www.quantiform.ru"];
+const ALLOWED_ORIGINS = new Set(
+  (process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : [])
+    .concat(cfg.IS_PROD ? PROD_ORIGINS : DEV_ORIGINS)
+);
+app.use(cors({
+  origin(origin, cb) {
+    /* без Origin (curl, сервер-сервер, webhook-провайдеры) — пропускаем;
+       браузерные запросы — только из whitelist */
+    if (!origin || ALLOWED_ORIGINS.has(origin)) return cb(null, true);
+    cb(new Error("cors_forbidden_origin"));
+  },
+  credentials: true,                                   /* кука qf_refresh */
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  maxAge: 600,
+}));
+
+/* ================= БЛОК 2, Пункт 2.2: Rate Limiting (express-rate-limit) =================
+   Глобальный лимит на всё /api/: окно 15 минут, максимум 100 запросов с IP.
+   Примечание для кластера: при выходе за пределы одного сервера заменить
+   встроенный memory-store на rate-limit-redis (keyGenerator + store),
+   чтобы лимиты считались глобально по всем узлам. */
+const { rateLimit } = require("express-rate-limit");
+const rlHandler = (name) => (req, res) => {
+  /* §5.1 security-событие: срабатывание rate-limit — в структурированный JSON-лог */
+  log.security("rate_limit_exceeded", { limiter: name, ip: req.ip, path: req.path });
+  res.status(429).json({ error: "rate_limited", message: "Слишком много запросов. Повторите позже." });
+};
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("api_global") });
+/* Строгий лимит авторизации — защита от подбора паролей: 15 мин / 5 запросов */
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, skipSuccessfulRequests: true, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("auth") });
+/* Лимит платежей: 1 минута / 3 запроса — защита от фрода и повторных списаний */
+const paymentsLimiter = rateLimit({ windowMs: 60 * 1000, limit: 3, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("payments") });
+/* Лимит AI-генерации: 1 минута / 10 запросов (дорогие ресурсы).
+   Дополнительно — per-user лимит в server/ai-security.cjs (§4.3). */
+const aiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("ai") });
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/refresh", authLimiter);
+app.use("/api/payments", paymentsLimiter);
+app.use("/api/ai", aiLimiter);
+app.use("/api/agent", aiLimiter);
+app.use("/api/ai-designer", aiLimiter);
+app.use("/api/", apiLimiter); /* все остальные API-роуты — глобальный лимит */
+
 /* БЛОК 3, Пункт 3.2: тело webhook-эндпоинтов должно оставаться СЫРЫМ
    (Buffer) для проверки HMAC-SHA256 — express.json() здесь запрещён.
    express.raw() монтируется ДО глобального json-парсера только на эти пути. */
@@ -162,6 +230,20 @@ async function sendConfirm(email, name, token) {
 
 app.get("/api/health", (_q, r) => r.json({ ok: true, mode: db.mode, company: "StartTechPro" }));
 
+/* ---------- §5.1 Фоновый job здоровья безопасности (JSON-лог) ---------- */
+/* Каждые 60 секунд пишет heartbeat с числом отозванных refresh-токенов —
+   мониторинг может алертить на отсутствие heartbeat или на всплеск revoke. */
+setInterval(() => {
+  log.info("security_heartbeat", { component: "auth", revokedTokensApprox: typeof revokedRefresh?.size === "function" ? revokedRefresh.size() : undefined });
+}, 60_000).unref?.();
+
+/* ---------- §5.1 Глобальный error-handler: необработанные ошибки — в JSON-лог ---------- */
+app.use((err, req, res, _next) => {
+  log.error("unhandled_request_error", { route: req.originalUrl, ip: req.ip, message: err && err.message, stack: err && err.stack });
+  if (res.headersSent) return;
+  res.status(500).json({ error: "server" });
+});
+
 app.post("/api/auth/register", async (req, res) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -192,9 +274,17 @@ app.post("/api/auth/resend", async (req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const u = await db.byEmail(String(req.body.email || "").trim().toLowerCase());
-    if (!u || !(await bcrypt.compare(String(req.body.password || ""), u.password_hash))) return res.status(401).json({ error: "bad_credentials" });
-    if (!u.email_confirmed && db.mode.startsWith("postgres")) return res.status(403).json({ error: "need_confirm" });
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const u = await db.byEmail(email);
+    if (!u || !(await bcrypt.compare(String(req.body.password || ""), u.password_hash))) {
+      /* §5.1 security-событие: неуспешная попытка входа (email маскируется) */
+      log.security("login_failed", { ip: req.ip, email, reason: "bad_credentials" });
+      return res.status(401).json({ error: "bad_credentials" });
+    }
+    if (!u.email_confirmed && db.mode.startsWith("postgres")) {
+      log.security("login_failed", { ip: req.ip, email, reason: "need_confirm" });
+      return res.status(403).json({ error: "need_confirm" });
+    }
     /* Кабинет администратора не упоминается на публичном сайте: служебные email
        получают только пользовательскую сессию. Вход в кабинет — через OTP-поток
        /api/admin/login/* (одноразовый код на почту при каждом входе). */
@@ -202,6 +292,8 @@ app.post("/api/auth/login", async (req, res) => {
        refresh-токен (7 дней) устанавливается ТОЛЬКО httpOnly-кукой qf_refresh
        (httpOnly + Secure + SameSite=Strict + Path=/api/auth) — в теле его нет. */
     const pair = issueTokens(res, u.id);
+    /* §5.1 security-событие: успешный вход (в логах — только id и маскированный email) */
+    log.security("login_success", { ip: req.ip, userId: u.id, email });
     /* ЭТАП 1 (§1.3): тариф — серверный источник истины; клиент получает его
        при входе ВМЕСТЕ С ПРОФИЛЕМ (localStorage — только кэш). */
     let tariff = null;
@@ -218,10 +310,17 @@ app.post("/api/auth/refresh", async (req, res) => {
     const rt = req.cookies[REF_COOKIE];
     if (!rt) return res.status(401).json({ error: "no_session" });
     let p;
-    try { p = jwt.verify(rt, JWT_SECRET); } catch { res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth")); return res.status(401).json({ error: "bad_session" }); }
-    if (p.scope !== "user" || p.typ !== "refresh") return res.status(401).json({ error: "bad_session" });
+    try { p = jwt.verify(rt, JWT_SECRET); } catch {
+      log.security("refresh_denied", { ip: req.ip, reason: "invalid_or_expired" });
+      res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth")); return res.status(401).json({ error: "bad_session" });
+    }
+    if (p.scope !== "user" || p.typ !== "refresh") {
+      log.security("refresh_denied", { ip: req.ip, userId: p.sub, reason: "wrong_scope" });
+      return res.status(401).json({ error: "bad_session" });
+    }
     if (await revokedRefresh.has(p.jti)) {
       /* reuse-detector: токен уже использован — отзываем всю цепочку этой куки */
+      log.security("refresh_reuse_detected", { ip: req.ip, userId: p.sub, jti: p.jti });
       await revokeToken(rt);
       res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth"));
       res.clearCookie(COOKIE, cookieOpts(0, "/"));
