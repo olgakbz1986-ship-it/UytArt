@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { PRODUCTS } from "../data/seed";
+import { applyServerTariff } from "./tariff";
 
 export type SellerType = "self_employed" | "ip" | "ooo";
 export type UserRole = "buyer" | "seller";
@@ -149,6 +150,9 @@ export const useAppStore = create<AppState>()(
         const r = await api.login(email, password);
         if (!r.ok || !r.profile) return { ok: false, error: r.error };
         const pr = r.profile;
+        /* ЭТАП 1 (§1.3): тариф приходит С СЕРВЕРА вместе с профилем;
+           localStorage — только кэш, источник истины — база сервера. */
+        applyServerTariff(r.tariff);
         useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
         /* Тихая проверка админской сессии: если в cookie OTP-сессия кабинета —
            запоминаем профиль (кабинет подхватит его сам). Никаких принудительных
@@ -163,12 +167,12 @@ export const useAppStore = create<AppState>()(
         return { ok: true } as { ok: true };
       },
       restoreSession: async () => {
-        // Если мок-сессия уже активна — не стучимся на бэкенд (убирает 401 в консоли)
-        if (useAppStore.getState().session) return;
         try {
           const r = await api.me();
           if (r.ok && r.profile) {
             const pr = r.profile;
+            /* §1.3: при восстановлении сессии тариф тоже приходит с сервера */
+            applyServerTariff(r.tariff);
             useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
           }
         } catch { /* сервер недоступен — остаёмся в демо-режиме */ }
