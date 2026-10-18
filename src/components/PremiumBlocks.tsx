@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, FileSpreadsheet, Globe2, Send, Sparkles, Trophy, Upload, Users, Vip, FlaskConical, Briefcase, Headphones, Megaphone, CheckCircle2, Lock } from "lucide-react";
+import { BarChart3, FileSpreadsheet, Globe2, Send, Sparkles, Trophy, Upload, Users, Crown, FlaskConical, Briefcase, Headphones, Megaphone, CheckCircle2, Lock } from "lucide-react";
 import { Badge, Btn, Modal } from "./ui";
 import { CATEGORIES } from "../data/seed";
 import { useAppStore } from "../lib/store";
@@ -66,7 +66,7 @@ function Card({ icon, title, children, tag }: { icon: React.ReactNode; title: st
       <header className="flex items-center gap-3 mb-4">
         <span className="w-9 h-9 rounded-[10px] bg-dark text-cream flex items-center justify-center">{icon}</span>
         <h3 className="font-display font-bold text-[16px] text-ink flex-1">{title}</h3>
-        {tag && <Badge tone="accent">{tag}</Badge>}
+        {tag && <Badge tone="premium">{tag}</Badge>}
       </header>
       {children}
     </section>
@@ -174,7 +174,7 @@ function AbTestInner() {
           {tests.map((t) => (
             <div key={t.id} className="border border-line-soft rounded-xl p-3 text-[12.5px]">
               <div className="flex justify-between font-semibold text-ink"><span>{products.find((p) => p.id === t.productId)?.name || t.productId}</span>
-                <Badge tone={t.status === "running" ? "accent" : "success"}>{t.status === "running" ? "идёт" : `победил ${t.winner?.toUpperCase()} (+${t.liftPct}%)`}</Badge></div>
+                <Badge tone={t.status === "running" ? "premium" : "success"}>{t.status === "running" ? "идёт" : `победил ${t.winner?.toUpperCase()} (+${t.liftPct}%)`}</Badge></div>
               <div className="text-ink-soft mt-1 grid grid-cols-2 gap-2">
                 <span>A: {conv(t.metrics.a)} ({t.metrics.a.views} просм.)</span><span>B: {conv(t.metrics.b)} ({t.metrics.b.views} просм.)</span>
               </div>
@@ -231,7 +231,7 @@ function ManagerInner({ roundTheClock }: { roundTheClock: boolean }) {
       </div>
       {tickets.map((t) => (
         <div key={t.id} className="mt-2 border border-line-soft rounded-xl p-3 text-[12.5px]">
-          <div className="flex justify-between"><span className="text-ink font-semibold">{t.message.slice(0, 60)}</span><Badge tone={t.status === "open" ? "accent" : "success"}>{t.status === "open" ? "SLA " + t.slaText : "отвечено"}</Badge></div>
+          <div className="flex justify-between"><span className="text-ink font-semibold">{t.message.slice(0, 60)}</span><Badge tone={t.status === "open" ? "premium" : "success"}>{t.status === "open" ? "SLA " + t.slaText : "отвечено"}</Badge></div>
           {t.answer && <p className="text-ink-soft mt-1">{t.answer}</p>}
         </div>
       ))}
@@ -451,7 +451,7 @@ export function SellerPremiumSection() {
   if (!anyOn) return null; /* бесплатные тарифы: раздел скрыт полностью */
   return (
     <div className="space-y-4 mt-6">
-      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Vip size={19} className="text-accent" /> Премиум-функции тарифа</h2>
+      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Crown size={19} className="text-accent" /> Премиум-функции тарифа</h2>
       <div className="grid lg:grid-cols-2 gap-4">
         {f.weeklyReport && <WeeklyReportBlock />}
         {f.curatorPicks && <CuratorPicksBlock />}
@@ -478,7 +478,7 @@ export function SellerPremiumBlocksLite() {
   if (!anyOn) return null;
   return (
     <div className="mt-8 space-y-4">
-      <h3 className="font-display font-bold text-[18px] text-ink flex items-center gap-2"><Vip size={17} className="text-accent" /> Премиум-функции тарифа</h3>
+      <h3 className="font-display font-bold text-[18px] text-ink flex items-center gap-2"><Crown size={17} className="text-accent" /> Премиум-функции тарифа</h3>
       <div className="grid lg:grid-cols-2 gap-4">
         <WeeklyReportBlock />
         <CuratorPicksBlock />
@@ -543,7 +543,7 @@ export function CuratorBlock() {
       </div>
       {tickets.slice(0, 3).map((t) => (
         <div key={t.id} className="mt-2 text-[12.5px] border border-line-soft rounded-xl px-3 py-2 flex justify-between">
-          <span className="text-ink">{t.question.slice(0, 50)}</span><Badge tone={t.status === "resolved" ? "success" : "accent"}>{t.status === "resolved" ? "решено" : `SLA ${t.slaMinutes} мин`}</Badge>
+          <span className="text-ink">{t.question.slice(0, 50)}</span><Badge tone={t.status === "resolved" ? "success" : "premium"}>{t.status === "resolved" ? "решено" : `SLA ${t.slaMinutes} мин`}</Badge>
         </div>
       ))}
     </Card>
@@ -553,7 +553,7 @@ export function CuratorBlock() {
 export function VipBadgeChip() {
   const f = useBuyerFeatures();
   if (!f.vipBadge) return null;
-  return <Badge tone="premium" className="shrink-0"><Vip size={11} /> VIP</Badge>;
+  return <Badge tone="premium" className="shrink-0"><Crown size={11} /> VIP</Badge>;
 }
 
 function LockedFeatureStub({ label, need }: { label: string; need: string }) {
@@ -572,7 +572,7 @@ export function BuyerPremiumSection() {
   if (!(f.premiumSales || f.curator)) return null;
   return (
     <div className="space-y-4 mt-6">
-      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Vip size={19} className="text-accent" /> Премиум для вас</h2>
+      <h2 className="font-display font-bold text-[20px] text-ink flex items-center gap-2"><Crown size={19} className="text-accent" /> Премиум для вас</h2>
       <PremiumSalesBlock />
       <CuratorBlock />
       {f.curator && thisWeekPicksForBuyer(f).length > 0 && (

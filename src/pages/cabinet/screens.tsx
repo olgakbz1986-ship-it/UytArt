@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { Activity, ArrowDownRight, ArrowUpRight, HeartPulse, Send, ShieldAlert, Sparkles, Zap, CircleSlash, ClipboardList, Play } from "lucide-react";
-import { Btn, Badge, Field, Switch } from "../../components/ui";
+import { Btn, Badge, Field, Switch, Modal } from "../../components/ui";
 import { adminApi, opKey } from "../../lib/admin-api";
 import {
   cn, Panel, DataTable, Drawer, RiskTag, DangerConfirm, EmptyState, ErrorState, LoadingBlock,

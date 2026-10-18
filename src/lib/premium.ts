@@ -166,7 +166,7 @@ export const usePremiumSales = create<PremiumSalesState>()(
         const seed = week.split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
         const ids: string[] = [];
         for (let i = 0; i < 8; i++) ids.push(PRODUCTS[(seed + i * 97) % PRODUCTS.length].id);
-        set((s) => ({ drops: [{ id: "drop-" + week, week, title: "Закрытая распродажа недели " + week, startsAt: new Date().toISOString(), discountPct: 20, productIds: [...new Set(ids)], status: "live" }, ...s.drops.map((d) => ({ ...d, status: "archived" as const }))].slice(0, 12) }));
+        set((s) => ({ drops: [{ id: "drop-" + week, week, title: "Закрытая распродажа недели " + week, startsAt: new Date().toISOString(), discountPct: 20, productIds: [...new Set(ids)], status: "live" as const }, ...s.drops.map((d) => ({ ...d, status: "archived" as const }))].slice(0, 12) }));
         /* синхронизация с сервером (сервер гейтит premium-сессию) */
         fetch("/api/premium/sales", { credentials: "include" }).catch(() => {});
       },
@@ -537,7 +537,7 @@ export function buildCustomTable(dims: ReportDim[]) {
     if (dims.includes("product")) row["Товар"] = p.name;
     if (dims.includes("revenue")) row["Выручка"] = (p.price || 0) * ((p as any).sales || 0);
     if (dims.includes("views")) row["Просмотры"] = p.views || 0;
-    if (dims.includes("stock")) row["Остаток"] = p.stock || 0;
+    if (dims.includes("stock")) row["Остаток"] = (p as any).stock || 0;
     return row;
   });
   const headers = dims.map((d) => (REPORT_DIMENSIONS.find((x) => x.key === d) || { label: d }).label);
