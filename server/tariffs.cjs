@@ -938,6 +938,55 @@ function mount(app, ctx) {
     } catch (e) { console.error("[LIMITS CONSUME]", e); res.status(500).json({ error: "server" }); }
   });
 
+  /* §4.5 / Задача 10: ПОКУПКА ПАКЕТА СВЕРХ ЛИМИТА.
+     POST /api/limits/buy-pack { packType: "products" | "generations", quantity }
+     Проверяем тариф пользователя, считаем стоимость пропорционально количеству
+     (300 ₽ за 50 слотов товаров, 500 ₽ за 50 генераций), создаём платёж в
+     провайдере, подтверждаем его (в демо — мгновенный успех; в prod — webhook),
+     начисляем слоты в базу (activatePack → sub.packs → sellerLimitsOfWithPacks)
+     и возвращаем { ok: true, newLimit }. */
+  app.post("/api/limits/buy-pack", guard, async (req, res) => {
+    try {
+      const packType = String((req.body && req.body.packType) || "");
+      const quantity = Math.max(1, Math.min(1000, Number((req.body && req.body.quantity) || 50)));
+      const packId = packType === "products" ? "plus-products-50" : packType === "generations" ? "plus-ai-gens-50" : null;
+      if (!packId) return res.status(400).json({ ok: false, error: "bad_pack_type" });
+      const pack = OVERLIMIT_PACKS[packId];
+      const amount = Math.round((pack.price * quantity) / pack.slots);
+      const t = await tariffView(req.userId);
+      const payment = {
+        id: crypto.randomUUID(),
+        user_id: req.userId,
+        kind: "overlimit_pack",
+        pack_id: packId,
+        legal_type: t.legalType,
+        plan_id: t.sellerPlanId,
+        amount,
+        currency: "RUB",
+        method: String((req.body && req.body.method) || "card"),
+        purpose: "Пакет сверх лимита · +" + quantity + " " + (packType === "products" ? "слотов товаров" : "AI-генераций") + " · " + amount + " ₽",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      };
+      const prov = await providerCreatePayment(payment);
+      payment.provider = prov.provider;
+      payment.provider_payment_id = prov.provider_payment_id;
+      payment.confirmation_url = prov.confirmation_url || null;
+      savePayment(payment);
+      /* В демо-режиме (mock-провайдер) платёж подтверждается сразу;
+         с реальным провайдером успех приходит через /api/payments/webhook,
+         который вызывает finalizePaid → activatePack тем же путём. */
+      let receipt = null;
+      if (payment.provider === "mock") {
+        receipt = await finalizePaid(payment);
+      }
+      /* Новый лимит после применения пакета (источник истины — база) */
+      const tv = await tariffView(req.userId);
+      const newLimit = packType === "products" ? tv.limits.seller.maxProducts : tv.limits.seller.aiCardGens;
+      res.json({ ok: true, payment: publicPayment(payment), receipt, newLimit: Number(newLimit) || 0, slots: quantity });
+    } catch (e) { console.error("[LIMITS BUY-PACK]", e); res.status(500).json({ ok: false, error: "server" }); }
+  });
+
   /* ============================================================
      ЭТАП 4 (§4.1–§4.6): ПУБЛИЧНЫЙ ЦЕННИК и УВЕДОМЛЕНИЯ
      ============================================================ */

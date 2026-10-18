@@ -14,6 +14,8 @@ import { useNotifyStore } from "../lib/notify";
 import { ChatModal } from "../components/chat";
 import MarketOrderDetail from "../components/MarketOrderDetail";
 import { ReviewModal, TicketModal } from "../components/review";
+import { BuyerPremiumSection } from "../components/PremiumBlocks";
+import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
 
 type Tab = "orders" | "agent" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
 
@@ -360,7 +362,12 @@ export default function ProfilePage() {
 
       {/* ЗАКАЗЫ */}
       {tab === "agent" && (
-        <div className="fade-up"><AgentPanel /></div>
+        <div className="fade-up">
+          {/* §2.8: счётчики потребления + предупреждение при 80% лимита */}
+          <LimitWarning actions={DEFAULT_WATCHED} refreshKey={tab} />
+          <LimitCounters actions={DEFAULT_WATCHED} refreshKey={tab} />
+          <AgentPanel />
+        </div>
       )}
 
       {tab === "orders" && (
@@ -677,7 +684,8 @@ export default function ProfilePage() {
 
       {/* БОНУСЫ */}
       {tab === "bonus" && (
-        <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start fade-up">
+        <div className="space-y-6 fade-up">
+        <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
           <div className="bg-surface rounded-2xl shadow-card p-6">
             <h2 className="font-display font-bold text-[18px] text-ink mb-4">История начислений</h2>
             <div className="space-y-2.5">
@@ -702,6 +710,9 @@ export default function ProfilePage() {
               <p className="flex justify-between"><span>Кэшбэк за заказ</span><span className="font-bold text-cream">+50</span></p>
             </div>
           </div>
+        </div>
+        {/* §5.1: премиум-функции покупателя — закрытые распродажи, цифровой куратор */}
+        <BuyerPremiumSection />
         </div>
       )}
 

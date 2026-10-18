@@ -5,7 +5,8 @@ import { Product, PRODUCTS, aiPickProducts, fmt, fmtDate } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits, selectAiLeft, fmtLimit } from "../lib/subscriptions";
-import { useTariffStore, LimitReachedError } from "../lib/tariff";
+import { useTariffStore, LimitReachedError, type TariffAction } from "../lib/tariff";
+import OverlimitPackModal from "../components/OverlimitPackModal";
 import { Badge, Btn, ProductImg } from "../components/ui";
 
 type Mode = "chat" | "room" | "photo";
@@ -45,7 +46,7 @@ export default function AiPage() {
   const [searching, setSearching] = useState(false);
   const [limitHit, setLimitHit] = useState(false);
   /* §2.1: платная стена с деталями серверного лимита */
-  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number } | null>(null);
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: TariffAction } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function AiPage() {
       if (e instanceof LimitReachedError) {
         setLimitWall({
           title: action === "interior_project" ? "Проект интерьера требует 3 генерации — лимит исчерпан" : "Лимит AI-генераций исчерпан",
-          limit: e.limit, used: e.used,
+          limit: e.limit, used: e.used, action,
         });
         setLimitHit(true);
       } else {
@@ -165,10 +166,23 @@ export default function AiPage() {
             <p className="text-[12.5px] text-ink-mute mb-5">Доступен пакет «+50 AI-генераций за 500 ₽/мес» или переход на тариф выше со скидкой на заказы.</p>
             <div className="flex gap-2 justify-center">
               <Btn variant="ghost" onClick={() => setLimitWall(null)}>Закрыть</Btn>
+              {limitWall.action && (
+                <Btn onClick={() => setLimitWall({ ...limitWall, action: undefined })}>Докупить пакет</Btn>
+              )}
               <Link to="/plans" onClick={() => setLimitWall(null)} className="inline-flex items-center h-10 px-5 rounded-[10px] bg-accent text-white text-sm font-bold hover:bg-accent-deep transition-colors">Перейти на следующий тариф</Link>
             </div>
           </div>
         </div>
+      )}
+
+      {/* §4.5: покупка пакета «+50 генераций за 500 ₽» прямо в момент отказа */}
+      {limitWall?.action && (
+        <OverlimitPackModal
+          open
+          action={limitWall.action}
+          reason={limitWall.title}
+          onClose={() => setLimitWall(null)}
+        />
       )}
 
       <div className="inline-flex bg-line-soft rounded-[12px] p-1.5 mb-7">

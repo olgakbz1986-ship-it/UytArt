@@ -108,6 +108,8 @@ interface SubState {
   aiGensUsed: Record<string, number>;
   concepts: Concept[];
   priceWatches: PriceWatch[];
+  /** §3.4: счётчик использованных бесплатных премиум-доставок по месяцам */
+  premiumFreeDeliveries: Record<string, number>;
   setBuyerPlan: (accountId: string, p: BuyerPlanId) => void;
   getBuyerPlan: (accountId: string) => BuyerPlanId;
   consumeAiGen: (accountId: string, cost?: number) => Promise<boolean>;
@@ -118,6 +120,9 @@ interface SubState {
    *  Возвращает ошибку-предложение апгрейда, если лимит исчерпан. */
   addPriceWatch: (w: Omit<PriceWatch, "id">) => Promise<string | null>;
   removePriceWatch: (id: string) => void;
+  /** §3.4: списать один слот бесплатной премиум-доставки за текущий месяц */
+  consumePremiumFreeDelivery: () => void;
+  premiumFreeDeliveriesLeft: () => number;
 }
 
 export const useSubStore = create<SubState>()(
@@ -127,6 +132,7 @@ export const useSubStore = create<SubState>()(
       aiGensUsed: {},
       concepts: [],
       priceWatches: [],
+      premiumFreeDeliveries: {},
 
       setBuyerPlan: (accountId, p) => set((s) => ({ 
         buyerPlanByAccount: { ...s.buyerPlanByAccount, [accountId]: p } 
@@ -175,6 +181,16 @@ export const useSubStore = create<SubState>()(
         return null;
       },
       removePriceWatch: (id) => set((s) => ({ priceWatches: s.priceWatches.filter((w) => w.id !== id) })),
+
+      /* §3.4/Задача 7: бесплатная доставка Премиума — максимум 2 заказа в месяц */
+      consumePremiumFreeDelivery: () => {
+        const month = currentMonth();
+        set((s) => ({ premiumFreeDeliveries: { ...s.premiumFreeDeliveries, [month]: (s.premiumFreeDeliveries[month] || 0) + 1 } }));
+      },
+      premiumFreeDeliveriesLeft: () => {
+        const used = get().premiumFreeDeliveries[currentMonth()] || 0;
+        return Math.max(0, 2 - used);
+      },
     }),
     { name: "uyutart-sub-v3" }
   )
