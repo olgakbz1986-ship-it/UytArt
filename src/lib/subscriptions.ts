@@ -20,7 +20,7 @@ export interface BuyerLimits {
 export const BUYER_PLANS: Record<BuyerPlanId, BuyerLimits> = {
   free: { aiGens: 2, marketOrders: 1, priceWatches: 0, qualityFilters: false, discountPct: 0, earlyAccess: false, curator: false, vip: false },
   start: { aiGens: 15, marketOrders: 3, priceWatches: 10, qualityFilters: true, discountPct: 3, earlyAccess: false, curator: false, vip: false },
-  designer: { aiGens: 50, marketOrders: 10, priceWatches: 999, qualityFilters: true, discountPct: 5, earlyAccess: true, curator: false, vip: false },
+  designer: { aiGens: 50, marketOrders: 10, priceWatches: Infinity, qualityFilters: true, discountPct: 5, earlyAccess: true, curator: false, vip: false },
   premium: { aiGens: Infinity, marketOrders: Infinity, priceWatches: Infinity, qualityFilters: true, discountPct: 7, earlyAccess: true, curator: true, vip: true },
 };
 export const buyerLimits = (plan: BuyerPlanId): BuyerLimits => BUYER_PLANS[plan] || BUYER_PLANS.free;
@@ -114,7 +114,9 @@ interface SubState {
   aiGensLeft: (accountId: string) => number;
   addConcept: (c: Omit<Concept, "id" | "createdAt">) => void;
   removeConcept: (id: string) => void;
-  addPriceWatch: (w: Omit<PriceWatch, "id">) => void;
+  /** §1.5/§2.2: асинхронная серверная проверка лимита перед добавлением.
+   *  Возвращает ошибку-предложение апгрейда, если лимит исчерпан. */
+  addPriceWatch: (w: Omit<PriceWatch, "id">) => Promise<string | null>;
   removePriceWatch: (id: string) => void;
 }
 
@@ -151,7 +153,21 @@ export const useSubStore = create<SubState>()(
         set((s) => ({ concepts: [{ ...c, id: "c-" + Date.now(), createdAt: new Date().toISOString() }, ...s.concepts] })),
       removeConcept: (id) => set((s) => ({ concepts: s.concepts.filter((c) => c.id !== id) })),
 
-      addPriceWatch: (w) => set((s) => ({ priceWatches: [{ ...w, id: "pw-" + Date.now() }, ...s.priceWatches] })),
+      addPriceWatch: async (w) => {
+        /* §1.5/§2.2: сервер — источник истины о лимите отслеживания цен
+           (0 на Free, 10 на Start/Designer...); обход через правку кэша невозможен */
+        try {
+          const { useTariffStore } = await import("./tariff");
+          await useTariffStore.getState().assertLimit("price_watch");
+        } catch (e: any) {
+          if (e && e.name === "LimitReachedError") {
+            return `Лимит отслеживания цен исчерпан (${e.used} из ${Number.isFinite(e.limit) ? e.limit : "∞"}). Перейдите на тариф «Старт» или выше — /plans`;
+          }
+          return "Сервер недоступен, попробуйте позже";
+        }
+        set((s) => ({ priceWatches: [{ ...w, id: "pw-" + Date.now() }, ...s.priceWatches] }));
+        return null;
+      },
       removePriceWatch: (id) => set((s) => ({ priceWatches: s.priceWatches.filter((w) => w.id !== id) })),
     }),
     { name: "uyutart-sub-v3" }

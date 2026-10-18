@@ -64,7 +64,9 @@ interface AgentState {
   deleteMessageSeller: (msgId: string) => void;
   exportAll: () => string;
   /* задачи */
-  addTask: (t: Omit<AgentTask, "id" | "startedAt" | "steps" | "status">) => string;
+  /** §1.5/§2.3: async — сервер проверяет лимит параллельных задач (3/10/∞).
+   *  Возвращает id задачи или null, если лимит исчерпан / сервер недоступен. */
+  addTask: (t: Omit<AgentTask, "id" | "startedAt" | "steps" | "status">) => Promise<string | null>;
   updateTask: (id: string, patch: Partial<AgentTask>) => void;
   /* память */
   learn: (signal: { type: string; payload: Record<string, unknown> }) => void;
