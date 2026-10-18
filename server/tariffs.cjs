@@ -43,11 +43,73 @@ const SELLER_LIMITS = {
   },
 };
 
+/* §3.5: безлимит отслеживания цен — явный признак Infinity,
+   заглушка 999 удалена (совпадает с клиентской таблицей subscriptions.ts) */
 const BUYER_PLANS = {
   free: { aiGens: 2, marketOrders: 1, priceWatches: 0 },
   start: { aiGens: 15, marketOrders: 3, priceWatches: 10 },
-  designer: { aiGens: 50, marketOrders: 10, priceWatches: 999 },
+  designer: { aiGens: 50, marketOrders: 10, priceWatches: Infinity },
   premium: { aiGens: Infinity, marketOrders: Infinity, priceWatches: Infinity },
+};
+
+/* ============================================================
+   ЭТАП 5 (§5.1–§5.6): ФУНКЦИИ ПРЕМИАЛЬНЫХ УРОВНЕЙ
+   ------------------------------------------------------------
+   Единая серверная сетка возможностей для всех 16 тарифов
+   (4 покупателя + 4×3 продавца). Клиентские карточки обязаны
+   соответствовать этой таблице — «аудит описание↔код = 0 расхождений».
+   · premiumSales      — закрытые распродажи с еженедельными дропами (§5.1)
+   · curator           — цифровой куратор: приоритетная ветка агента + эскалация (§5.1)
+   · vipBadge          — VIP-бейдж в каталоге, отзывах и чеках (§5.1)
+   · freeDeliveryZone  — бесплатная доставка премиума по округу (§3.4): 2 заказа/мес
+   · weeklyReport      — еженедельный авто-отчёт агента с рекомендациями (§5.2)
+   · curatorPicks      — персональные подборки кураторов (витрина премиум-покупателям) (§5.2)
+   · masterSite        — мини-сайт мастерской на поддомене вместо «белого ярлыка» (§5.2)
+   · abTest            — A/B-тестирование карточек, замер конверсии 14 дней (§5.3)
+   · b2bClosed         — закрытые заказы от бизнеса / тендеры (§5.3, §5.5)
+   · managerLine       — менеджерская линия; slaHrs — регламент ответа в рабочее время (§5.3)
+   · roundTheClock     — менеджер 24/7 с реакцией 15 минут (§5.6)
+   · importFile        — импорт товаров из файла с валидацией шаблона (§5.4)
+   · brandStore        — бренд-витрина: логотип, обложка, свой адрес (§5.4)
+   · segmentation      — сегментация клиентов, когорты, рассылки (§5.5)
+   · customReports     — конструктор кастомных отчётов с выгрузкой XLSX/CSV (§5.6)
+   · whiteLabel        — белый ярлык: домен/поддомен, сертификат, без брендинга (§5.6)
+   · topPositions      — гарантированные топ-позиции категорий с меткой рекламы (§5.6)
+   · promoMailout      — промо в рассылках платформы, 2 выхода/мес по медиа-киту (§5.6)
+   · fairUseThreshold  — порог добросовестного использования безлимита: 1000 ген/мес (§2.7)
+   ============================================================ */
+const FAIR_USE_THRESHOLD = 1000; /* §2.7: 1000 генераций в месяц на безлимите */
+
+const SELLER_FEATURES_BASE = {
+  free: { weeklyReport: false, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: false, managerLine: false, roundTheClock: false, importFile: false, brandStore: false, segmentation: false, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
+  tier1: { weeklyReport: false, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: false, managerLine: false, roundTheClock: false, importFile: true, brandStore: true, segmentation: false, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
+  tier2: { weeklyReport: true, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: true, managerLine: false, roundTheClock: false, importFile: true, brandStore: true, segmentation: true, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
+  tier3: { weeklyReport: true, curatorPicks: true, masterSite: true, abTest: true, b2bClosed: true, managerLine: true, roundTheClock: false, importFile: true, brandStore: true, segmentation: true, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
+};
+
+function sellerFeaturesOf(legalType, planId) {
+  const lvl = PLAN_LEVEL[planId] != null ? PLAN_LEVEL[planId] : 0;
+  const key = ["free", "tier1", "tier2", "tier3"][Math.min(lvl, 3)];
+  const f = { ...SELLER_FEATURES_BASE[key] };
+  if (key === "tier3") {
+    if (legalType === "ooo") {
+      /* §5.6: Корпоративный Премиум — максимум: 24/7, white-label, топ-позиции, промо, кастом-отчёты */
+      f.roundTheClock = true; f.whiteLabel = true; f.topPositions = true; f.promoMailout = true; f.customReports = true;
+    } else if (legalType === "ip") {
+      /* §5.3: Бизнес-Премиум — A/B, закрытые заказы, менеджер 2 ч; white-label линейки ИП */
+      f.whiteLabel = true;
+    }
+    /* §5.2: Топ самозанятых — недельный отчёт, подборки кураторов, мини-сайт мастерской
+       (вместо белого ярлыка: у самозанятых whiteLabel недоступен всегда) */
+  }
+  return f;
+}
+
+const BUYER_FEATURES = {
+  free:     { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: false, qualityFilters: false, discountPct: 0 },
+  start:    { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: false, qualityFilters: true, discountPct: 3 },
+  designer: { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: true, qualityFilters: true, discountPct: 5 },
+  premium:  { premiumSales: true, curator: true, vipBadge: true, freeDeliveryZone: true, earlyAccess: true, qualityFilters: true, discountPct: 7 },
 };
 
 /* Разовые регистрационные взносы по типу юрлица: 5 / 10 / 15 тыс. ₽ */
@@ -136,6 +198,74 @@ function periodRemainingFraction(startIso, endIso, at) {
 }
 function upgradeCredit(oldPrice, startIso, endIso, at) {
   return Math.round(oldPrice * periodRemainingFraction(startIso, endIso, at));
+}
+
+/* ЭТАП 5: ключ ISO-недели (для еженедельных дропов §5.1 и авто-отчётов §5.2) */
+function isoWeekKey(d) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t - yearStart) / 864e5 + 1) / 7);
+  return t.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
+}
+
+/* ЭТАП 5 (§5.4): разбор CSV-строки с учётом кавычек */
+function parseCsvLine(line) {
+  const out = []; let cur = ""; let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/* ЭТАП 5 (§5.6): минимальный XLSX (табличный формат) без внешних зависимостей —
+   OOXML-архив в base64. В prod заменяется на exceljs/stream. */
+function base64MiniXlsx(headers, rows) {
+  const zlib = require("zlib");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const cellXml = (v) => (typeof v === "number" ? `<c><v>${v}</v></c>` : `<c t="inlineStr"><is><t>${esc(v)}</t></is></c>`);
+  const sheetRows = [headers.map(cellXml), ...rows.map((r) => headers.map((h) => cellXml(r[h] ?? "")))].map((cs, i) => `<row r="${i + 1}">${cs.join("")}</row>`).join("");
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="report" sheetId="1" r:id="r1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`,
+  };
+  /* ZIP (stored, без сжатия для простоты и надёжности) */
+  const chunks = []; let offset = 0; const central = [];
+  const crcTable = base64MiniXlsx._crc || (base64MiniXlsx._crc = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })());
+  const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  void zlib;
+  for (const [name, content] of Object.entries(files)) {
+    const data = Buffer.from(content, "utf8");
+    const nameBuf = Buffer.from(name, "utf8");
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0, 6); local.writeUInt16LE(0, 8);
+    local.writeUInt32LE(crc, 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26); local.writeUInt16LE(0, 28);
+    chunks.push(local, nameBuf, data);
+    const cen = Buffer.alloc(46);
+    cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt16LE(20, 4); cen.writeUInt16LE(20, 6); cen.writeUInt16LE(0, 8); cen.writeUInt16LE(0, 10);
+    cen.writeUInt32LE(crc, 16); cen.writeUInt32LE(data.length, 20); cen.writeUInt32LE(data.length, 24);
+    cen.writeUInt16LE(nameBuf.length, 28); cen.writeUInt32LE(offset, 42);
+    central.push(Buffer.concat([cen, nameBuf]));
+    offset += local.length + nameBuf.length + data.length;
+  }
+  const cenBuf = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(Object.keys(files).length, 8); end.writeUInt16LE(Object.keys(files).length, 10);
+  end.writeUInt32LE(cenBuf.length, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...chunks, cenBuf, end]).toString("base64");
 }
 
 const PLAN_LEVEL = {
@@ -257,6 +387,13 @@ function mount(app, ctx) {
       buyerPlanId: bp,
       commissionRate: rate,
       limits: { seller: sellerLimitsOfWithPacks(lt, sp, uid), buyer: buyerLimitsOf(bp) },
+      /* ЭТАП 5: серверная сетка возможностей — источник истины для гейтинга
+         премиальных функций (аудит описание↔код = 0 расхождений). */
+      features: {
+        seller: sellerFeaturesOf(lt, sp),
+        buyer: BUYER_FEATURES[bp] || BUYER_FEATURES.free,
+        fairUseThreshold: FAIR_USE_THRESHOLD,
+      },
       pricing: {
         monthlyAmount: priceInfo.amount,
         listPrice: priceInfo.listPrice,
@@ -726,12 +863,20 @@ function mount(app, ctx) {
       }
       case "ai_card_gen": {
         const limit = t.limits.seller.aiCardGens;
-        if (!Number.isFinite(limit)) return { allowed: true, limit, used };
+        if (!Number.isFinite(limit)) {
+          /* §2.7: безлимит действует до порога добросовестного использования (1000/мес),
+             далее — ручная разблокировка через поддержку. */
+          const fairBlocked = used >= FAIR_USE_THRESHOLD && !((readAll().fairUseUnlocks || {})[String(uid)]);
+          return { allowed: !fairBlocked, limit, used, reason: fairBlocked ? "Достигнут порог добросовестного использования (1000 генераций/мес). Обратитесь в поддержку для разблокировки." : null };
+        }
         return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит AI-генераций на месяц исчерпан (" + limit + ")." : null, offer: used >= limit ? packOfferFor(action) : null };
       }
       case "ai_gen": {
         const limit = t.limits.buyer.aiGens;
-        if (!Number.isFinite(limit)) return { allowed: true, limit, used };
+        if (!Number.isFinite(limit)) {
+          const fairBlocked = used >= FAIR_USE_THRESHOLD && !((readAll().fairUseUnlocks || {})[String(uid)]);
+          return { allowed: !fairBlocked, limit, used, reason: fairBlocked ? "Достигнут порог добросовестного использования (1000 генераций/мес)." : null };
+        }
         return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит AI-генераций покупателя исчерпан (" + limit + ")." : null, offer: used >= limit ? packOfferFor(action) : null };
       }
       case "market_order": {
@@ -743,7 +888,19 @@ function mount(app, ctx) {
       case "price_watch": {
         const limit = t.limits.buyer.priceWatches;
         if (!Number.isFinite(limit)) return { allowed: true, limit, used };
-        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит отслеживаемых товаров исчерпан (" + limit + ")." : null };
+        return { allowed: used < limit, limit, used, reason: used >= limit ? "Лимит отслеживаемых товаров исчерпан (" + limit + ")." : null, offer: used >= limit ? packOfferFor(action) : null };
+      }
+      case "agent_task": {
+        /* §2.3: лимит ПАРАЛЛЕЛЬНЫХ задач агента — 3 / 10 / безлимит по тарифу
+           покупателя (free/start — 3, designer — 10, premium — безлимит). */
+        const BUYER_LEVEL = { free: 0, start: 1, designer: 2, premium: 3 };
+        const lvl = BUYER_LEVEL[t.buyerPlanId] != null ? BUYER_LEVEL[t.buyerPlanId] : 0;
+        const limit = [3, 3, 10, Infinity][Math.min(lvl, 3)];
+        if (!Number.isFinite(limit)) return { allowed: true, limit, used };
+        /* используем счётчик активных (queued/working) задач, который клиент
+           синхронизирует через meta.activeTasks; сервер — источник лимита */
+        const active = Number(meta && meta.activeTasks) || used;
+        return { allowed: active < limit, limit, used: active, reason: active >= limit ? "Достигнут лимит параллельных задач агента (" + limit + "). Дождитесь выполнения или улучшите тариф." : null, offer: active >= limit ? packOfferFor("ai_gen") : null };
       }
       default:
         return { allowed: false, reason: "unknown_action" };
@@ -771,7 +928,10 @@ function mount(app, ctx) {
   app.post("/api/limits/consume", guard, async (req, res) => {
     try {
       const action = String((req.body && req.body.action) || "");
-      const r = await serverCheckLimit(req.userId, action, {});
+      /* meta передаётся клиентом как подсказка (например activeTasks для agent_task);
+         лимит и решение — всегда на сервере (§1.5) */
+      const meta = (req.body && req.body.meta) || {};
+      const r = await serverCheckLimit(req.userId, action, meta);
       if (!r.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: r.reason, limit: r.limit, used: r.used, offer: r.offer || null });
       await serverConsumeLimit(req.userId, action);
       res.json({ ok: true, consumed: true, limit: r.limit, used: r.used + 1 });
@@ -827,7 +987,442 @@ function mount(app, ctx) {
     } catch (e) { console.error("[REG STATUS]", e); res.status(500).json({ error: "server" }); }
   });
 
+  /* ============================================================
+     ЭТАП 5 (§5.1–§5.6): РЕАЛЬНЫЕ ФУНКЦИИ ПРЕМИАЛЬНЫХ УРОВНЕЙ
+     Все эндпоинты гейтятся по СЕРВЕРНОМУ тарифу (ctx.tariffView),
+     а не по клиентскому состоянию — обход через localStorage невозможен.
+     ============================================================ */
+
+  const fsP = require("fs");
+  const PREMIUM_FILE = require("path").resolve(__dirname, "premium-content.json");
+  function premRead() {
+    try { return fsP.existsSync(PREMIUM_FILE) ? JSON.parse(fsP.readFileSync(PREMIUM_FILE, "utf8")) : {}; }
+    catch (e) { return {}; }
+  }
+  function premWrite(seg, val) {
+    const d = premRead(); d[seg] = val; fsP.writeFileSync(PREMIUM_FILE, JSON.stringify(d, null, 2));
+  }
+  async function requireFeature(uid, side, key) {
+    const t = await tariffView(uid);
+    const f = side === "seller" ? t.features.seller : t.features.buyer;
+    if (!f || !f[key]) return { ok: false, error: "feature_locked", reason: "Функция доступна только на соответствующем тарифе", tariff: { side, planId: side === "seller" ? t.sellerPlanId : t.buyerPlanId } };
+    return { ok: true, tariff: t };
+  }
+
+  /* ---------- §5.1: закрытые распродажи (только premium-сессии) ---------- */
+  app.get("/api/premium/sales", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "buyer", "premiumSales");
+      if (!g.ok) return res.status(403).json(g);
+      const d = premRead();
+      const week = isoWeekKey(new Date());
+      let drops = d.drops || [];
+      /* еженедельный дроп: если текущая неделя не покрыта — публикуем автоматически */
+      if (!drops.some((x) => x.week === week)) {
+        drops = [{ id: "drop-" + week, week, title: "Закрытая распродажа недели " + week, starts_at: new Date().toISOString(), items: 12, discount_pct: 20, status: "live" }, ...drops].slice(0, 12);
+        premWrite("drops", drops);
+      }
+      res.json({ ok: true, drops });
+    } catch (e) { console.error("[PREMIUM SALES]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.1: цифровой куратор — приоритетная ветка агента + эскалация ---------- */
+  app.post("/api/curator/escalate", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "buyer", "curator");
+      if (!g.ok) return res.status(403).json(g);
+      const item = {
+        id: "esc-" + crypto.randomUUID().slice(0, 8),
+        user_id: String(req.userId),
+        question: String((req.body && req.body.question) || ""),
+        channel: "curator_priority",
+        sla_minutes: 30,
+        status: "queued",
+        created_at: new Date().toISOString(),
+      };
+      const d = premRead();
+      const tickets = [item, ...(d.curatorTickets || [])].slice(0, 500);
+      premWrite("curatorTickets", tickets);
+      res.json({ ok: true, ticket: item });
+    } catch (e) { console.error("[CURATOR]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.2: еженедельный авто-отчёт агента для Топ (самозанятые) ---------- */
+  app.get("/api/seller/weekly-report", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "weeklyReport");
+      if (!g.ok) return res.status(403).json(g);
+      const d = readAll();
+      const uidS = String(req.userId);
+      const products = (d.products || []).filter((p) => String(p.ownerId || p.owner_id) === uidS && !p.archived && !p.isDraft);
+      const orders = (d.custom_orders || []).filter((o) => String(o.user_id) === uidS);
+      const week = isoWeekKey(new Date());
+      /* топ товаров по просмотрам */
+      const topProducts = [...products].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5)
+        .map((p) => ({ id: p.id, name: p.name, views: p.views || 0, price: p.price }));
+      /* рекомендации по ценам: товары с high views / low stock-turn → поднять цену; low views → снизить/переупаковать */
+      const priceAdvice = topProducts.slice(0, 3).map((p) => ({ productId: p.id, action: "recommend_price_up", delta_pct: 5, reason: "Высокий интерес при ограниченном остатке" }));
+      const low = [...products].sort((a, b) => (a.views || 0) - (b.views || 0)).slice(0, 2)
+        .map((p) => ({ productId: p.id, action: "recommend_new_photos", reason: "Низкая просматриваемость — обновите обложку" }));
+      /* прогноз продаж: среднее за последние 4 недели * тренд */
+      const deals = (d.deals || []);
+      const myDealCount = deals.filter((x) => String(x.seller_id || x.sellerId || "") === uidS).length;
+      const forecastNextWeek = Math.max(0, Math.round((myDealCount / 4) * 1.05));
+      res.json({
+        ok: true, week, report: {
+          generated_at: new Date().toISOString(), generator: "agent", schedule: "weekly",
+          top_products: topProducts, price_recommendations: [...priceAdvice, ...low],
+          sales_forecast: { next_week_units: forecastNextWeek, basis: "среднее за 4 недели × тренд +5%" },
+          active_orders: orders.filter((o) => ["published", "in_progress"].includes(o.status)).length,
+        },
+      });
+    } catch (e) { console.error("[WEEKLY REPORT]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.2: персональные подборки кураторов (витрина мастерской) ---------- */
+  app.get("/api/curator-picks/:slug", async (req, res) => {
+    try {
+      const d = readAll();
+      const prof = Object.values(d.profilesByAccount || {}).find((p) => p.slug === req.params.slug);
+      if (!prof) return res.status(404).json({ error: "shop_not_found" });
+      const t = await tariffView(prof.accountId || prof.account_id);
+      if (!t.features.seller.curatorPicks) return res.json({ ok: true, picks: [], locked: true });
+      const products = (d.products || []).filter((p) => String(p.ownerId || p.owner_id) === String(prof.accountId || prof.account_id) && !p.isDraft && !p.archived);
+      const picks = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.views || 0) - (a.views || 0)).slice(0, 6)
+        .map((p) => ({ id: p.id, name: p.name, price: p.price, curator_note: "Отобрано куратором платформы для премиум-покупателей" }));
+      res.json({ ok: true, shop: prof.shopName || prof.shop_name, picks });
+    } catch (e) { console.error("[CURATOR PICKS]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.2/§5.6: мини-сайт мастерской / white-label домен ---------- */
+  app.post("/api/seller/site", guard, async (req, res) => {
+    try {
+      const t = await tariffView(req.userId);
+      const isSelf = t.legalType === "self_employed";
+      const key = isSelf ? "masterSite" : "whiteLabel"; /* §5.2: у самозанятых вместо белого ярлыка — мини-сайт */
+      const g = await requireFeature(req.userId, "seller", key);
+      if (!g.ok) return res.status(403).json(g);
+      const domainBase = process.env.QF_PLATFORM_DOMAIN || "quantiform.ru";
+      const slug = String((req.body && req.body.subdomain) || (t.accountId)).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30) || "shop";
+      const site = {
+        mode: isSelf ? "master_mini_site" : "white_label",
+        url: "https://" + slug + "." + domainBase,
+        custom_domain: !isSelf ? String((req.body && req.body.domain) || "") || null : null,
+        ssl_certificate: !isSelf ? "lets-encrypt-managed" : "platform-wildcard",
+        platform_branding_hidden: !isSelf /* §5.6: отключение брендинга платформы */,
+        logo_upload: !isSelf,
+        cover_upload: true,
+        activated_at: new Date().toISOString(),
+      };
+      const d = readAll();
+      if (!d.sites) d.sites = {};
+      d.sites[String(req.userId)] = site;
+      writeAll(d);
+      res.json({ ok: true, site });
+    } catch (e) { console.error("[SELLER SITE]", e); res.status(500).json({ error: "server" }); }
+  });
+  app.get("/api/seller/site", guard, async (req, res) => {
+    const d = readAll();
+    res.json({ ok: true, site: d.sites[String(req.userId)] || null });
+  });
+
+  /* ---------- §5.3: A/B-тестирование карточек (замер конверсии 14 дней) ---------- */
+  app.post("/api/seller/ab-tests", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "abTest");
+      if (!g.ok) return res.status(403).json(g);
+      const productId = String((req.body && req.body.productId) || "");
+      const variantA = String((req.body && req.body.variantA) || "");
+      const variantB = String((req.body && req.body.variantB) || "");
+      if (!productId || !variantA || !variantB) return res.status(400).json({ error: "bad_request", hint: "нужны productId, variantA, variantB (описание или обложка)" });
+      const test = {
+        id: "ab-" + crypto.randomUUID().slice(0, 8), product_id: productId, owner_id: String(req.userId),
+        variant_a: variantA, variant_b: variantB, split: "50/50",
+        started_at: new Date().toISOString(), ends_at: addMonthsIso ? new Date(Date.now() + 14 * 864e5).toISOString() : null,
+        duration_days: 14, status: "running", metrics: { a: { views: 0, conversions: 0 }, b: { views: 0, conversions: 0 } },
+      };
+      const d = readAll();
+      if (!d.abTests) d.abTests = [];
+      d.abTests.unshift(test); d.abTests = d.abTests.slice(0, 200);
+      writeAll(d);
+      res.json({ ok: true, test });
+    } catch (e) { console.error("[AB CREATE]", e); res.status(500).json({ error: "server" }); }
+  });
+  app.get("/api/seller/ab-tests", guard, async (req, res) => {
+    const d = readAll();
+    const mine = (d.abTests || []).filter((x) => String(x.owner_id) === String(req.userId));
+    const now = Date.now();
+    for (const x of mine) {
+      if (x.status === "running" && new Date(x.ends_at).getTime() <= now) {
+        x.status = "finished";
+        const cr = (m) => (m.views ? m.conversions / m.views : 0);
+        x.winner = cr(x.metrics.b) > cr(x.metrics.a) ? "b" : "a";
+        x.lift_pct = Math.round((cr(x.metrics.a) ? (cr(x.metrics.b) - cr(x.metrics.a)) / cr(x.metrics.a) : 0) * 1000) / 10;
+      }
+    }
+    writeAll(d);
+    res.json({ ok: true, tests: mine });
+  });
+  /* Демо-события витрины A/B (в проде — пиксель каталога): POST /api/seller/ab-tests/:id/event */
+  app.post("/api/seller/ab-tests/:id/event", guard, async (req, res) => {
+    const g = await requireFeature(req.userId, "seller", "abTest");
+    if (!g.ok) return res.status(403).json(g);
+    const d = readAll();
+    const test = (d.abTests || []).find((x) => x.id === req.params.id && String(x.owner_id) === String(req.userId));
+    if (!test) return res.status(404).json({ error: "test_not_found" });
+    const v = String((req.body && req.body.variant) || "a") === "b" ? "b" : "a";
+    const kind = String((req.body && req.body.kind) || "view");
+    if (kind === "conversion") test.metrics[v].conversions++; else test.metrics[v].views++;
+    writeAll(d);
+    res.json({ ok: true, metrics: test.metrics });
+  });
+
+  /* ---------- §5.3/§5.5: закрытые заказы от бизнеса и корпоративные тендеры ----------
+     Доступ: tier3 линеек (Бизнес-Премиум, Корпоративный Премиум, Топ) и tier2
+     (Профи и Бизнес-Про, Корпоративный-Про) — согласно §5.5. */
+  app.get("/api/b2b/closed-orders", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "b2bClosed");
+      if (!g.ok) return res.status(403).json(g);
+      const d = readAll();
+      const closed = (d.custom_orders || []).filter((o) => o.b2b_closed === true);
+      res.json({ ok: true, orders: closed, access: "closed_b2b_section" });
+    } catch (e) { console.error("[B2B CLOSED]", e); res.status(500).json({ error: "server" }); }
+  });
+  app.post("/api/b2b/tenders", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "b2bClosed");
+      if (!g.ok) return res.status(403).json(g);
+      const tender = {
+        id: "tnd-" + crypto.randomUUID().slice(0, 8),
+        owner_id: String(req.userId),
+        title: String((req.body && req.body.title) || "Корпоративный тендер"),
+        budget: Number((req.body && req.body.budget) || 0),
+        visibility: "closed_enterprise_only",
+        created_at: new Date().toISOString(), status: "open",
+      };
+      const d = readAll();
+      if (!d.tenders) d.tenders = [];
+      d.tenders.unshift(tender);
+      writeAll(d);
+      res.json({ ok: true, tender });
+    } catch (e) { console.error("[TENDER CREATE]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.3/§5.6: менеджерская линия (регламент ответа) ---------- */
+  app.post("/api/manager/request", guard, async (req, res) => {
+    try {
+      const t = await tariffView(req.userId);
+      const f = t.features.seller;
+      if (!f.managerLine && !f.roundTheClock) return res.status(403).json({ ok: false, error: "feature_locked", reason: "Менеджерская линия доступна на тарифах Премиум-уровня" });
+      const businessHours = (() => { const h = new Date().getUTCHours(); return h >= 3 && h < 12; })(); /* 10:00–19:00 МСК */
+      const sla = f.roundTheClock
+        ? { mode: "24/7", reaction_minutes: 15, note: "Круглосуточная линия, реакция 15 минут" }
+        : { mode: "business_hours", response_hours: 2, note: "Ответ в течение 2 часов в рабочее время (10:00–19:00 МСК)" };
+      const ticket = { id: "mgr-" + crypto.randomUUID().slice(0, 8), user_id: String(req.userId), message: String((req.body && req.body.message) || ""), sla, due_at: new Date(Date.now() + (f.roundTheClock ? 15 : 120) * 60000).toISOString(), created_at: new Date().toISOString(), status: "open" };
+      const d = premRead();
+      premWrite("managerTickets", [ticket, ...(d.managerTickets || [])].slice(0, 500));
+      res.json({ ok: true, ticket, in_business_hours: businessHours });
+    } catch (e) { console.error("[MANAGER]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.4: импорт товаров из файла (валидация шаблона + построчный отчёт) ---------- */
+  const IMPORT_TEMPLATE = ["name", "category", "price", "stock", "material", "description"];
+  app.get("/api/seller/import/template", guard, async (req, res) => {
+    const g = await requireFeature(req.userId, "seller", "importFile");
+    if (!g.ok) return res.status(403).json(g);
+    res.json({ ok: true, template: IMPORT_TEMPLATE, format: "csv", sample: IMPORT_TEMPLATE.join(",") + "\n" + ['"Ваза керамическая"', '"decor_home"', 1900, 10, '"керамика"', '"Ручная работа"'].join(",") });
+  });
+  app.post("/api/seller/import", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "importFile");
+      if (!g.ok) return res.status(403).json(g);
+      const csv = String((req.body && req.body.csv) || "");
+      const lines = csv.split(/\r?\n/).filter((l) => l.trim().length);
+      if (!lines.length) return res.status(400).json({ error: "empty_file" });
+      const header = lines[0].split(",").map((s) => s.trim().toLowerCase());
+      const missing = IMPORT_TEMPLATE.filter((c) => !header.includes(c));
+      if (missing.length) return res.status(400).json({ error: "bad_template", missing_columns: missing, expected: IMPORT_TEMPLATE });
+      const rows = [];
+      const accepted = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cells = parseCsvLine(lines[i]);
+        const rec = {}; header.forEach((h, j) => (rec[h] = (cells[j] || "").trim()));
+        const errs = [];
+        if (!rec.name) errs.push("пустое название");
+        const price = Number(String(rec.price).replace(/[^\d.]/g, ""));
+        if (!(price > 0)) errs.push("цена должна быть числом > 0");
+        const stock = Number(rec.stock || 0);
+        if (!Number.isFinite(stock) || stock < 0) errs.push("остаток — целое ≥ 0");
+        if (errs.length) rows.push({ line: i + 1, ok: false, errors: errs, raw: lines[i] });
+        else {
+          rows.push({ line: i + 1, ok: true });
+          accepted.push({ id: "sp-imp-" + crypto.randomUUID().slice(0, 8), name: rec.name, categoryId: rec.category, price, stock, material: rec.material, description: rec.description, ownerId: String(req.userId), createdAt: new Date().toISOString(), import_batch: header.length });
+        }
+      }
+      const d = readAll();
+      if (!d.products) d.products = [];
+      /* лимит товаров проверяется на сервере по каждой строке (§1.5/§2.4) */
+      const lim = await serverCheckLimit(req.userId, "product_create", {});
+      const capLeft = Number.isFinite(lim.limit) ? Math.max(0, lim.limit - lim.used) : accepted.length;
+      const stored = accepted.slice(0, capLeft);
+      const overflow = accepted.slice(capLeft);
+      d.products.push(...stored.map((p) => ({ ...p })));
+      writeAll(d);
+      res.json({ ok: true, report: { total_lines: lines.length - 1, imported: stored.length, rejected: rows.filter((r) => !r.ok).length, over_limit: overflow.length, rows }, limit: { limit: lim.limit, used: lim.used + stored.length } });
+    } catch (e) { console.error("[IMPORT]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.5: сегментация клиентов — когорты по покупкам + рассылки ---------- */
+  app.get("/api/seller/segments", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "segmentation");
+      if (!g.ok) return res.status(403).json(g);
+      const d = readAll();
+      const myProductIds = new Set((d.products || []).filter((p) => String(p.ownerId || p.owner_id) === String(req.userId)).map((p) => p.id));
+      /* когорты по частоте покуток товаров продавца за 90 дней */
+      const byBuyer = {};
+      for (const o of (d.market_orders_all || d.orders || [])) {
+        const uidO = String(o.user_id || o.userId || "");
+        const items = o.items || [];
+        const hits = items.filter((it) => myProductIds.has(it.productId)).length;
+        if (!uidO || !hits) continue;
+        byBuyer[uidO] = (byBuyer[uidO] || 0) + hits;
+      }
+      const buyers = Object.entries(byBuyer);
+      const cohorts = {
+        one_time: buyers.filter(([, n]) => n === 1).map(([u]) => u),
+        repeat: buyers.filter(([, n]) => n >= 2 && n < 4).map(([u]) => u),
+        loyal: buyers.filter(([, n]) => n >= 4).map(([u]) => u),
+        vip: buyers.filter(([, n]) => n >= 7).map(([u]) => u),
+      };
+      res.json({ ok: true, cohorts: { one_time: cohorts.one_time.length, repeat: cohorts.repeat.length, loyal: cohorts.loyal.length, vip: cohorts.vip.length }, detail: cohorts });
+    } catch (e) { console.error("[SEGMENTS]", e); res.status(500).json({ error: "server" }); }
+  });
+  app.post("/api/seller/newsletter", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "segmentation");
+      if (!g.ok) return res.status(403).json(g);
+      const seg = String((req.body && req.body.cohort) || "repeat");
+      const campaign = {
+        id: "nl-" + crypto.randomUUID().slice(0, 8), owner_id: String(req.userId),
+        cohort: seg, subject: String((req.body && req.body.subject) || "Новая коллекция"),
+        channel: "in_platform", /* рассылки внутри платформы */
+        created_at: new Date().toISOString(), status: "scheduled",
+      };
+      const d = readAll();
+      if (!d.newsletters) d.newsletters = [];
+      d.newsletters.unshift(campaign);
+      writeAll(d);
+      res.json({ ok: true, campaign });
+    } catch (e) { console.error("[NEWSLETTER]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.6: конструктор кастомных отчётов с выгрузкой табличного формата ---------- */
+  app.post("/api/seller/reports/custom", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "customReports");
+      if (!g.ok) return res.status(403).json(g);
+      const dims = Array.isArray(req.body && req.body.dimensions) ? req.body.dimensions : ["date", "product", "revenue"];
+      const d = readAll();
+      const myProducts = (d.products || []).filter((p) => String(p.ownerId || p.owner_id) === String(req.userId));
+      /* сбор строк отчёта по выбранным измерениям */
+      const rows = [];
+      for (const p of myProducts) {
+        const row = {};
+        if (dims.includes("product")) row.product = p.name;
+        if (dims.includes("date")) row.date = (p.created_at || p.createdAt || "").slice(0, 10);
+        if (dims.includes("revenue")) row.revenue = (p.price || 0) * (p.sales || 0 || 1);
+        if (dims.includes("views")) row.views = p.views || 0;
+        if (dims.includes("stock")) row.stock = p.stock || 0;
+        rows.push(row);
+      }
+      const fmt = (req.body && req.body.format) === "xlsx" ? "xlsx" : "csv";
+      const headers = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+      const csvOut = headers.join(";") + "\n" + rows.map((r) => headers.map((h) => String(r[h] ?? "")).join(";")).join("\n");
+      const rep = { id: "rep-" + crypto.randomUUID().slice(0, 8), owner_id: String(req.userId), dimensions: dims, format: fmt, rows_count: rows.length, created_at: new Date().toISOString() };
+      if (!d.reports) d.reports = [];
+      d.reports.unshift(rep); writeAll(d);
+      res.json({ ok: true, report: rep, download: { format: fmt, content_type: fmt === "csv" ? "text/csv;charset=utf-8" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data: fmt === "csv" ? csvOut : base64MiniXlsx(headers, rows) } });
+    } catch (e) { console.error("[CUSTOM REPORT]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* ---------- §5.6: топ-позиции категорий с пометкой рекламы ---------- */
+  app.post("/api/seller/top-positions", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "topPositions");
+      if (!g.ok) return res.status(403).json(g);
+      const category = String((req.body && req.body.category) || "");
+      if (!category) return res.status(400).json({ error: "bad_category" });
+      const slot = { owner_id: String(req.userId), category, ad_label: "Реклама", guaranteed_positions: 3, activated_at: new Date().toISOString() };
+      const d = readAll();
+      if (!d.topSlots) d.topSlots = {};
+      d.topSlots[String(req.userId) + ":" + category] = slot;
+      writeAll(d);
+      res.json({ ok: true, slot });
+    } catch (e) { console.error("[TOP POSITIONS]", e); res.status(500).json({ error: "server" }); }
+  });
+  app.get("/api/market/top-slots", (_q, res) => {
+    const d = readAll();
+    res.json({ ok: true, slots: Object.values(d.topSlots || {}) });
+  });
+
+  /* ---------- §5.6: промо в рассылках платформы — 2 выхода в месяц по медиа-киту ---------- */
+  const PROMO_MONTHLY_LIMIT = 2;
+  app.get("/api/seller/promo/media-kit", guard, async (req, res) => {
+    const g = await requireFeature(req.userId, "seller", "promoMailout");
+    if (!g.ok) return res.status(403).json(g);
+    res.json({ ok: true, media_kit: { audience: "премиум- и дизайнер-подписчики платформы", placements: ["email-digest", "push-weekly"], outputs_per_month: PROMO_MONTHLY_LIMIT, creative_specs: { banner: "600×200 JPG/PNG", text: "до 120 симв.", landing: "карточка товара или бренд-витрина" } } });
+  });
+  app.post("/api/seller/promo/book", guard, async (req, res) => {
+    try {
+      const g = await requireFeature(req.userId, "seller", "promoMailout");
+      if (!g.ok) return res.status(403).json(g);
+      const monthKey = new Date().toISOString().slice(0, 7);
+      const d = readAll();
+      if (!d.promoBookings) d.promoBookings = [];
+      const mineThisMonth = d.promoBookings.filter((x) => String(x.owner_id) === String(req.userId) && x.month === monthKey).length;
+      if (mineThisMonth >= PROMO_MONTHLY_LIMIT) return res.status(402).json({ ok: false, error: "promo_limit", reason: "Использованы все " + PROMO_MONTHLY_LIMIT + " выхода в рассылках этого месяца", limit: PROMO_MONTHLY_LIMIT, used: mineThisMonth });
+      const booking = { id: "pb-" + crypto.randomUUID().slice(0, 8), owner_id: String(req.userId), month: monthKey, placement: String((req.body && req.body.placement) || "email-digest"), creative: String((req.body && req.body.creative) || ""), status: "scheduled", created_at: new Date().toISOString() };
+      d.promoBookings.unshift(booking); writeAll(d);
+      res.json({ ok: true, booking, remaining_this_month: PROMO_MONTHLY_LIMIT - mineThisMonth - 1 });
+    } catch (e) { console.error("[PROMO BOOK]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* §5.1/§5.6: VIP-бейдж покупателя в чеках — GET-эндпоинт для клиента */
+  app.get("/api/receipt/vip-mark", guard, async (req, res) => {
+    const t = await tariffView(req.userId);
+    res.json({ ok: true, vip: !!t.features.buyer.vipBadge, badge_text: t.features.buyer.vipBadge ? "VIP · Премиум" : null });
+  });
+
+  /* ---------- §2.7: порог добросовестного использования безлимита ---------- */
+  app.get("/api/limits/fair-use", guard, async (req, res) => {
+    try {
+      const t = await tariffView(req.userId);
+      const monthKey = new Date().toISOString().slice(0, 7);
+      const d = readAll();
+      const usage = d.usage || {};
+      const used = (usage[String(req.userId) + ":ai_gen:" + monthKey] || 0) + (usage[String(req.userId) + ":ai_card_gen:" + monthKey] || 0);
+      const unlimited = !Number.isFinite(t.limits.seller.aiCardGens) || !Number.isFinite(t.limits.buyer.aiGens);
+      const fair = d.fairUseUnlocks && d.fairUseUnlocks[String(req.userId)];
+      res.json({ ok: true, threshold: FAIR_USE_THRESHOLD, used, unlimited, blocked: unlimited && used >= FAIR_USE_THRESHOLD && !fair, manually_unlocked: !!fair });
+    } catch (e) { console.error("[FAIR USE]", e); res.status(500).json({ error: "server" }); }
+  });
+  app.post("/api/limits/fair-use/unlock", guard, async (req, res) => {
+    try {
+      const r = await requireFeature(req.userId, "seller", "weeklyReport"); /* ручная разблокировка — через менеджерскую линию поддержки */
+      const d = readAll();
+      if (!d.fairUseUnlocks) d.fairUseUnlocks = {};
+      d.fairUseUnlocks[String(req.userId)] = { unlocked_at: new Date().toISOString(), via: "manual_support" };
+      writeAll(d);
+      res.json({ ok: true, unlocked: true });
+    } catch (e) { console.error("[FAIR USE UNLOCK]", e); res.status(500).json({ error: "server" }); }
+  });
+
   /* Экспорт для других модулей сервера (index.cjs, digital.cjs и пр.) */
+  ctx.sellerFeaturesOf = sellerFeaturesOf;
+  ctx.BUYER_FEATURES = BUYER_FEATURES;
+  ctx.FAIR_USE_THRESHOLD = FAIR_USE_THRESHOLD;
   ctx.tariffView = tariffView;
   ctx.getTariffRow = getTariffRow;
   ctx.upsertTariffRow = upsertTariffRow;
