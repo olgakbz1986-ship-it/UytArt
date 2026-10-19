@@ -49,6 +49,7 @@ if (process.env.DATABASE_URL) {
     create: async (u) => { await pool.query("insert into users (id,email,password_hash,name,phone,role,legal_type,tier,avatar_url,email_confirmed,confirm_token,confirm_expires) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", [u.id,u.email,u.password_hash,u.name,u.phone,u.role,u.legal_type,u.tier,u.avatar_url,u.email_confirmed,u.confirm_token,u.confirm_expires]); return u; },
     update: async (id, p) => (await pool.query("update users set name=coalesce($2,name), phone=coalesce($3,phone), email_confirmed=coalesce($4,email_confirmed), confirm_token=coalesce($5,confirm_token), confirm_expires=coalesce($6,confirm_expires), updated_at=now() where id=$1 returning *", [id, p.name ?? null, p.phone ?? null, p.email_confirmed ?? null, p.confirm_token ?? null, p.confirm_expires ?? null])).rows[0],
     confirm: async (t) => (await pool.query("update users set email_confirmed=true, confirm_token=null, confirm_expires=null where confirm_token=$1 and confirm_expires > now() returning id", [t])).rowCount > 0,
+    byConfirmToken: async (t) => (await pool.query("select email from users where confirm_token=$1", [t])).rows[0] || null,
     allUsers: async () => (await pool.query("select id,email,name,phone,role,tier,created_at from users order by created_at desc limit 500")).rows,
     allOrders: async () => (await pool.query("select * from market_orders order by created_at desc limit 300")).rows,
   };
@@ -63,6 +64,7 @@ if (process.env.DATABASE_URL) {
     create: async (u) => { const d = load(); d.users.push(u); save(d); return u; },
     update: async (id, p) => { const d = load(); const u = d.users.find((x) => x.id === id); if (!u) return null; Object.assign(u, p); save(d); return u; },
     confirm: async (t) => { const d = load(); const u = d.users.find((x) => x.confirm_token === t && x.confirm_expires > Date.now()); if (!u) return false; u.email_confirmed = true; u.confirm_token = null; save(d); return true; },
+    byConfirmToken: async (t) => load().users.find((x) => x.confirm_token === t) || null,
     allUsers: async () => load().users.slice(-500),
     allOrders: async () => { try { const d = load(); return (d.orders || []).slice(-300); } catch { return []; } },
   };
@@ -309,7 +311,18 @@ app.post("/api/auth/register", async (req, res) => {
 });
 
 app.get("/api/auth/confirm", async (req, res) => {
-  const ok = await db.confirm(String(req.query.token || ""));
+  const token = String(req.query.token || "");
+  /* ПУНКТ 5: после успешного подтверждения — автоматический редирект на страницу
+     входа с предварительно заполненным email (#/auth?email=...), чтобы
+     пользователю не пришлось вводить адрес заново. */
+  if (token && typeof db.byConfirmToken === "function") {
+    const pre = await db.byConfirmToken(token);
+    const ok = await db.confirm(token);
+    if (ok && pre) return res.redirect("/#/auth?email=" + encodeURIComponent(String(pre.email || "")));
+    if (ok) return res.type("html").send("<h2>Email подтверждён ✅</h2><p>Теперь можно войти в Quantiform.</p>");
+    return res.type("html").send("<h2>Ссылка недействительна</h2><p>Запросите письмо заново.</p>");
+  }
+  const ok = await db.confirm(token);
   res.type("html").send(ok ? "<h2>Email подтверждён ✅</h2><p>Теперь можно войти в Quantiform.</p>" : "<h2>Ссылка недействительна</h2><p>Запросите письмо заново.</p>");
 });
 
