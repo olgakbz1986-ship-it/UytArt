@@ -1153,6 +1153,11 @@ export function ProductEditorPage() {
               sellerCity={draft.sellerCity}
               sellerName={(sellerReg as any)?.fullName || (sellerReg as any)?.name || (sellerReg as any)?.city || "Продавец"}
               processingDays={draft.processingDays}
+              /* ЭТАП 2 (п.3): серверный калькулятор логистики в карточке —
+                 персональное предложение для города покупателя. */
+              productId={id}
+              buyerCity={useAppStore.getState().viewerCity || undefined}
+              hasInstall={!!(draft as any).serviceMode && (draft as any).serviceMode !== "delivery"}
             />
           )}
         </section>
