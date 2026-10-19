@@ -27,6 +27,9 @@ type Draft = {
   specs: { id: string; key: string; value: string }[];
   description: string;
   sellerCity: string;
+  /* ЭТАП 2 (п.1): география деятельности — города доставки и города монтажа */
+  deliveryCitiesText: string;   // «Курск, Белгород, Воронеж»
+  installCitiesText: string;    // отдельный список для крупногабарита с монтажом
   processingDays: string;
   deliveryPickup: boolean;
   deliveryCourier: boolean;
@@ -56,6 +59,8 @@ const empty: Draft = {
   sku: "",
   tags: [],
   sellerCity: "",
+  deliveryCitiesText: "",
+  installCitiesText: "",
   processingDays: "1",
   deliveryPickup: false,
   deliveryCourier: false,
@@ -64,6 +69,25 @@ const empty: Draft = {
   deliveryZoneText: "",
   serviceMode: "both",
 };
+
+/* ЭТАП 2 (п.1): маппинг географии из формы в единый серверный контракт
+   deliveryZone/installCities (структура БД не меняется — поля уже
+   поддерживаются нормализатором GET /api/products). */
+const parseCityList = (s?: string): string[] =>
+  String(s || "").split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+
+function geoPayload(draft: { sellerCity?: string; deliveryRussia?: boolean; deliveryCitiesText?: string; installCitiesText?: string }) {
+  const cities = parseCityList(draft.deliveryCitiesText);
+  const installCities = parseCityList(draft.installCitiesText);
+  const deliveryZone = draft.deliveryRussia
+    ? { mode: "nationwide" as const }
+    : cities.length
+      ? { mode: "cities" as const, cities }
+      : draft.sellerCity
+        ? { mode: "city" as const, cities: [draft.sellerCity] }
+        : { mode: "nationwide" as const }; // гео не задано — без ограничений (совместимость)
+  return { deliveryZone, installCities };
+}
 
 export function ProductEditorPage() {
   const navigate = useNavigate();
@@ -165,6 +189,9 @@ export function ProductEditorPage() {
         specs: (editItem.specs || []).map((sp: any) => ({ id: sp.id || "spec-" + Math.random().toString(36).slice(2), key: sp.key || "", value: sp.value || "" })),
         description: editItem.description || "",
         sellerCity: editItem.sellerCity || sellerReg.city || "",
+        deliveryRussia: !((editItem as any).deliveryZone && (editItem as any).deliveryZone.mode !== "nationwide"),
+        deliveryCitiesText: (Array.isArray((editItem as any).deliveryZone?.cities) ? (editItem as any).deliveryZone.cities : []).join(", "),
+        installCitiesText: (Array.isArray((editItem as any).installCities) ? (editItem as any).installCities : []).join(", "),
       };
       setDraft(loaded);
       draftRef.current = loaded;
@@ -208,6 +235,8 @@ export function ProductEditorPage() {
     draft.weight,
     draft.media,
     draft.sellerCity,
+    draft.deliveryCitiesText,
+    draft.installCitiesText,
     draft.instant,
     draft.manufacturer,
     draft.sku,
@@ -233,6 +262,7 @@ export function ProductEditorPage() {
           specs: draft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
           media: draft.media,
           sellerCity: draft.sellerCity,
+          ...geoPayload(draft),
           instant: draft.instant,
           isDraft: editItem ? editItem.isDraft !== false : true,
           draftSavedAt: new Date().toISOString(),
@@ -286,6 +316,7 @@ export function ProductEditorPage() {
           specs: (currentDraft.specs && currentDraft.specs.some((sp: any) => sp.key.trim() && sp.value.trim())) ? currentDraft.specs.filter((sp: any) => sp.key.trim() && sp.value.trim()).map(({ id: specId, key, value }: any) => ({ id: specId, key, value })) : (existing?.specs || []),
           media: (currentDraft.media && currentDraft.media.length) ? currentDraft.media : (existing?.media || []),
           sellerCity: currentDraft.sellerCity || existing?.sellerCity || "",
+          ...geoPayload(currentDraft),
           instant: currentDraft.instant ?? existing?.instant,
           isDraft: existing ? existing.isDraft !== false : true,
           draftSavedAt: new Date().toISOString(),
@@ -502,6 +533,7 @@ export function ProductEditorPage() {
         sku: draft.sku || undefined,
         tags: draft.tags || [],
         sellerCity: draft.sellerCity || reg.city || "Россия",
+        ...geoPayload({ ...draft, sellerCity: draft.sellerCity || reg.city || "" }),
         shopName: reg.shopName || "Мастерская",
         legalType: reg.legalType || "self_employed",
         inn: reg.inn || "",
@@ -558,6 +590,7 @@ export function ProductEditorPage() {
       specs: currentDraft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
       media: currentDraft.media,
       sellerCity: currentDraft.sellerCity,
+      ...geoPayload(currentDraft),
       instant: currentDraft.instant,
       isDraft: editItem ? editItem.isDraft !== false : true,
       draftSavedAt: new Date().toISOString(),
@@ -616,6 +649,7 @@ export function ProductEditorPage() {
           specs: currentDraft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
           media: currentDraft.media,
           sellerCity: currentDraft.sellerCity,
+          ...geoPayload(currentDraft),
           instant: currentDraft.instant,
           isDraft: editItem ? editItem.isDraft !== false : true,
           draftSavedAt: new Date().toISOString(),
@@ -860,6 +894,22 @@ export function ProductEditorPage() {
                 <p className="text-[11px] text-ink-soft">Для цифровых товаров: файл приходит сразу после оплаты</p>
               </div>
             </label>
+          </div>
+
+          {/* ЭТАП 2 (п.1): география деятельности — жёсткий серверный фильтр ленты по этим спискам */}
+          {!draft.deliveryRussia && (
+            <div className="mb-4">
+              <Field label="Города доставки (через запятую)">
+                <input className="field" value={draft.deliveryCitiesText} onChange={(e) => setDraft({...draft, deliveryCitiesText: e.target.value})} placeholder="Курск, Белгород, Воронеж" />
+              </Field>
+              <p className="text-[11px] text-ink-soft mt-1">Товар будет виден в лентах и поиске только покупателям из этих городов (фильтр на уровне сервера). Если список пуст — доставка только в город отправления.</p>
+            </div>
+          )}
+          <div>
+            <Field label="Города монтажа / установки (для крупногабарита, через запятую)">
+              <input className="field" value={draft.installCitiesText} onChange={(e) => setDraft({...draft, installCitiesText: e.target.value})} placeholder="Курск, Липецк" />
+            </Field>
+            <p className="text-[11px] text-ink-soft mt-1">В карточке товара покупателю из этих городов будет показано подтверждение возможности монтажа и ориентировочные сроки установки.</p>
           </div>
         </section>
 

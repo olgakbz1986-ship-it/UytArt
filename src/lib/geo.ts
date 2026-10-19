@@ -340,21 +340,23 @@ const bothKnown = (a: string, b: string): boolean =>
   CITIES.some((c) => normalizeCity(c.name) === normalizeCity(a)) && CITIES.some((c) => normalizeCity(c.name) === normalizeCity(b));
 
 export function isZoneMatch(
-  zone: { mode: "city" | "radius" | "region" | "nationwide"; km?: number; withDistrict?: boolean } | undefined,
+  zone: { mode: "city" | "radius" | "region" | "nationwide" | "cities"; km?: number; withDistrict?: boolean; cities?: string[] } | undefined,
   sellerCity: string,
   buyerCity: string,
 ): boolean {
   if (!zone || zone.mode === "nationwide") return true;
   if (!sellerCity || !buyerCity) return true;
   const na = normalizeCity(sellerCity), nb = normalizeCity(buyerCity);
+  if ((zone as any).mode === "cities") return !!(zone as any).cities?.some((c: string) => nameMatch(c, buyerCity)) || nameMatch(sellerCity, buyerCity);
   if (zone.mode === "city") return na === nb || (!!zone.withDistrict && nameMatch(sellerCity, buyerCity));
   if (zone.mode === "region") return bothKnown(sellerCity, buyerCity) ? cityToDistrict(sellerCity) === cityToDistrict(buyerCity) : nameMatch(sellerCity, buyerCity);
   if (zone.mode === "radius") return bothKnown(sellerCity, buyerCity) ? distanceKm(sellerCity, buyerCity) <= (zone.km || 50) : nameMatch(sellerCity, buyerCity);
   return true;
 }
 
-export function zoneLabel(zone: { mode: "city" | "radius" | "region" | "nationwide"; km?: number; withDistrict?: boolean } | undefined, sellerCity: string): string {
+export function zoneLabel(zone: { mode: "city" | "radius" | "region" | "nationwide" | "cities"; km?: number; withDistrict?: boolean; cities?: string[] } | undefined, sellerCity: string): string {
   if (!zone || zone.mode === "nationwide") return "🇷🇺 По России";
+  if (zone.mode === "cities") return "🚚 " + (zone.cities?.length ? zone.cities.join(", ") : (sellerCity || "город продавца"));
   if (zone.mode === "city") return "📍 Только " + (sellerCity || "город продавца") + (zone.withDistrict ? " и район" : "");
   if (zone.mode === "radius") return "🚚 до " + (zone.km || 50) + " км от " + (sellerCity || "...");
   if (zone.mode === "region") return "🏛 " + safeDistrictLabel(sellerCity);
