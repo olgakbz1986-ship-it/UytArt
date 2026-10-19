@@ -27,3 +27,8 @@ server/dev-admin.json
 Thumbs.db
 build/
 vite/
+node_modules/
+dist/
+build/
+*.tmp
+dev-*.json
