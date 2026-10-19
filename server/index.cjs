@@ -248,13 +248,14 @@ setInterval(() => {
 const ESCROW_SCAN_MS = 5 * 60 * 1000;
 async function escrowTimeoutSweep() {
   try {
-    if (String(db.mode).indexOf("json-dev") === -1) return; /* только dev-хранилище */
+    if (db.mode !== "json-dev (бесплатно)") return; /* только dev-хранилище: режим сравнивается со значением из createNotification/инициализации db */
     const path = require("path"), fsx = require("fs");
     const FILE = path.resolve(__dirname, "dev-db.json");
     if (!fsx.existsSync(FILE)) return;
     const d = JSON.parse(fsx.readFileSync(FILE, "utf8"));
     const now = Date.now();
     let changed = false;
+    const releasedOrders = []; /* заказы, выпущенные ИМЕННО в этом тике — для уведомлений ровно один раз */
     for (const ord of d.custom_orders || []) {
       const deal = ord.deal;
       if (!deal || deal.escrow !== "held") continue;
@@ -270,17 +271,31 @@ async function escrowTimeoutSweep() {
       deal.status = "settled";
       deal.release_reason = "timeout_no_disputes";
       changed = true;
+      releasedOrders.push(ord);
       console.log("[ESCROW TIMEOUT] сделка " + ord.id + ": тайм-аут истёк, открытых споров нет → средства разблокированы и переведены мастеру " + deal.master_id + " (" + (deal.prepay_amount || 0) + " ₽)");
-      if (typeof createNotification === "function") {
-        createNotification(deal.master_id, "escrow_released", "Автоматический расчёт по тайм-ауту",
-          "Покупатель не подтвердил получение и не открыл спор в установленный срок. Средства переведены вам.", "/market?focus=" + ord.id);
-        createNotification(ord.user_id, "escrow_released", "Сделка закрыта по тайм-ауту",
-          "Тайм-аут подтверждения получения истёк, споров нет. Окончательный расчёт произведён.", "/market?focus=" + ord.id);
+    }
+    if (changed) {
+      fsx.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      /* Уведомления пишем ПОСЛЕ записи release: createNotification сам перечитывает
+         dev-db.json и делает свою запись — иначе вторая запись перезаписала бы файл
+         состоянием «до выпуска» и потеряла escrow: released (гонка двух writers).
+         Список releasedOrders гарантирует ровно одно уведомление на сделку. */
+      for (const ord of releasedOrders) {
+        const deal = ord.deal;
+        if (typeof createNotification === "function") {
+          createNotification(deal.master_id, "escrow_released", "Автоматический расчёт по тайм-ауту",
+            "Покупатель не подтвердил получение и не открыл спор в установленный срок. Средства переведены вам.", "/market?focus=" + ord.id);
+          createNotification(ord.user_id, "escrow_released", "Сделка закрыта по тайм-ауту",
+            "Тайм-аут подтверждения получения истёк, споров нет. Окончательный расчёт произведён.", "/market?focus=" + ord.id);
+        }
       }
     }
-    if (changed) fsx.writeFileSync(FILE, JSON.stringify(d, null, 2));
   } catch (e) { console.error("[ESCROW SWEEP ERROR]", e); }
 }
+/* Диагностический запуск sweep при старте сервера (для E2E-проверок и отладки):
+   QF_SWEEP_ON_START=1 node server/index.cjs — обработает просроченные сделки сразу,
+   не дожидаясь первого тика интервала. В обычной эксплуатации флаг не используется;
+   штатный цикл ниже остаётся единственным планировщиком. */
 if (process.env.QF_SWEEP_ON_START === "1") escrowTimeoutSweep().catch(() => {});
 setInterval(escrowTimeoutSweep, ESCROW_SCAN_MS).unref?.();
 
