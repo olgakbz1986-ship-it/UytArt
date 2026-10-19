@@ -281,6 +281,7 @@ async function escrowTimeoutSweep() {
     if (changed) fsx.writeFileSync(FILE, JSON.stringify(d, null, 2));
   } catch (e) { console.error("[ESCROW SWEEP ERROR]", e); }
 }
+if (process.env.QF_SWEEP_ON_START === "1") escrowTimeoutSweep().catch(() => {});
 setInterval(escrowTimeoutSweep, ESCROW_SCAN_MS).unref?.();
 
 /* ---------- §5.1 Глобальный error-handler: необработанные ошибки — в JSON-лог ---------- */
@@ -1653,13 +1654,16 @@ app.get("/api/purchases/status", guard, async (req, res) => {
   try {
     const rawId = String(req.query.productId || "");
     if (!rawId) return res.status(400).json({ error: "no_product_id" });
+    /* FIX E2E: нормализация «в обе стороны» — раньше при запросе с bare-id
+       (p-kursk) сравнение шло только raw↔stored, а покупки хранятся как "sp-p-kursk". */
     const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
+    const spId = "sp-" + bareId;
+    const sameProduct = (pid) => { const s = String(pid || ""); return s === rawId || s === bareId || s === spId; };
     const FILE = require("path").resolve(__dirname, "dev-db.json");
     const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
     const purchase = (d.purchases || []).find((x) => {
       if (String(x.userId) !== String(req.userId) || x.status === "cancelled") return false;
-      const pid = String(x.productId || "");
-      return pid === rawId || pid === bareId || ("sp-" + pid) === rawId;
+      return sameProduct(x.productId);
     });
     const already = !!(purchase && (d.market_reviews || []).some((r) => r.product_id && String(r.product_id).replace(/^sp-/, "") === bareId && String(r.reviewer_id) === String(req.userId)));
     res.json({ ok: true, canReview: !!purchase && !already, purchased: !!purchase, alreadyReviewed: already });
@@ -1681,12 +1685,14 @@ app.post("/api/purchases/:productId/reviews", guard, async (req, res) => {
        давало бы пустую строку и 409 no_completed_deal для любой покупки. */
     const rawId = String(req.params.productId || "");
     const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
+    /* FIX E2E: двусторонняя нормализация id (см. GET /api/purchases/status) */
+    const spId = "sp-" + bareId;
+    const sameProduct = (pid) => { const s = String(pid || ""); return s === rawId || s === bareId || s === spId; };
     /* История транзакций покупателя: только реальная оплаченная покупка
        этого товара этим пользователем открывает доступ к форме отзыва. */
     const purchase = (d.purchases || []).find((x) => {
       if (String(x.userId) !== String(req.userId) || x.status === "cancelled") return false;
-      const pid = String(x.productId || "");
-      return pid === rawId || pid === bareId || ("sp-" + pid) === rawId;
+      return sameProduct(x.productId);
     });
     if (!purchase) return res.status(409).json({ error: "no_completed_deal", message: "Отзыв возможен только после покупки товара." });
     const prod = (d.products || []).find((p) => String(p.id) === bareId);
@@ -1836,7 +1842,7 @@ app.get("/api/products/:id/reviews", async (req, res) => {
     const fs = require("fs");
     const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [] };
     const reviews = (d.market_reviews || [])
-      .filter((r) => r.product_id === rawId || r.product_id === bareId)
+      .filter((r) => { const s = String(r.product_id || ""); return s === rawId || s === bareId || s === "sp-" + bareId; })
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     /* имена авторов — из users (без выдачи e-mail/телефонов) */
     const uMap = {};
