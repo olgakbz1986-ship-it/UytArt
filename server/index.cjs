@@ -673,10 +673,21 @@ app.post("/api/orders/:id/deal/prepay", guard, async (req, res) => {
     if (!accepted) return res.status(409).json({ error: "no_accepted_response" });
     /* Внести предоплату может только владелец заказа */
     if (ord.user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
+    /* ЭТАП 3 (п.1): предоплата допустима только на этапе «отклик принят».
+       Нельзя оплатить уже завершённую/отменённую сделку или заказ до принятия отклика. */
+    if (!["in_progress", "published"].includes(String(ord.status))) {
+      return res.status(409).json({ error: "invalid_state_transition", message: "Предоплата доступна только после принятия отклика мастера." });
+    }
     const amount = Math.round(Number(req.body.amount || accepted.price * 0.3));
     ord.deal = {
       status: "prepaid",
+      escrow: "held",                    /* ЭТАП 3 (п.3): средства ЗАБЛОКИРОВАНЫ
+                                            на защищённом счёте платформы, а не
+                                            переведены мастеру. Разблокировка —
+                                            только через /deal/release после
+                                            подтверждения покупателем. */
       prepay_amount: amount,
+      deal_total: Number(accepted.price) || amount,
       master_id: accepted.master_id,
       paid_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
@@ -731,11 +742,29 @@ app.get("/api/orders/:id/deal", guard, async (req, res) => {
   }
 });
 
+/* ЭТАП 3 (п.2): структурированный обязательный отклик мастера.
+   Итоговая цена, сроки (в днях) и способ доставки — все три поля проверяются
+   на сервере; неполный или нереалистичный отклик физически невозможно создать.
+   Клиентский UI-формат совпадает с этим же контрактом (единая таблица допустимых
+   delivery_method для обеих сторон сделки). */
+const DELIVERY_METHODS = ["cdek", "russian_post", "courier", "self_pickup"];
+
 app.post("/api/orders/:id/responses", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    const { price, deadline_days, comment } = req.body;
-    
+    const { price, deadline_days, comment, delivery_method } = req.body;
+
+    /* Валидация структуры отклика (ЭТАП 3 §2): без цены/срока/способа доставки
+       отклик не принимается — это обязательные данные, а не необязательный комментарий. */
+    const priceNum = Number(price);
+    const daysNum = Number(deadline_days);
+    if (!Number.isFinite(priceNum) || priceNum <= 0)
+      return res.status(400).json({ error: "invalid_price", message: "Отклик обязан содержать положительную итоговую цену." });
+    if (!Number.isInteger(daysNum) || daysNum < 1 || daysNum > 365)
+      return res.status(400).json({ error: "invalid_deadline", message: "Срок выполнения — целое число дней от 1 до 365." });
+    if (!DELIVERY_METHODS.includes(String(delivery_method)))
+      return res.status(400).json({ error: "invalid_delivery_method", allowed: DELIVERY_METHODS, message: "Выберите способ доставки из списка." });
+
     /* Правило владения и логика откликов:
        - откликаться может только авторизованный мастер (не гость);
        - мастер не может откликнуться на СОБСТВЕННЫЙ заказ;
@@ -750,13 +779,14 @@ app.post("/api/orders/:id/responses", guard, async (req, res) => {
       const dup = (d0.order_responses || []).find(r => r.order_id === id && r.master_id === req.userId);
       if (dup) return res.status(409).json({ error: "already_responded" });
     }
-    
+
     const newResponse = {
       id: require("crypto").randomUUID(),
       order_id: id,
       master_id: req.userId,
-      price: Number(price),
-      deadline_days: Number(deadline_days),
+      price: priceNum,
+      deadline_days: daysNum,
+      delivery_method: String(delivery_method),
       comment: comment || "",
       status: "pending",
       created_at: new Date().toISOString()
@@ -800,7 +830,25 @@ app.put("/api/orders/:id/responses/:rid", guard, async (req, res) => {
   try {
     const { id, rid } = req.params;
     const { status } = req.body; // 'accepted' or 'rejected'
-    
+
+    /* ЭТАП 3 (п.1): единый жёсткий конвейер статусов заказа.
+       Принятие отклика — переход «received_responses → response_accepted»
+       (в терминах существующей системы — in_progress). Повторное принятие
+       при уже идущей сделке запрещено: линейность и необратимость пути сделки. */
+    if (status === "accepted") {
+      if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+      const FILEC = require("path").resolve(__dirname, "dev-db.json");
+      const fsc = require("fs");
+      const dc = fsc.existsSync(FILEC) ? JSON.parse(fsc.readFileSync(FILEC, "utf8")) : { custom_orders: [], order_responses: [] };
+      const ordC = (dc.custom_orders || []).find(o => o.id === id);
+      if (!ordC) return res.status(404).json({ error: "not_found" });
+      const alreadyAccepted = (dc.order_responses || []).find(r => r.order_id === id && r.status === "accepted");
+      if (alreadyAccepted && alreadyAccepted.id !== rid)
+        return res.status(409).json({ error: "deal_in_progress", message: "По заказу уже принят отклик — смена исполнителя возможна только через новую сделку." });
+      if (["delivered", "confirmed", "completed", "reviewed"].includes(String(ordC.status)))
+        return res.status(409).json({ error: "order_finalized", message: "Заказ уже на финальной стадии жизненного цикла." });
+    }
+
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
@@ -831,6 +879,21 @@ app.put("/api/orders/:id/responses/:rid", guard, async (req, res) => {
           const order = d.custom_orders.find(o => o.id === id);
           if (order) {
             order.status = "in_progress";
+            /* ЭТАП 3 (п.3): в момент принятия отклика инициируется безопасная
+               сделка (эскроу): средства НЕ переводятся мастеру — они будут
+               заблокированы на защищённом счёте платформы после внесения
+               предоплаты покупателем (deal/prepay). awaiting_prepay — оффер. */
+            if (!order.deal) {
+              order.deal = {
+                status: "awaiting_prepay",
+                escrow: "initiated",           /* платёжный шлюз ещё не списывал средства */
+                prepay_amount: null,
+                master_id: resp.master_id,
+                initiated_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+                contacts_revealed: false,
+              };
+            }
             order.updated_at = new Date().toISOString();
           }
         }
@@ -863,6 +926,16 @@ app.put("/api/orders/:id/responses/:rid", guard, async (req, res) => {
 // ==========================================
 // API ЭТАПА 7: ДЕТАЛЬНАЯ КАРТОЧКА, ЧАТ И ЭТАПЫ
 // ==========================================
+/* ЭТАП 3 (п.1): единый жёсткий конвейер статусов заказа — на уровне модуля,
+   используется PUT /api/orders/:id и POST /api/orders/:id/ship.
+   created → responses_received → response_accepted → prepay_held
+   → in_work → shipped → delivered → confirmed_by_buyer
+   → final_settlement → completed → reviewed
+   Внутренние значения (совместимость с существующим кодом):
+   published | in_progress | shipped | delivered | confirmed | completed | cancelled */
+const ORDER_PIPELINE = ["published", "in_progress", "shipped", "delivered", "confirmed", "completed"];
+const FINAL_STATUSES = ["completed", "cancelled"];
+
 app.put("/api/orders/:id", guard, async (req, res) => {
   try {
     const patch = req.body || {};
@@ -876,8 +949,58 @@ app.put("/api/orders/:id", guard, async (req, res) => {
       if (idx === -1) return res.status(404).json({ error: "not_found" });
       /* Правило владения: редактировать заказ может только его владелец */
       if (arr[idx].user_id && arr[idx].user_id !== req.userId) return res.status(403).json({ error: "not_owner" });
+
+      /* ============================================================
+         ЭТАП 3 (п.1): переходы статусов проверяются СЕРВЕРОМ по
+         единому конвейеру ORDER_PIPELINE (объявлен выше, рядом с /ship).
+         Клиент не может ни перескочить стадию, ни откатить финальную.
+         Инициатор тоже проверяется: «delivered/confirmed» — ТОЛЬКО
+         покупатель-владелец заказа (уже гарантировано проверкой
+         владения выше), «shipped» — принятый мастер через отдельный
+         эндпоинт POST /api/orders/:id/ship, не через этот роут.
+         ============================================================ */
+      if (patch.status !== undefined && String(patch.status) !== String(arr[idx].status)) {
+        const from = String(arr[idx].status);
+        const to = String(patch.status);
+        if (FINAL_STATUSES.includes(from))
+          return res.status(409).json({ error: "terminal_state", message: "Завершённый/отменённый заказ необратим: смена статуса запрещена." });
+        if (to === "cancelled") { /* отмена разрешена владельцу на любой промежуточной стадии */
+          const dealC = arr[idx].deal;
+          if (dealC && dealC.escrow === "held") {
+            console.log("[ESCROW REFUND] отмена сделки " + arr[idx].id + ": возврат заблокированных средств покупателю (" + (dealC.prepay_amount || 0) + " ₽)");
+            dealC.escrow = "refunded";
+            dealC.status = "cancelled";
+          }
+        } else if (!ORDER_PIPELINE.includes(to)) {
+          return res.status(400).json({ error: "invalid_status", allowed: ORDER_PIPELINE.concat("cancelled"), got: to });
+        } else {
+          const fi = ORDER_PIPELINE.indexOf(from), ti = ORDER_PIPELINE.indexOf(to);
+          if (fi === -1) return res.status(409).json({ error: "invalid_state_transition", message: "Неизвестное текущее состояние заказа." });
+          /* Разрешён только шаг вперёд по конвейеру (или stay). Исключение из
+             линейности — автопереходы сервера (accepted→in_progress и т.п.),
+             они выполняются внутри соответствующих обработчиков, не здесь. */
+          if (ti < fi) return res.status(409).json({ error: "irreversible_transition", message: "Обратный переход статуса запрещён: " + from + " → " + to });
+          if (ti > fi + 1) return res.status(409).json({ error: "skipped_stage", message: "Нельзя пропускать стадию жизненного цикла: " + from + " → " + to });
+          /* Подтверждение доставки («delivered», «confirmed») инициирует только
+             покупатель. Для владельца это всегда покупатель — проверка выше уже
+             гарантирует user_id === req.userId. Мастер сюда не допускается. */
+        }
+      }
+
       const prev = arr[idx];
       const next = Object.assign({}, prev, patch, { id: prev.id, updated_at: new Date().toISOString() });
+
+      /* ЭТАП 3 (п.3): подтверждение получения покупателем (delivered/confirmed)
+       → автоматический окончательный расчёт: эскроу разблокируется и средства
+       переводятся мастеру. Один раз, повтор вызова идемпотентен. */
+      if (["delivered", "confirmed"].includes(String(patch.status)) && next.deal && next.deal.escrow === "held") {
+        next.deal.escrow = "released";
+        next.deal.released_at = new Date().toISOString();
+        next.deal.status = "settled";
+        console.log("[ESCROW RELEASE] сделка " + next.id + ": средства разблокированы и переведены мастеру " + next.deal.master_id + " (" + (next.deal.prepay_amount || 0) + " ₽ предоплаты + остаток " + Math.max(0, (next.deal.deal_total || 0) - (next.deal.prepay_amount || 0)) + " ₽)");
+        createNotification(next.deal.master_id, "escrow_released", "Окончательный расчёт произведён",
+          "Покупатель подтвердил получение по заказу «" + (next.title || "") + "». Средства разблокированы на вашем счёте.", "/market?focus=" + next.id);
+      }
 
       if (patch.images) next.attachments = patch.images;
       if (patch.attachments) next.images = patch.attachments;
@@ -900,6 +1023,37 @@ app.put("/api/orders/:id", guard, async (req, res) => {
     res.json({ ok: true, order: saved });
   } catch (e) {
     console.error("[ORDERS UPDATE ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+/* ЭТАП 3 (п.1): «Отправлен» — исключительное действие принятного мастера.
+   Покупатель не может перевести заказ в shipped, мастер — в delivered/confirmed.
+   Разрыв линейности по ролям закрывается этим отдельным эндпоинтом: PUT /api/orders/:id
+   защищён проверкой владения (только покупатель), поэтому статус shipped
+   вынесен в отдельный роут с проверкой участника-мастера. */
+app.post("/api/orders/:id/ship", guard, async (req, res) => {
+  try {
+    const ctx = await orderParty(req, req.params.id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
+    if (!ctx.isMaster) return res.status(403).json({ error: "only_master_can_ship", message: "Отметить отправку может только принятый исполнитель." });
+    const ord = ctx.ord;
+    const fi = ORDER_PIPELINE.indexOf(String(ord.status));
+    if (String(ord.status) !== "in_progress")
+      return res.status(409).json({ error: "invalid_state_transition", message: "Отправка возможна только из статуса «в работе»." });
+    /* Проверка конвейера: in_progress → shipped (следующая стадия). */
+    if (ORDER_PIPELINE[fi + 1] !== "shipped") return res.status(409).json({ error: "skipped_stage" });
+    const { FILE, fs, d } = devDbRead();
+    const idx = (d.custom_orders || []).findIndex(o => o.id === req.params.id);
+    d.custom_orders[idx].status = "shipped";
+    d.custom_orders[idx].updated_at = new Date().toISOString();
+    if (req.body && req.body.tracking) d.custom_orders[idx].tracking = String(req.body.tracking);
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    createNotification(ord.user_id, "shipped", "Заказ отправлен",
+      "Исполнитель передал заказ «" + (ord.title || "") + "» в доставку." + (req.body && req.body.tracking ? " Трек: " + req.body.tracking : ""), "/market?focus=" + ord.id);
+    res.json({ ok: true, order: d.custom_orders[idx] });
+  } catch (e) {
+    console.error("[ORDER SHIP ERROR]", e);
     res.status(500).json({ error: "server" });
   }
 });

@@ -32,10 +32,18 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
   const [loading, setLoading] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
-  // Состояния для отклика мастера
+  // Состояния для отклика мастера (ЭТАП 3 §2: структурированный отклик —
+  // обязательны цена, срок и способ доставки; сервер валидирует все три поля)
+  const DELIVERY_METHOD_OPTIONS: Array<[string, string]> = [
+    ["cdek", "СДЭК"],
+    ["russian_post", "Почта России"],
+    ["courier", "Курьер"],
+    ["self_pickup", "Самовывоз"],
+  ];
   const [showResponseForm, setShowResponseForm] = useState(false);
   const [responsePrice, setResponsePrice] = useState("");
   const [responseDeadline, setResponseDeadline] = useState("");
+  const [responseDelivery, setResponseDelivery] = useState("cdek");
   const [responseComment, setResponseComment] = useState("");
   const [submittingResponse, setSubmittingResponse] = useState(false);
   
@@ -245,8 +253,8 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
   }, [messages]);
 
   const submitResponse = async () => {
-    if (!responsePrice || !responseDeadline || !responseComment.trim()) {
-      alert("Пожалуйста, заполните все поля: цену, сроки и комментарий");
+    if (!responsePrice || !responseDeadline || !responseComment.trim() || !responseDelivery) {
+      alert("Пожалуйста, заполните все поля: цену, сроки, способ доставки и комментарий");
       return;
     }
     setSubmittingResponse(true);
@@ -254,9 +262,11 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
       const res = await fetch(`/api/orders/${order.id}/responses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           price: Number(responsePrice),
           deadline_days: Number(responseDeadline),
+          delivery_method: responseDelivery,
           comment: responseComment.trim()
         })
       });
@@ -267,6 +277,9 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
         setResponsePrice("");
         setResponseDeadline("");
         setResponseComment("");
+        setResponseDelivery("cdek");
+      } else if (res.status === 400) {
+        alert(data.message || "Отклик должен содержать корректные цену, срок и способ доставки");
       } else if (res.status === 409 || data.error === "already_responded") {
         alert("Вы уже откликнулись на этот заказ");
       } else if (res.status === 403 || data.error === "own_order") {
@@ -358,7 +371,16 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
               чужой авторизованный мастер — только кнопка отклика. */}
           {isOwner ? (
             <div className="flex gap-2 shrink-0 flex-wrap justify-end">
-              {order.status === "in_progress" && (
+              {/* ЭТАП 3 (п.1): кнопки соответствуют ЖЁСТКОМУ конвейеру статусов.
+                  Подтверждение доставки/получения инициирует ТОЛЬКО покупатель;
+                  продавец не может отметить доставку или завершить сделку сам. */}
+              {order.status === "shipped" && (
+                <button onClick={() => changeOrderStatus("delivered")} className="h-[44px] px-4 rounded-xl bg-premium text-white font-bold text-[13px] hover:opacity-90 transition-opacity cursor-pointer">Подтвердить доставку</button>
+              )}
+              {order.status === "delivered" && (
+                <button onClick={() => changeOrderStatus("confirmed")} className="h-[44px] px-4 rounded-xl bg-success text-white font-bold text-[13px] hover:opacity-90 transition-opacity cursor-pointer">Подтвердить получение</button>
+              )}
+              {order.status === "confirmed" && (
                 <button onClick={() => changeOrderStatus("completed")} className="h-[44px] px-4 rounded-xl bg-success text-white font-bold text-[13px] hover:opacity-90 transition-opacity cursor-pointer">Заказ завершён</button>
               )}
               {(order.status === "published" || order.status === "in_progress") && (
@@ -384,9 +406,10 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
             <h3 className="font-bold text-[16px] text-ink mb-4">Ваше предложение</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Ваша цена, ₽</label>
+                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Итоговая цена, ₽ *</label>
                 <input
                   type="number"
+                  min={1}
                   value={responsePrice}
                   onChange={(e) => setResponsePrice(e.target.value)}
                   placeholder="Например, 50000"
@@ -394,14 +417,29 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
                 />
               </div>
               <div>
-                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Срок выполнения, дней</label>
+                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Срок выполнения, дней *</label>
                 <input
                   type="number"
+                  min={1}
+                  max={365}
                   value={responseDeadline}
                   onChange={(e) => setResponseDeadline(e.target.value)}
                   placeholder="Например, 14"
                   className="w-full h-[44px] px-4 rounded-xl border border-line-soft bg-surface text-[14px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
                 />
+              </div>
+              {/* ЭТАП 3 §2: способ доставки — обязательное структурированное поле отклика */}
+              <div className="md:col-span-2">
+                <label className="text-[12px] font-bold text-ink-mute mb-1.5 block">Способ доставки *</label>
+                <select
+                  value={responseDelivery}
+                  onChange={(e) => setResponseDelivery(e.target.value)}
+                  className="w-full h-[44px] px-4 rounded-xl border border-line-soft bg-surface text-[14px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
+                >
+                  {DELIVERY_METHOD_OPTIONS.map(([v, label]) => (
+                    <option key={v} value={v}>{label}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="mb-4">
@@ -452,6 +490,9 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
                   <div className="text-right mr-2">
                     <p className="text-[14px] font-bold text-ink">{fmtRub(r.price)} ₽</p>
                     <p className="text-[11px] text-ink-mute">{r.deadline_days} дн.</p>
+                    {r.delivery_method && (
+                      <p className="text-[11px] text-ink-mute">🚚 {Object.fromEntries(DELIVERY_METHOD_OPTIONS)[r.delivery_method] || r.delivery_method}</p>
+                    )}
                   </div>
                   {r.status === "pending" ? (
                     <div className="flex gap-2">
@@ -481,13 +522,17 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
           );
         })()}
 
-        {/* ===== Безопасная сделка: предоплата раскрывает контакты ===== */}
+        {/* ===== Безопасная сделка (ЭТАП 3 §3): эскроу-конвейер =====
+           awaiting_prepay → prepaid (escrow=held: средства заблокированы на
+           защищённом счёте платформы, НЕ переведены мастеру) → settled
+           (escrow=released: автоматический окончательный расчёт после
+           подтверждения получения покупателем). Отмена — возврат (refunded). */}
         {!isGuest && deal && deal.status !== "none" && (
           <div className="border-t border-line-soft p-4 bg-surface shrink-0">
-            <h3 className="font-bold text-[13px] text-ink mb-2 flex items-center gap-2"><ShieldCheck size={15} className="text-accent-deep" /> Безопасная сделка</h3>
+            <h3 className="font-bold text-[13px] text-ink mb-2 flex items-center gap-2"><ShieldCheck size={15} className="text-accent-deep" /> Безопасная сделка · средства под защитой платформы</h3>
             {deal.status === "awaiting_prepay" && (
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-[12px] text-ink-soft flex-1 min-w-[200px]">Отклик принят. Внесите предоплату, чтобы открыть чат-контакты мастера. Без предоплаты в течение 7 дней сделка автоматически отменяется.</p>
+                <p className="text-[12px] text-ink-soft flex-1 min-w-[200px]">Отклик принят — безопасная сделка инициирована. Внесите предоплату: средства будут заблокированы на защищённом счёте платформы и переведены мастеру только после подтверждения вами получения. Без предоплаты в течение 7 дней сделка автоматически отменяется.</p>
                 {isOwner && (
                   <button onClick={payPrepay} disabled={paying} className="h-[44px] px-5 rounded-xl bg-accent text-ink font-bold text-[13px] hover:bg-accent-deep hover:text-cream disabled:opacity-50 transition-colors cursor-pointer">
                     {paying ? "Обработка платежа..." : "Внести предоплату"}
@@ -497,7 +542,8 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
             )}
             {deal.status === "prepaid" && (
               <div className="space-y-2">
-                <p className="text-[12px] text-success font-bold">✓ Предоплата {fmtRub(deal.prepay_amount)} ₽ внесена — контакты раскрыты обеим сторонам</p>
+                <p className="text-[12px] text-success font-bold">✓ Предоплата {fmtRub(deal.prepay_amount)} ₽ внесена — средства заблокированы на счёте платформы (эскроу), контакты раскрыты обеим сторонам</p>
+                <p className="text-[11px] text-ink-mute">Окончательный расчёт с мастером произойдёт автоматически после подтверждения получения заказа. До этого момента деньги недоступны ни одной из сторон.</p>
                 {dealContacts && (dealContacts.phone || dealContacts.telegram) ? (
                   <div className="flex flex-wrap gap-4 text-[13px] text-ink">
                     {dealContacts.phone && <span>📞 <a href={"tel:" + dealContacts.phone} className="underline">{dealContacts.phone}</a></span>}
@@ -508,8 +554,11 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
                 )}
               </div>
             )}
-            {deal.status === "cancelled_auto" && (
-              <p className="text-[12px] text-error font-bold">Сделка отменена: предоплата не была внесена в течение 7 дней. Заказ снова открыт для откликов.</p>
+            {(deal.status === "settled" || deal.escrow === "released") && (
+              <p className="text-[12px] text-success font-bold">✓ Окончательный расчёт произведён: средства разблокированы и переведены мастеру. Сделка закрыта.</p>
+            )}
+            {(deal.status === "cancelled_auto" || deal.escrow === "refunded") && (
+              <p className="text-[12px] text-error font-bold">{deal.escrow === "refunded" ? "Сделка отменена: заблокированная предоплата возвращена покупателю." : "Сделка отменена: предоплата не была внесена в течение 7 дней. Заказ снова открыт для откликов."}</p>
             )}
           </div>
         )}
