@@ -237,6 +237,52 @@ setInterval(() => {
   log.info("security_heartbeat", { component: "auth", revokedTokensApprox: typeof revokedRefresh?.size === "function" ? revokedRefresh.size() : undefined });
 }, 60_000).unref?.();
 
+/* ============================================================
+   ЭТАП 3 (п.3): фоновый контролёр эскроу-таймаута.
+   Разблокировка и перевод средств мастеру происходит автоматически,
+   если покупатель подтвердил получение (обрабатывается в PUT /api/orders/:id)
+   ЛИБО истёк тайм-аут сделки (deal.expires_at, по умолчанию 7 суток),
+   при условии отсутствия открытых споров (complaint с статусом open).
+   Скан каждые 5 минут; идемпотентен (повтор не создаёт дублей операций).
+   ============================================================ */
+const ESCROW_SCAN_MS = 5 * 60 * 1000;
+async function escrowTimeoutSweep() {
+  try {
+    if (String(db.mode).indexOf("json-dev") === -1) return; /* только dev-хранилище */
+    const path = require("path"), fsx = require("fs");
+    const FILE = path.resolve(__dirname, "dev-db.json");
+    if (!fsx.existsSync(FILE)) return;
+    const d = JSON.parse(fsx.readFileSync(FILE, "utf8"));
+    const now = Date.now();
+    let changed = false;
+    for (const ord of d.custom_orders || []) {
+      const deal = ord.deal;
+      if (!deal || deal.escrow !== "held") continue;
+      /* Открытый спор замораживает эскроу — средства НЕ выпускаются.
+         Учитываются и серверные жалобы (d.complaints, статус new/in_review/open),
+         привязанные к заказу. */
+      const disputes = (d.complaints || []).filter((c) => String(c.order_id || c.orderId || "") === String(ord.id) && ["open", "new", "in_review"].includes(String(c.status || "open")));
+      if (disputes.length > 0) continue;
+      const exp = Date.parse(deal.expires_at || "");
+      if (!Number.isFinite(exp) || now < exp) continue;
+      deal.escrow = "released";
+      deal.released_at = new Date().toISOString();
+      deal.status = "settled";
+      deal.release_reason = "timeout_no_disputes";
+      changed = true;
+      console.log("[ESCROW TIMEOUT] сделка " + ord.id + ": тайм-аут истёк, открытых споров нет → средства разблокированы и переведены мастеру " + deal.master_id + " (" + (deal.prepay_amount || 0) + " ₽)");
+      if (typeof createNotification === "function") {
+        createNotification(deal.master_id, "escrow_released", "Автоматический расчёт по тайм-ауту",
+          "Покупатель не подтвердил получение и не открыл спор в установленный срок. Средства переведены вам.", "/market?focus=" + ord.id);
+        createNotification(ord.user_id, "escrow_released", "Сделка закрыта по тайм-ауту",
+          "Тайм-аут подтверждения получения истёк, споров нет. Окончательный расчёт произведён.", "/market?focus=" + ord.id);
+      }
+    }
+    if (changed) fsx.writeFileSync(FILE, JSON.stringify(d, null, 2));
+  } catch (e) { console.error("[ESCROW SWEEP ERROR]", e); }
+}
+setInterval(escrowTimeoutSweep, ESCROW_SCAN_MS).unref?.();
+
 /* ---------- §5.1 Глобальный error-handler: необработанные ошибки — в JSON-лог ---------- */
 app.use((err, req, res, _next) => {
   log.error("unhandled_request_error", { route: req.originalUrl, ip: req.ip, message: err && err.message, stack: err && err.stack });
@@ -1441,7 +1487,14 @@ app.get("/api/products", softGuard, async (_q, r) => {
     /* ЭТАП 2: жёсткий гео-фильтр выборки — в ответ попадают только товары,
        чья доставка/монтаж покрывает город покупателя (или nationwide). */
     const city = await buyerCityFromQueryOrSession(_q);
-    r.json({ ok: true, products: geo.geoFilter(d.products || [], city), filteredByCity: city || null });
+    /* Нормализация geography → deliveryZone/installCities (единый контракт
+       для товаров и мастеров; структура БД не меняется — только проекция). */
+    const enriched = (d.products || []).map((p) => Object.assign({}, p, {
+      sellerCity: p.sellerCity || (p.geography && p.geography.city) || (p.deliveryZone && p.deliveryZone.city) || p.city || "",
+      deliveryZone: p.deliveryZone || (p.geography && p.geography.delivery) || (p.geography ? { mode: "cities", cities: [p.geography.city] } : null),
+      installCities: Array.isArray(p.installCities) && p.installCities.length ? p.installCities : ((p.geography && p.geography.install) || []),
+    }));
+    r.json({ ok: true, products: geo.geoFilter(enriched, city), filteredByCity: city || null });
   }
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
