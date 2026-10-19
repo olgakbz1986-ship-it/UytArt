@@ -1651,7 +1651,9 @@ app.post("/api/purchases/:productId/reviews", guard, async (req, res) => {
     }
     const FILE = require("path").resolve(__dirname, "dev-db.json");
     const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
-    const rawId = String(req.params.id || "");
+    /* FIX аудита: маршрут объявлен как /:productId — обращение к req.params.id
+       давало бы пустую строку и 409 no_completed_deal для любой покупки. */
+    const rawId = String(req.params.productId || "");
     const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
     /* История транзакций покупателя: только реальная оплаченная покупка
        этого товара этим пользователем открывает доступ к форме отзыва. */
