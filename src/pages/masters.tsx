@@ -187,6 +187,22 @@ export function ShopPage() {
   const reg: SellerProfile | null = profiles[ownerId] || (ownerId === session?.userId ? (activeReg as unknown as SellerProfile) : null);
   const master = buildRealMaster(reg, ownerId, marketAll);
   const reviews = useReviewStore((s) => s.reviews);
+  /* ЭТАП 4 (§4.3): серверные отзывы о мастере (подтягиваем market_reviews из
+     БД сделок — витрина не зависит от локального стора покупателя). */
+  const [serverReviews, setServerReviews] = useState<any[]>([]);
+  useEffect(() => {
+    if (!ownerId) return;
+    let alive = true;
+    fetch(`/api/market/users/${encodeURIComponent(ownerId)}/reviews`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && j && j.ok) setServerReviews(j.reviews || []); })
+      .catch(() => { /* деградация: только локальные approved-отзывы */ });
+    return () => { alive = false; };
+  }, [ownerId]);
+  /* Галерея выполненных работ мастера (работы из Студии Quantiform,
+     привязанные к владельцу витрины по ownerId). */
+  const works = useSellerAccount((s) => s.works);
+  const galleryWorks = useMemo(() => works.filter((w: any) => !w.isDraft && w.ownerId === ownerId), [works, ownerId]);
   /* Витрина магазина: только товары этого продавца */
   const goods = useMemo(() => marketAll.filter((x) => x.id.startsWith("sp-") && (x as any).ownerId === ownerId), [marketAll, ownerId]);
   const goodsIds = new Set(goods.map((g) => g.id));
@@ -274,12 +290,45 @@ export function ShopPage() {
         )}
       </section>
 
+      {/* ЭТАП 4 (§4.1): галерея выполненных работ мастера — верифицированный
+          агрегатор репутации: только готовые (не черновые) работы владельца. */}
+      {galleryWorks.length > 0 && (
+        <section className="mt-10">
+          <h2 className="font-display font-bold text-[22px] text-ink mb-4">Выполненные работы</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {galleryWorks.map((w: any) => (
+              <Link key={w.id} to={`/product/${(w as any).id}`} className="group bg-surface rounded-[16px] shadow-card overflow-hidden">
+                <div className="aspect-square bg-cream overflow-hidden">
+                  {w.preview ? <img src={w.preview} alt={w.name} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform" /> :
+                    <div className="w-full h-full flex items-center justify-center text-[34px]">{w.type === "photo" ? "📷" : w.type === "video" ? "🎬" : "🛠️"}</div>}
+                </div>
+                <div className="p-3">
+                  <p className="text-[13px] font-bold text-ink truncate">{w.name}</p>
+                  <p className="text-[11px] text-ink-mute">{new Date(w.createdAt).toLocaleDateString("ru-RU")}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mt-10">
         <h2 className="font-display font-bold text-[22px] text-ink mb-4">Отзывы покупателей</h2>
-        {shopReviews.length === 0 ? (
+        {shopReviews.length === 0 && serverReviews.length === 0 ? (
           <p className="text-[13.5px] text-ink-soft bg-cream rounded-[14px] px-5 py-6 text-center">Отзывов пока нет — они появятся после первых покупок.</p>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
+            {/* Серверные отзывы по завершённым сделкам (антинакрутка на POST) */}
+            {serverReviews.map((r: any) => (
+              <div key={r.id} className="bg-surface rounded-2xl shadow-card p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Rating value={r.rating} />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-soft text-[#4d7327] text-[10.5px] font-bold"><ShieldCheck size={11} /> Проверенная сделка</span>
+                </div>
+                <p className="text-[13px] text-ink-soft leading-relaxed">{r.text}</p>
+                <p className="text-[11px] text-ink-mute mt-2">{new Date(r.created_at).toLocaleDateString("ru-RU")}</p>
+              </div>
+            ))}
             {shopReviews.map((r) => (
               <div key={r.id} className="bg-surface rounded-2xl shadow-card p-5">
                 <div className="flex items-center gap-2 mb-2">

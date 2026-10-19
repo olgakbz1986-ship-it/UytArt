@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ShoppingBag, Heart, MessageSquare, Star, MapPin , Building2, Truck, PackageCheck, Wrench } from "lucide-react";
+import { ShoppingBag, Heart, MessageSquare, Star, MapPin , Building2, Truck, PackageCheck, Wrench, ShieldCheck } from "lucide-react";
 import { SellerAboutModal } from "./SellerAboutModal";
 import { SpecSections } from "./SpecSections";
 
@@ -205,10 +205,48 @@ export function ProductViewCore(p: ProductViewCoreProps) {
               {!logistics && <p>СДЭК, Boxberry и Почта России — 2–7 дней по России.</p>}
             </div>
           )}
-          {tab === "reviews" && <p className="text-[14px] text-ink-mute">Отзывов пока нет — станьте первым!</p>}
+          {tab === "reviews" && <ProductServerReviews productId={p.productId} />}
         </div>
       </div>
       <SellerAboutModal open={sellerAboutOpen} onClose={() => setSellerAboutOpen(false)} />
+    </div>
+  );
+}
+
+/* ЭТАП 4 (§4.3): серверные отзывы по проданному товару — агрегация
+   финансово подтверждённых сделок (GET /api/products/:id/reviews). */
+interface ServerReview { id: string; reviewer_name: string; rating: number; text: string; created_at: string }
+function ProductServerReviews({ productId }: { productId?: string }) {
+  const [server, setServer] = useState<ServerReview[] | null>(null);
+  useEffect(() => {
+    if (!productId) { setServer(null); return; }
+    let alive = true;
+    fetch(`/api/products/${encodeURIComponent(productId)}/reviews`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && j && j.ok) setServer(j.reviews || []); })
+      .catch(() => { /* деградация: показываем статичную заглушку */ });
+    return () => { alive = false; };
+  }, [productId]);
+
+  if (!productId || !server || server.length === 0) {
+    return <p className="text-[14px] text-ink-mute">Отзывов пока нет — станьте первым!</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {server.map((r) => (
+        <div key={r.id} className="bg-surface rounded-[14px] shadow-card p-5">
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className="w-9 h-9 rounded-full bg-dark text-cream flex items-center justify-center font-display font-bold text-[14px]">{(r.reviewer_name || "?")[0].toUpperCase()}</span>
+            <div>
+              <p className="text-[13.5px] font-bold text-ink">{r.reviewer_name}</p>
+              <p className="text-[11px] text-ink-mute">{new Date(r.created_at).toLocaleDateString("ru-RU")}</p>
+            </div>
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-soft text-[#4d7327] text-[10.5px] font-bold"><ShieldCheck size={11} /> Проверенная сделка</span>
+          </div>
+          <span className="inline-flex items-center gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={13} className={i < Math.round(r.rating) ? "text-accent" : "text-line"} fill="currentColor" />)}</span>
+          <p className="text-[13.5px] text-ink-soft leading-relaxed mt-1.5">{r.text}</p>
+        </div>
+      ))}
     </div>
   );
 }
