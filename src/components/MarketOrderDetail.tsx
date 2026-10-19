@@ -288,16 +288,14 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
       return;
     }
     setSubmittingReview(true);
-    /* Реальные участники: reviewer — текущий пользователь, reviewee — мастер из принятого отклика */
-    const acceptedResp = responses.find((r) => r.status === "accepted");
     try {
       const res = await fetch(`/api/market/orders/${order.id}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          reviewer_id: myUid || "dev-user-1",
-          reviewee_id: (acceptedResp && acceptedResp.master_id) || deal?.master_id || "dev-master-1",
+          /* ЭТАП 4: стороны сделки сервер определяет сам (сессия + принятый
+             отклик); клиентские reviewer_id/reviewee_id игнорируются. */
           rating: reviewRating,
           text: reviewText.trim()
         })
@@ -628,8 +626,10 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
           </div>
         </div>
 
-        {/* Секция отзыва (только для завершенных заказов) */}
-        {order.status === 'completed' && (
+        {/* ЭТАП 4 (клиент): форма отзыва — только владельцу завершённой сделки.
+            Идентификаторы сторон сервер вычисляет сам по сессии и принятому
+            отклику; передать чужой reviewer_id/reviewee_id невозможно. */}
+        {isOwner && order.status === 'completed' && (
           <div className="border-t border-line-soft p-6 bg-cream/30">
             <h3 className="font-bold text-[16px] text-ink mb-4 flex items-center gap-2">
               <Star size={18} className="text-accent-deep" /> 

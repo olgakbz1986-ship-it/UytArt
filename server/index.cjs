@@ -1301,43 +1301,73 @@ app.delete("/api/products/:id", guard, (req, r) => {
   } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/market/orders/:id/reviews", async (req, res) => {
+/* ============================================================
+   ЭТАП 4 (сервер): отзыв разрешён ТОЛЬКО по завершённой и
+   финансово подтверждённой сделке между конкретными участниками.
+   Антинакрутка:
+   - автор отзыва — всегда req.userId из сессии (клиентский
+     reviewer_id игнорируется полностью);
+   - оцениваемый — принятый мастер сделки (reviewee_id из тела
+     игнорируется); подставить в рейтинг чужого аккаунта нельзя;
+   - требуется финальный статус заказа (completed/delivered/
+     confirmed/reviewed) либо закрытая эскроу-сделка (settled);
+   - одна сделка — один отзыв от каждого участника.
+   ============================================================ */
+const FINAL_ORDER_STATUSES = ["completed", "delivered", "confirmed", "reviewed"];
+
+app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    const { reviewer_id, reviewee_id, rating, text } = req.body;
-    
-    if (!rating || rating < 1 || rating > 5) {
+    const { rating, text } = req.body;
+
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
       return res.status(400).json({ error: "Rating must be between 1 and 5" });
     }
+    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [], custom_orders: [], order_responses: [] };
+
+    const ord = (d.custom_orders || []).find(o => o.id === id);
+    if (!ord) return res.status(404).json({ error: "not_found" });
+    const accepted = (d.order_responses || []).find(r => r.order_id === id && r.status === "accepted");
+    if (!accepted) return res.status(409).json({ error: "no_completed_deal", message: "Отзыв возможен только по завершённой сделке с принятым исполнителем." });
+
+    /* Финансовое подтверждение: финальный статус сделки или закрытый эскроу. */
+    const financiallyClosed = FINAL_ORDER_STATUSES.includes(String(ord.status)) ||
+      (ord.deal && ["completed", "settled", "released"].includes(String(ord.deal.status)));
+    if (!financiallyClosed) return res.status(409).json({ error: "deal_not_completed", message: "Сделка не завершена финансово: оставьте отзыв после подтверждения выполнения." });
+
+    /* Только участники конкретной сделки могут её оценивать. */
+    const isBuyer = String(ord.user_id) === String(req.userId);
+    const isMaster = String(accepted.master_id) === String(req.userId);
+    if (!isBuyer && !isMaster) return res.status(403).json({ error: "not_participant" });
+
+    /* Одна сторона — один отзыв по сделке (защита от накрутки). */
+    const dup = (d.market_reviews || []).find(r => r.order_id === id && String(r.reviewer_id) === String(req.userId));
+    if (dup) return res.status(409).json({ error: "already_reviewed" });
 
     const newReview = {
       id: require("crypto").randomUUID(),
       order_id: id,
-      reviewer_id: reviewer_id || "dev-user-1",
-      reviewee_id: reviewee_id || "dev-master-1",
+      reviewer_id: req.userId,                                   /* из сессии, не из тела */
+      reviewee_id: isBuyer ? accepted.master_id : ord.user_id,  /* оппонент по сделке */
       rating: Number(rating),
       text: text || "",
       created_at: new Date().toISOString()
     };
 
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [], custom_orders: [] };
-      if (!d.market_reviews) d.market_reviews = [];
-      
-      d.market_reviews.push(newReview);
-      
-      // Помечаем заказ как reviewed
-      if (d.custom_orders) {
-        const order = d.custom_orders.find(o => o.id === id);
-        if (order) {
-          order.reviewed = true;
-          order.updated_at = new Date().toISOString();
-        }
-      }
-      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    }
+    if (!d.market_reviews) d.market_reviews = [];
+    d.market_reviews.push(newReview);
+    /* Помечаем заказ как reviewed (не понижаем финальный статус). */
+    ord.reviewed = true;
+    if (!FINAL_ORDER_STATUSES.includes(String(ord.status))) ord.status = "completed";
+    ord.updated_at = new Date().toISOString();
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+
+    createNotification(newReview.reviewee_id, "review", "Новый отзыв о сделке",
+      `Ваша оценка по заказу «${ord.title || ""}»: ${newReview.rating}/5.`, `/market?focus=${id}`);
 
     res.json({ ok: true, review: newReview });
   } catch (e) {
