@@ -43,10 +43,28 @@ import { usePrefsStore } from "../lib/prefs";
 /* ============================================================
    Биржа индивидуальных заказов (пункт меню «Заказы»)
    ============================================================ */
+/* ЭТАП 3 (п.1): единый жёсткий конвейер статусов заказа (синхронно с
+   серверным ORDER_PIPELINE в server/index.cjs) и его человекочитаемое представление. */
+export const ORDER_STATUS_RU: Record<string, { ru: string; tone: "success" | "honey" | "ai" | "premium" }> = {
+  draft: { ru: "Черновик", tone: "honey" },
+  moderation: { ru: "На модерации", tone: "honey" },
+  published: { ru: "Создан — собирает отклики", tone: "success" },
+  in_progress: { ru: "В работе", tone: "ai" },
+  shipped: { ru: "Отправлен", tone: "ai" },
+  delivered: { ru: "Доставлен", tone: "premium" },
+  confirmed: { ru: "Подтверждён покупателем", tone: "premium" },
+  completed: { ru: "Завершён", tone: "success" },
+  cancelled: { ru: "Отменён", tone: "honey" },
+};
+
 export interface MarketOrder {
   id: string; title: string; type: string; desc: string; material: string;
   budget: number; term: string; region: string; refName?: string; refType?: "image" | "video"; coverImage?: string; images?: string[]; moderationIssues?: string[]; moderationWarnings?: string[];
-  date: string; status: "draft" | "moderation" | "published" | "in_progress" | "completed" | "cancelled";
+  /* ЭТАП 3 (п.1): единый жёсткий конвейер статусов заказа, синхронизированный
+     с серверным ORDER_PIPELINE (server/index.cjs):
+     published → in_progress → shipped → delivered → confirmed → completed,
+     плюс отмена (cancelled) и служебные pre-publish состояния (draft/moderation). */
+  date: string; status: "draft" | "moderation" | "published" | "in_progress" | "shipped" | "delivered" | "confirmed" | "completed" | "cancelled";
   responses: number; myOwn?: boolean;
   /* Владелец заказа (userId автора). Правило владения: только владелец
      может редактировать/удалять заказ и видеть список откликов. */
@@ -475,7 +493,8 @@ export function MarketPage() {
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Материал</span><span className="font-semibold text-ink">{detailOrder.material || "Не указан"}</span></div>
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Регион</span><span className="font-semibold text-ink">{detailOrder.region}</span></div>
               <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Категория</span><span className="font-semibold text-ink">{detailOrder.type}</span></div>
-              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Статус</span><Badge tone={detailOrder.status === "published" ? "success" : "honey"}>{detailOrder.status === "published" ? "Опубликован" : "На модерации"}</Badge></div>
+              {/* ЭТАП 3 (п.1): единый человекочитаемый маппинг конвейера статусов */}
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Статус</span><Badge tone={ORDER_STATUS_RU[detailOrder.status]?.tone || "honey"}>{ORDER_STATUS_RU[detailOrder.status]?.ru || detailOrder.status}</Badge></div>
               {detailOrder.status === "moderation" && (detailOrder as any).moderationIssues?.length > 0 && (
                 <div className="col-span-full rounded-[10px] bg-accent-soft p-3">
                   <p className="text-[12px] font-bold text-ink mb-1">🤖 Агент модерации: исправьте замечания и отправьте заказ снова</p>
