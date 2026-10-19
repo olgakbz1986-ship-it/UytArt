@@ -1,0 +1,669 @@
+{
+  "custom_orders": [
+    {
+      "id": "o-escrow-test",
+      "user_id": "u-buyer",
+      "status": "delivered",
+      "deal": {
+        "status": "settled",
+        "escrow": "released",
+        "prepay_amount": 3000,
+        "deal_total": 10000,
+        "master_id": "m-kursk",
+        "expires_at": "2026-10-19T00:00:00.000Z",
+        "released_at": "2026-10-19T19:08:01.806Z",
+        "release_reason": "timeout_no_disputes"
+      }
+    },
+    {
+      "id": "t-order-1",
+      "title": "Тест заказ",
+      "user_id": "e2e-buyer",
+      "status": "in_progress",
+      "deal": {
+        "status": "settled",
+        "escrow": "released",
+        "prepay_amount": 5000,
+        "master_id": "e2e-master",
+        "initiated_at": "2026-10-18T19:30:56.910138",
+        "expires_at": "2026-10-19T20:38:35.146Z",
+        "released_at": "2026-10-19T20:48:09.432Z",
+        "release_reason": "timeout_no_disputes"
+      }
+    },
+    {
+      "id": "ae684959-65c2-4032-a587-fc826ca94d5b",
+      "user_id": "e2e-buyer",
+      "title": "E2E стол дубовый",
+      "description": "Тестовый заказ",
+      "desc": "Тестовый заказ",
+      "category": "Другое",
+      "type": "Другое",
+      "material": "",
+      "budget": 50000,
+      "budget_min": 50000,
+      "budget_max": 50000,
+      "budget_type": "fixed",
+      "deadline": "",
+      "term": "",
+      "region": "",
+      "invited_by": "e2e-buyer",
+      "status": "confirmed",
+      "responses": 0,
+      "images": [],
+      "attachments": [],
+      "agentDraft": false,
+      "agentPhoto": null,
+      "created_at": "2026-10-19T20:25:23.680Z",
+      "updated_at": "2026-10-19T20:25:23.776Z"
+    },
+    {
+      "id": "2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "user_id": "e2e-buyer",
+      "title": "E2E-2 шкаф",
+      "description": "тест",
+      "desc": "тест",
+      "category": "Другое",
+      "type": "Другое",
+      "material": "",
+      "budget": 60000,
+      "budget_min": 60000,
+      "budget_max": 60000,
+      "budget_type": "fixed",
+      "deadline": "",
+      "term": "",
+      "region": "",
+      "invited_by": "e2e-buyer",
+      "status": "confirmed",
+      "responses": 1,
+      "images": [],
+      "attachments": [],
+      "agentDraft": false,
+      "agentPhoto": null,
+      "created_at": "2026-10-19T20:25:46.867Z",
+      "updated_at": "2026-10-19T20:25:47.040Z",
+      "deal": {
+        "status": "settled",
+        "escrow": "released",
+        "prepay_amount": 55000,
+        "deal_total": 55000,
+        "master_id": "e2e-master",
+        "paid_at": "2026-10-19T20:25:46.948Z",
+        "expires_at": "2026-10-26T20:25:46.948Z",
+        "contacts_revealed": true,
+        "released_at": "2026-10-19T20:25:46.971Z"
+      },
+      "reviewed": true
+    },
+    {
+      "id": "84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "user_id": "e2e-buyer",
+      "title": "E2E-3 эскроу",
+      "description": "тест",
+      "desc": "тест",
+      "category": "Другое",
+      "type": "Другое",
+      "material": "",
+      "budget": 30000,
+      "budget_min": 30000,
+      "budget_max": 30000,
+      "budget_type": "fixed",
+      "deadline": "",
+      "term": "",
+      "region": "",
+      "invited_by": "e2e-buyer",
+      "status": "confirmed",
+      "responses": 1,
+      "images": [],
+      "attachments": [],
+      "agentDraft": false,
+      "agentPhoto": null,
+      "created_at": "2026-10-19T20:26:07.886Z",
+      "updated_at": "2026-10-19T20:26:07.956Z",
+      "deal": {
+        "status": "settled",
+        "escrow": "released",
+        "prepay_amount": 30000,
+        "deal_total": 30000,
+        "master_id": "e2e-master",
+        "paid_at": "2026-10-19T20:26:07.909Z",
+        "expires_at": "2026-10-19T20:27:57.859Z",
+        "contacts_revealed": true,
+        "released_at": "2026-10-19T20:32:55.977Z",
+        "release_reason": "timeout_no_disputes"
+      },
+      "reviewed": true
+    },
+    {
+      "id": "33cf07e4-f5dc-4c2b-bdcd-d97ce7c84fe4",
+      "user_id": "e2e-buyer",
+      "title": "E2E-SWEEP сделка",
+      "description": "т",
+      "desc": "т",
+      "category": "Другое",
+      "type": "Другое",
+      "material": "",
+      "budget": 10000,
+      "budget_min": 10000,
+      "budget_max": 10000,
+      "budget_type": "fixed",
+      "deadline": "",
+      "term": "",
+      "region": "",
+      "invited_by": "e2e-buyer",
+      "status": "published",
+      "responses": 0,
+      "images": [],
+      "attachments": [],
+      "agentDraft": false,
+      "agentPhoto": null,
+      "created_at": "2026-10-19T20:28:24.244Z",
+      "updated_at": "2026-10-19T20:28:24.244Z"
+    },
+    {
+      "id": "sweep-final-1",
+      "user_id": "e2e-buyer",
+      "title": "E2E финальный: тайм-аут эскроу",
+      "status": "in_progress",
+      "deal": {
+        "status": "settled",
+        "escrow": "released",
+        "prepay_amount": 5000,
+        "deal_total": 15000,
+        "master_id": "sweep-master",
+        "paid_at": "2026-10-19T19:18:35.558334+00:00",
+        "expires_at": "2026-10-19T19:18:35.558334+00:00",
+        "contacts_revealed": true,
+        "released_at": "2026-10-19T21:19:00.744Z",
+        "release_reason": "timeout_no_disputes"
+      },
+      "created_at": "2026-10-19T19:18:35.558334+00:00",
+      "updated_at": "2026-10-19T19:18:35.558334+00:00"
+    },
+    {
+      "id": "rev-final-1",
+      "user_id": "e2e-buyer",
+      "title": "E2E финальный: отзыв по сделке",
+      "status": "completed",
+      "product_id": "sp-p-kursk",
+      "seller_id": "sweep-master",
+      "deal": {
+        "status": "settled",
+        "escrow": "released",
+        "prepay_amount": 3000,
+        "deal_total": 9000,
+        "master_id": "sweep-master",
+        "paid_at": "2026-10-19T19:18:35.558334+00:00",
+        "expires_at": "2026-10-19T19:18:35.558334+00:00"
+      },
+      "created_at": "2026-10-19T19:18:35.558334+00:00",
+      "updated_at": "2026-10-19T21:19:00.716Z",
+      "reviewed": true
+    },
+    {
+      "id": "sweep-frozen-1",
+      "user_id": "e2e-buyer",
+      "title": "frozen",
+      "status": "in_progress",
+      "deal": {
+        "status": "prepaid",
+        "escrow": "held",
+        "prepay_amount": 7000,
+        "master_id": "sweep-master",
+        "paid_at": "2026-10-19T21:19:00.745Z",
+        "expires_at": "2026-10-19T20:19:00.745Z"
+      }
+    }
+  ],
+  "order_responses": [
+    {
+      "id": "t-resp-1",
+      "order_id": "t-order-1",
+      "master_id": "t-master",
+      "price": 9000,
+      "deadline_days": 7,
+      "delivery_method": "cdek",
+      "status": "accepted"
+    },
+    {
+      "id": "1e4756c5-00c7-417c-9c16-83b2aab052e0",
+      "order_id": "2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "master_id": "e2e-master",
+      "price": 55000,
+      "deadline_days": 14,
+      "delivery_method": "cdek",
+      "comment": "Массив из бука",
+      "status": "accepted",
+      "created_at": "2026-10-19T20:25:46.882Z"
+    },
+    {
+      "id": "4e3c3289-bd32-42b9-aba0-10869a0cc5e6",
+      "order_id": "84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "master_id": "e2e-master",
+      "price": 30000,
+      "deadline_days": 7,
+      "delivery_method": "cdek",
+      "comment": "ок",
+      "status": "accepted",
+      "created_at": "2026-10-19T20:26:07.900Z"
+    },
+    {
+      "id": "resp-final-1",
+      "order_id": "rev-final-1",
+      "master_id": "sweep-master",
+      "price": 9000,
+      "deadline_days": 7,
+      "delivery_method": "cdek",
+      "comment": "Финальный E2E",
+      "status": "accepted",
+      "created_at": "2026-10-19T19:18:35.558334+00:00"
+    }
+  ],
+  "complaints": [
+    {
+      "id": "cmp-frozen-1",
+      "order_id": "sweep-frozen-1",
+      "status": "open",
+      "created_at": "2026-10-19T21:19:00.745Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "p-kursk",
+      "title": "Кухня на заказ",
+      "ownerId": "u-seller1",
+      "sellerCity": "Курск",
+      "weight": 50,
+      "geography": {
+        "city": "Курск",
+        "delivery": {
+          "mode": "cities",
+          "cities": [
+            "Курск",
+            "Белгород"
+          ]
+        },
+        "install": [
+          "Курск"
+        ]
+      }
+    },
+    {
+      "id": "p-hab",
+      "title": "Табурет Хабаровск",
+      "ownerId": "u-seller2",
+      "sellerCity": "Хабаровск",
+      "weight": 5,
+      "geography": {
+        "city": "Хабаровск",
+        "delivery": {
+          "mode": "cities",
+          "cities": [
+            "Хабаровск"
+          ]
+        }
+      }
+    }
+  ],
+  "masters": [
+    {
+      "id": "m-kursk",
+      "name": "Мастер Курск",
+      "geography": {
+        "city": "Курск",
+        "delivery": {
+          "mode": "cities",
+          "cities": [
+            "Курск"
+          ]
+        },
+        "install": [
+          "Курск"
+        ]
+      }
+    },
+    {
+      "id": "m-all",
+      "name": "Мастер РФ",
+      "geography": {
+        "city": "Москва",
+        "delivery": {
+          "mode": "nationwide"
+        }
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": "t-buyer",
+      "email": "t.buyer@test.local",
+      "password": "x",
+      "role": "user"
+    },
+    {
+      "id": "t-master",
+      "email": "t.master@test.local",
+      "password": "x",
+      "role": "user"
+    },
+    {
+      "id": "t-stranger",
+      "email": "t.stranger@test.local",
+      "password": "x",
+      "role": "user"
+    },
+    {
+      "id": "e2e-buyer",
+      "email": "b@e2e.test",
+      "name": "e2e-buyer",
+      "password_hash": "x",
+      "role": "user",
+      "tier": "free",
+      "city": "Курск",
+      "created_at": "2026-10-19T20:25:23.658Z"
+    },
+    {
+      "id": "e2e-master",
+      "email": "m@e2e.test",
+      "name": "e2e-master",
+      "password_hash": "x",
+      "role": "user",
+      "tier": "free",
+      "city": "Воронеж",
+      "created_at": "2026-10-19T20:25:23.658Z"
+    }
+  ],
+  "digital": {
+    "products": [
+      {
+        "id": "demo-prompt-1",
+        "ownerId": "demo-seller-1",
+        "type": "prompt",
+        "title": "Набор промтов «Интерьер-стилист»",
+        "description": "25 протестированных системных промтов для генерации дизайн-концепций интерьеров. Работают с GPT-4 и YandexGPT.",
+        "price": 990,
+        "licenseType": "personal",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.8,
+          "salesCount": 12
+        },
+        "testDriveLimit": 2,
+        "status": "published",
+        "systemPrompt": "Ты — интерьерный стилист. Отвечай лаконично, предлагай палитру и материалы.",
+        "exampleInputs": [
+          "Гостиная 18 м², северная сторона"
+        ],
+        "exampleOutputs": [
+          "Тёплый минимализм: дуб, лён, латунь…"
+        ],
+        "targetAI": "gpt4",
+        "createdAt": "2026-10-19T19:30:57.165Z",
+        "updatedAt": "2026-10-19T19:30:57.165Z"
+      },
+      {
+        "id": "demo-agent-1",
+        "ownerId": "demo-seller-1",
+        "type": "agent",
+        "title": "ИИ-агент «Менеджер маркетплейса»",
+        "description": "Готовый агент для мониторинга цен и автоответов покупателям. Конфигурация + инструкция запуска.",
+        "price": 4900,
+        "licenseType": "commercial",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.6,
+          "salesCount": 5
+        },
+        "testDriveLimit": 2,
+        "status": "published",
+        "agentConfig": {
+          "tools": [
+            "price_monitor",
+            "reply_agent"
+          ],
+          "loop": "react"
+        },
+        "modelProvider": "local",
+        "requiresHosting": false,
+        "monthlyTokenLimit": 1000000,
+        "createdAt": "2026-10-19T19:30:57.165Z",
+        "updatedAt": "2026-10-19T19:30:57.165Z"
+      },
+      {
+        "id": "demo-site-1",
+        "ownerId": "demo-seller-1",
+        "type": "site",
+        "title": "Шаблон «Магазин мастера»",
+        "description": "Лендинг-шаблон портфолио мастера на React + Tailwind. Исходный код включён.",
+        "price": 3500,
+        "licenseType": "resell",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.9,
+          "salesCount": 30
+        },
+        "testDriveLimit": 0,
+        "status": "published",
+        "techStack": [
+          "React",
+          "Tailwind"
+        ],
+        "includesSourceCode": true,
+        "demoUrl": "https://example.com/demo",
+        "createdAt": "2026-10-19T19:30:57.165Z",
+        "updatedAt": "2026-10-19T19:30:57.165Z"
+      }
+    ],
+    "purchases": [],
+    "versions": [],
+    "subscriptions": [],
+    "testDrives": {},
+    "securityLogs": [],
+    "blockedIps": {}
+  },
+  "tariffs": {
+    "e2e-buyer": {
+      "user_id": "e2e-buyer",
+      "legal_type": "self_employed",
+      "seller_plan_id": "free",
+      "buyer_plan_id": "free",
+      "commission_rate": 10,
+      "updated_at": "2026-10-19T20:25:23.680Z"
+    }
+  },
+  "notifications": [
+    {
+      "id": "da2f7f92-a920-4ae2-b9f2-3d9ef13e4bee",
+      "user_id": "e2e-buyer",
+      "type": "response",
+      "title": "Новый отклик на заказ",
+      "text": "Мастер предложил цену 55000 ₽",
+      "link": "/market?focus=2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "read": false,
+      "created_at": "2026-10-19T20:25:46.883Z"
+    },
+    {
+      "id": "0fc9617b-db5e-4e93-94a3-6299a9c11122",
+      "user_id": "e2e-master",
+      "type": "accepted",
+      "title": "Ваш отклик принят!",
+      "text": "Заказчик выбрал вас исполнителем.",
+      "link": "/market?focus=2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "read": false,
+      "created_at": "2026-10-19T20:25:46.901Z"
+    },
+    {
+      "id": "6f3b0911-9d7f-491e-b214-d795883b52f4",
+      "user_id": "e2e-master",
+      "type": "prepay",
+      "title": "Предоплата внесена",
+      "text": "Заказчик внёс предоплату 55000 ₽. Контакты теперь доступны обеим сторонам.",
+      "link": "/market?focus=2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "read": false,
+      "created_at": "2026-10-19T20:25:46.948Z"
+    },
+    {
+      "id": "872b3bb3-6c2a-4bde-9712-fcfd10ee139f",
+      "user_id": "e2e-buyer",
+      "type": "prepay",
+      "title": "Сделка активна",
+      "text": "Предоплата 55000 ₽ внесена. Контакты мастера раскрыты.",
+      "link": "/market?focus=2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "read": false,
+      "created_at": "2026-10-19T20:25:46.949Z"
+    },
+    {
+      "id": "2b91cf7d-ced6-45b9-9b4a-096e38014b84",
+      "user_id": "e2e-master",
+      "type": "review",
+      "title": "Новый отзыв о сделке",
+      "text": "Ваша оценка по заказу «E2E-2 шкаф»: 5/5.",
+      "link": "/market?focus=2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "read": false,
+      "created_at": "2026-10-19T20:25:47.041Z"
+    },
+    {
+      "id": "b3e7ea75-22c9-45f5-ab5c-966c0233c1fc",
+      "user_id": "e2e-buyer",
+      "type": "response",
+      "title": "Новый отклик на заказ",
+      "text": "Мастер предложил цену 30000 ₽",
+      "link": "/market?focus=84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "read": false,
+      "created_at": "2026-10-19T20:26:07.901Z"
+    },
+    {
+      "id": "97fe963d-764d-4472-a9a4-3c5ea239f9d0",
+      "user_id": "e2e-master",
+      "type": "accepted",
+      "title": "Ваш отклик принят!",
+      "text": "Заказчик выбрал вас исполнителем.",
+      "link": "/market?focus=84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "read": false,
+      "created_at": "2026-10-19T20:26:07.905Z"
+    },
+    {
+      "id": "797b0a32-d56b-4282-b056-63e177093cb2",
+      "user_id": "e2e-master",
+      "type": "prepay",
+      "title": "Предоплата внесена",
+      "text": "Заказчик внёс предоплату 30000 ₽. Контакты теперь доступны обеим сторонам.",
+      "link": "/market?focus=84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "read": false,
+      "created_at": "2026-10-19T20:26:07.909Z"
+    },
+    {
+      "id": "6baf2b53-dd9b-4e14-86bb-fa0f8074018e",
+      "user_id": "e2e-buyer",
+      "type": "prepay",
+      "title": "Сделка активна",
+      "text": "Предоплата 30000 ₽ внесена. Контакты мастера раскрыты.",
+      "link": "/market?focus=84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "read": false,
+      "created_at": "2026-10-19T20:26:07.910Z"
+    },
+    {
+      "id": "d2fdae10-ac1b-433a-a6ef-f3646fdda509",
+      "user_id": "e2e-master",
+      "type": "review",
+      "title": "Новый отзыв о сделке",
+      "text": "Ваша оценка по заказу «E2E-3 эскроу»: 4/5.",
+      "link": "/market?focus=84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "read": false,
+      "created_at": "2026-10-19T20:26:07.957Z"
+    },
+    {
+      "id": "0f0287da-1999-43eb-a987-973405180882",
+      "user_id": "u-seller1",
+      "type": "review",
+      "title": "Новый отзыв о товаре",
+      "text": "Оценка 5/5 по покупке «p-kursk».",
+      "link": "/shop/u-seller1",
+      "read": false,
+      "created_at": "2026-10-19T20:43:12.279Z"
+    },
+    {
+      "id": "be26fd71-7a82-4acb-a7f3-f18efe1d40fb",
+      "user_id": "sweep-master",
+      "type": "review",
+      "title": "Новый отзыв о сделке",
+      "text": "Ваша оценка по заказу «E2E финальный: отзыв по сделке»: 5/5.",
+      "link": "/market?focus=rev-final-1",
+      "read": false,
+      "created_at": "2026-10-19T21:19:00.716Z"
+    },
+    {
+      "id": "958744cf-4aec-4962-b8e2-34cc8394f1a3",
+      "user_id": "sweep-master",
+      "type": "escrow_released",
+      "title": "Автоматический расчёт по тайм-ауту",
+      "text": "Покупатель не подтвердил получение и не открыл спор в установленный срок. Средства переведены вам.",
+      "link": "/market?focus=sweep-final-1",
+      "read": false,
+      "created_at": "2026-10-19T21:19:00.744Z"
+    },
+    {
+      "id": "54f16074-54ab-4c0d-acf4-0259b60f9b9f",
+      "user_id": "e2e-buyer",
+      "type": "escrow_released",
+      "title": "Сделка закрыта по тайм-ауту",
+      "text": "Тайм-аут подтверждения получения истёк, споров нет. Окончательный расчёт произведён.",
+      "link": "/market?focus=sweep-final-1",
+      "read": false,
+      "created_at": "2026-10-19T21:19:00.744Z"
+    }
+  ],
+  "market_reviews": [
+    {
+      "id": "fd9262ca-b17c-463f-af05-78591515ea71",
+      "order_id": "2114d87c-d93e-42ec-a2ad-4c15791aea09",
+      "reviewer_id": "e2e-buyer",
+      "reviewee_id": "e2e-master",
+      "rating": 5,
+      "text": "Мастер сдержал сроки",
+      "created_at": "2026-10-19T20:25:47.040Z"
+    },
+    {
+      "id": "cc54a266-742e-4f4f-9ea7-03977e339b9d",
+      "order_id": "84841f99-add8-4104-8c4e-e59ef9e6b70e",
+      "reviewer_id": "e2e-buyer",
+      "reviewee_id": "e2e-master",
+      "rating": 4,
+      "text": "Хорошо, но дольше обещанного",
+      "created_at": "2026-10-19T20:26:07.956Z"
+    },
+    {
+      "id": "90ea04a0-e8c3-466e-b4f1-3067679e530b",
+      "order_id": "ORD-E2E-1",
+      "reviewer_id": "e2e-buyer",
+      "reviewee_id": "u-seller1",
+      "product_id": "sp-p-kursk",
+      "rating": 5,
+      "text": "Отличный станок, доставка в Курск за 2 дня",
+      "created_at": "2026-10-19T20:43:12.278Z"
+    },
+    {
+      "id": "aff6400b-8350-400f-a6d0-e022971bf91a",
+      "order_id": "rev-final-1",
+      "reviewer_id": "e2e-buyer",
+      "reviewee_id": "sweep-master",
+      "product_id": "sp-p-kursk",
+      "rating": 5,
+      "text": "Отличная работа, всё по срокам!",
+      "created_at": "2026-10-19T21:19:00.716Z"
+    }
+  ],
+  "purchases": []
+}

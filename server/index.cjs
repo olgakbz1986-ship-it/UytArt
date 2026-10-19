@@ -68,6 +68,12 @@ if (process.env.DATABASE_URL) {
   };
 }
 
+/* Двухрежимный слой хранения биржи (ЭТАП 5: паритет PG для masters/products/
+   purchases/market_reviews/deal-эскроу/sweep). В json-dev — тот же dev-db.json,
+   в postgres — таблица market_documents (JSONB-документы по коллекциям). */
+const { createMarketDb } = require("./market-db.cjs");
+const marketDb = createMarketDb({ dbMode: db.mode, databaseUrl: process.env.DATABASE_URL, devFile: path.resolve(__dirname, "dev-db.json") });
+
 const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 465), secure: +(process.env.SMTP_PORT || 465) === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }) : null;
 
 /* ---------- Пункт 1.3: двухтокенная схема (JWT 15 мин + refresh 7 дней) ---------- */
@@ -246,58 +252,51 @@ setInterval(() => {
    Скан каждые 5 минут; идемпотентен (повтор не создаёт дублей операций).
    ============================================================ */
 const ESCROW_SCAN_MS = 5 * 60 * 1000;
+/* FIX ЭТАП 3 (п.3): контролёр переведён на двухрежимный слой marketDb —
+   раньше существовал только в json-dev (в PG сделки висели бы в held вечно).
+   Атомарность mutate() гарантирует: релиз и уведомления пишутся сериализованно,
+   гонка двух writers исключена в обоих режимах. */
 async function escrowTimeoutSweep() {
   try {
-    if (db.mode !== "json-dev (бесплатно)") return; /* только dev-хранилище: режим сравнивается со значением из createNotification/инициализации db */
-    const path = require("path"), fsx = require("fs");
-    const FILE = path.resolve(__dirname, "dev-db.json");
-    if (!fsx.existsSync(FILE)) return;
-    const d = JSON.parse(fsx.readFileSync(FILE, "utf8"));
     const now = Date.now();
-    let changed = false;
-    const releasedOrders = []; /* заказы, выпущенные ИМЕННО в этом тике — для уведомлений ровно один раз */
-    for (const ord of d.custom_orders || []) {
-      const deal = ord.deal;
-      if (!deal || deal.escrow !== "held") continue;
-      /* Открытый спор замораживает эскроу — средства НЕ выпускаются.
-         Учитываются и серверные жалобы (d.complaints, статус new/in_review/open),
-         привязанные к заказу. */
-      const disputes = (d.complaints || []).filter((c) => String(c.order_id || c.orderId || "") === String(ord.id) && ["open", "new", "in_review"].includes(String(c.status || "open")));
-      if (disputes.length > 0) continue;
-      const exp = Date.parse(deal.expires_at || "");
-      if (!Number.isFinite(exp) || now < exp) continue;
-      deal.escrow = "released";
-      deal.released_at = new Date().toISOString();
-      deal.status = "settled";
-      deal.release_reason = "timeout_no_disputes";
-      changed = true;
-      releasedOrders.push(ord);
-      console.log("[ESCROW TIMEOUT] сделка " + ord.id + ": тайм-аут истёк, открытых споров нет → средства разблокированы и переведены мастеру " + deal.master_id + " (" + (deal.prepay_amount || 0) + " ₽)");
-    }
-    if (changed) {
-      fsx.writeFileSync(FILE, JSON.stringify(d, null, 2));
-      /* Уведомления пишем ПОСЛЕ записи release: createNotification сам перечитывает
-         dev-db.json и делает свою запись — иначе вторая запись перезаписала бы файл
-         состоянием «до выпуска» и потеряла escrow: released (гонка двух writers).
-         Список releasedOrders гарантирует ровно одно уведомление на сделку. */
-      for (const ord of releasedOrders) {
+    const releasedOrders = []; /* заказы, выпущенные ИМЕННО в этом тике */
+    await marketDb.mutate((d) => {
+      let changed = false;
+      for (const ord of d.custom_orders || []) {
         const deal = ord.deal;
-        if (typeof createNotification === "function") {
-          createNotification(deal.master_id, "escrow_released", "Автоматический расчёт по тайм-ауту",
-            "Покупатель не подтвердил получение и не открыл спор в установленный срок. Средства переведены вам.", "/market?focus=" + ord.id);
-          createNotification(ord.user_id, "escrow_released", "Сделка закрыта по тайм-ауту",
-            "Тайм-аут подтверждения получения истёк, споров нет. Окончательный расчёт произведён.", "/market?focus=" + ord.id);
+        if (!deal || deal.escrow !== "held") continue;
+        /* Открытый спор замораживает эскроу — средства НЕ выпускаются.
+           Учитываются и серверные жалобы (d.complaints, статус new/in_review/open),
+           привязанные к заказу. */
+        const disputes = (d.complaints || []).filter((c) => String(c.order_id || c.orderId || "") === String(ord.id) && ["open", "new", "in_review"].includes(String(c.status || "open")));
+        if (disputes.length > 0) continue;
+        const exp = Date.parse(deal.expires_at || "");
+        if (!Number.isFinite(exp) || now < exp) continue;
+        deal.escrow = "released";
+        deal.released_at = new Date().toISOString();
+        deal.status = "settled";
+        deal.release_reason = "timeout_no_disputes";
+        changed = true;
+        releasedOrders.push(ord);
+        console.log("[ESCROW TIMEOUT] сделка " + ord.id + ": тайм-аут истёк, открытых споров нет → средства разблокированы и переведены мастеру " + deal.master_id + " (" + (deal.prepay_amount || 0) + " ₽)");
+      }
+      if (changed) {
+        if (!Array.isArray(d.notifications)) d.notifications = [];
+        for (const ord of releasedOrders) {
+          const deal = ord.deal;
+          const mk = (user_id, title, text) => ({ id: crypto.randomUUID(), user_id: user_id || "dev-user-1", type: "escrow_released", title, text, link: "/market?focus=" + ord.id, read: false, created_at: new Date().toISOString() });
+          d.notifications.push(mk(deal.master_id, "Автоматический расчёт по тайм-ауту", "Покупатель не подтвердил получение и не открыл спор в установленный срок. Средства переведены вам."));
+          d.notifications.push(mk(ord.user_id, "Сделка закрыта по тайм-ауту", "Тайм-аут подтверждения получения истёк, споров нет. Окончательный расчёт произведён."));
         }
       }
-    }
+    });
   } catch (e) { console.error("[ESCROW SWEEP ERROR]", e); }
 }
-/* Диагностический запуск sweep при старте сервера (для E2E-проверок и отладки):
-   QF_SWEEP_ON_START=1 node server/index.cjs — обработает просроченные сделки сразу,
-   не дожидаясь первого тика интервала. В обычной эксплуатации флаг не используется;
-   штатный цикл ниже остаётся единственным планировщиком. */
-if (process.env.QF_SWEEP_ON_START === "1") escrowTimeoutSweep().catch(() => {});
+/* Штатный планировщик один — setInterval каждые 5 минут.
+   Для E2E-проверок и отладки экспортируем саму функцию (module.exports),
+   чтобы тест мог вызвать её напрямую без диагностических флагов окружения. */
 setInterval(escrowTimeoutSweep, ESCROW_SCAN_MS).unref?.();
+module.exports = { ...(module.exports || {}), escrowTimeoutSweep };
 
 /* ---------- §5.1 Глобальный error-handler: необработанные ошибки — в JSON-лог ---------- */
 app.use((err, req, res, _next) => {
@@ -658,36 +657,35 @@ app.post("/api/orders", guard, async (req, res) => {
        источником товарной привязки отзыва (ЭТАП 4 §4.3) и истории сделок. */
     if (isCatalogPurchase) {
       try {
-        const FILE = require("path").resolve(__dirname, "dev-db.json");
-        const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
-        if (!d.purchases) d.purchases = [];
-        for (const it of b.items) {
-          const pid = String(it.productId || "").startsWith("sp-") ? String(it.productId).slice(3) : String(it.productId || "");
-          const prod = (d.products || []).find((x) => String(x.id) === pid || String(x.id) === String(it.productId));
-          d.purchases.push({
-            id: crypto.randomUUID(),
-            order_number: b.number || newOrder.id,
-            userId: req.userId,
-            productId: pid,
-            qty: Number(it.qty || 1),
-            price: Number(it.price || 0),
-            seller_id: prod ? String(prod.ownerId || prod.seller_id || "") : "",
-            status: "paid",
-            date: now,
-          });
-        }
-        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+        /* FIX ЭТАП 5: запись через атомарный marketDb.mutate — раньше этот блок
+           перечитывал dev-db.json и писал его ПОСЛЕДНИМ, перезаписывая состояние
+           «до добавления заказа» и теряя newOrder в custom_orders (гонка writers). */
+        await marketDb.mutate((d) => {
+          if (!d.purchases) d.purchases = [];
+          for (const it of b.items) {
+            const pid = String(it.productId || "").startsWith("sp-") ? String(it.productId).slice(3) : String(it.productId || "");
+            const prod = (d.products || []).find((x) => String(x.id) === pid || String(x.id) === String(it.productId));
+            d.purchases.push({
+              id: crypto.randomUUID(),
+              order_number: b.number || newOrder.id,
+              userId: req.userId,
+              productId: pid,
+              qty: Number(it.qty || 1),
+              price: Number(it.price || 0),
+              seller_id: prod ? String(prod.ownerId || prod.seller_id || "") : "",
+              status: "paid",
+              date: now,
+            });
+          }
+        });
       } catch (_) { /* не блокируем создание заказа из-за журнала покупок */ }
     }
 
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [] };
+    /* FIX ЭТАП 5: добавление заказа — через атомарный marketDb (оба режима). */
+    await marketDb.mutate((d) => {
       if (!d.custom_orders) d.custom_orders = [];
       d.custom_orders.push(newOrder);
-      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    }
+    });
 
     res.json({ ok: true, order: newOrder });
   } catch (e) {
@@ -1745,73 +1743,73 @@ app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
     if (!rating || Number(rating) < 1 || Number(rating) > 5) {
       return res.status(400).json({ error: "Rating must be between 1 and 5" });
     }
-    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
 
-    const FILE = require("path").resolve(__dirname, "dev-db.json");
-    const fs = require("fs");
-    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [], custom_orders: [], order_responses: [] };
+    /* FIX ЭТАП 5: эндпоинт работает в обоих режимах через атомарный marketDb.
+       Вся проверка + запись — внутри одного mutate(), поэтому «одна сторона —
+       один отзыв» сериализованно гарантируется и в PG тоже. */
+    const outcome = await marketDb.mutate((d) => {
+      const ord = (d.custom_orders || []).find((o) => o.id === id);
+      if (!ord) return { status: 404, body: { error: "not_found" } };
+      const accepted = (d.order_responses || []).find((r) => r.order_id === id && r.status === "accepted");
+      if (!accepted) return { status: 409, body: { error: "no_completed_deal", message: "Отзыв возможен только по завершённой сделке с принятым исполнителем." } };
 
-    const ord = (d.custom_orders || []).find(o => o.id === id);
-    if (!ord) return res.status(404).json({ error: "not_found" });
-    const accepted = (d.order_responses || []).find(r => r.order_id === id && r.status === "accepted");
-    if (!accepted) return res.status(409).json({ error: "no_completed_deal", message: "Отзыв возможен только по завершённой сделке с принятым исполнителем." });
+      /* Финансовое подтверждение: финальный статус сделки или закрытый эскроу. */
+      const financiallyClosed = FINAL_ORDER_STATUSES.includes(String(ord.status)) ||
+        (ord.deal && ["completed", "settled", "released"].includes(String(ord.deal.status)));
+      if (!financiallyClosed) return { status: 409, body: { error: "deal_not_completed", message: "Сделка не завершена финансово: оставьте отзыв после подтверждения выполнения." } };
 
-    /* Финансовое подтверждение: финальный статус сделки или закрытый эскроу. */
-    const financiallyClosed = FINAL_ORDER_STATUSES.includes(String(ord.status)) ||
-      (ord.deal && ["completed", "settled", "released"].includes(String(ord.deal.status)));
-    if (!financiallyClosed) return res.status(409).json({ error: "deal_not_completed", message: "Сделка не завершена финансово: оставьте отзыв после подтверждения выполнения." });
+      /* Только участники конкретной сделки могут её оценивать. */
+      const isBuyer = String(ord.user_id) === String(req.userId);
+      const isMaster = String(accepted.master_id) === String(req.userId);
+      if (!isBuyer && !isMaster) return { status: 403, body: { error: "not_participant" } };
 
-    /* Только участники конкретной сделки могут её оценивать. */
-    const isBuyer = String(ord.user_id) === String(req.userId);
-    const isMaster = String(accepted.master_id) === String(req.userId);
-    if (!isBuyer && !isMaster) return res.status(403).json({ error: "not_participant" });
+      /* Одна сторона — один отзыв по сделке (защита от накрутки). */
+      const dup = (d.market_reviews || []).find((r) => r.order_id === id && String(r.reviewer_id) === String(req.userId));
+      if (dup) return { status: 409, body: { error: "already_reviewed" } };
 
-    /* Одна сторона — один отзыв по сделке (защита от накрутки). */
-    const dup = (d.market_reviews || []).find(r => r.order_id === id && String(r.reviewer_id) === String(req.userId));
-    if (dup) return res.status(409).json({ error: "already_reviewed" });
-
-    const newReview = {
-      id: require("crypto").randomUUID(),
-      order_id: id,
-      reviewer_id: req.userId,                                   /* из сессии, не из тела */
-      reviewee_id: isBuyer ? accepted.master_id : ord.user_id,  /* оппонент по сделке */
-      /* ЭТАП 4 (§4.3): привязка отзыва к товару. Приоритет: явный product_id
-         сделки → seller_id + id последней купленной карточки покупателя
-         (покупка фиксируется в d.purchases при оформлении заказа из карточки).
-         Структура БД не меняется — только проекция существующих полей. */
-      product_id: (() => {
-        if (ord.product_id) return String(ord.product_id);
-        if (ord.refType === "product" && ord.refName) return String(ord.refName);
-        try {
-          const buys = (d.purchases || []).filter((x) => String(x.userId) === String(ord.user_id) && x.status !== "cancelled");
-          if (buys.length > 0) {
-            const last = buys.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0))[0];
-            const pid = String(last.productId || last.id || "");
-            /* совпадение продавца — обязательное условие привязки */
-            if (pid && String(ord.seller_id || accepted.master_id || "") && (!ord.seller_id || String(ord.seller_id) === String(accepted.master_id))) {
-              return pid.startsWith("sp-") ? pid : "sp-" + pid;
+      const newReview = {
+        id: require("crypto").randomUUID(),
+        order_id: id,
+        reviewer_id: req.userId,                                   /* из сессии, не из тела */
+        reviewee_id: isBuyer ? accepted.master_id : ord.user_id,  /* оппонент по сделке */
+        /* ЭТАП 4 (§4.3): привязка отзыва к товару. Приоритет: явный product_id
+           сделки → seller_id + id последней купленной карточки покупателя
+           (покупка фиксируется в d.purchases при оформлении заказа из карточки).
+           Структура БД не меняется — только проекция существующих полей. */
+        product_id: (() => {
+          if (ord.product_id) return String(ord.product_id);
+          if (ord.refType === "product" && ord.refName) return String(ord.refName);
+          try {
+            const buys = (d.purchases || []).filter((x) => String(x.userId) === String(ord.user_id) && x.status !== "cancelled");
+            if (buys.length > 0) {
+              const last = buys.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0))[0];
+              const pid = String(last.productId || last.id || "");
+              /* совпадение продавца — обязательное условие привязки */
+              if (pid && String(ord.seller_id || accepted.master_id || "") && (!ord.seller_id || String(ord.seller_id) === String(accepted.master_id))) {
+                return pid.startsWith("sp-") ? pid : "sp-" + pid;
+              }
             }
-          }
-        } catch (_) { /* мягкая деградация: отзыв остаётся без товарной привязки */ }
-        return undefined;
-      })(),
-      rating: Number(rating),
-      text: text || "",
-      created_at: new Date().toISOString()
-    };
+          } catch (_) { /* мягкая деградация: отзыв остаётся без товарной привязки */ }
+          return undefined;
+        })(),
+        rating: Number(rating),
+        text: text || "",
+        created_at: new Date().toISOString(),
+      };
 
-    if (!d.market_reviews) d.market_reviews = [];
-    d.market_reviews.push(newReview);
-    /* Помечаем заказ как reviewed (не понижаем финальный статус). */
-    ord.reviewed = true;
-    if (!FINAL_ORDER_STATUSES.includes(String(ord.status))) ord.status = "completed";
-    ord.updated_at = new Date().toISOString();
-    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      if (!d.market_reviews) d.market_reviews = [];
+      d.market_reviews.push(newReview);
+      /* Помечаем заказ как reviewed (не понижаем финальный статус). */
+      ord.reviewed = true;
+      if (!FINAL_ORDER_STATUSES.includes(String(ord.status))) ord.status = "completed";
+      ord.updated_at = new Date().toISOString();
+      return { status: 200, body: { ok: true, review: newReview }, notifyTo: newReview.reviewee_id, ordTitle: ord.title || "" };
+    });
 
-    createNotification(newReview.reviewee_id, "review", "Новый отзыв о сделке",
-      `Ваша оценка по заказу «${ord.title || ""}»: ${newReview.rating}/5.`, `/market?focus=${id}`);
-
-    res.json({ ok: true, review: newReview });
+    if (outcome.status !== 200) return res.status(outcome.status).json(outcome.body);
+    createNotification(outcome.notifyTo, "review", "Новый отзыв о сделке",
+      `Ваша оценка по заказу «${outcome.ordTitle}»: ${outcome.body.review.rating}/5.`, `/market?focus=${id}`);
+    res.json(outcome.body);
   } catch (e) {
     console.error("[MARKET REVIEW API ERROR]", e);
     res.status(500).json({ error: "server" });
@@ -1821,23 +1819,11 @@ app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
 app.get("/api/market/users/:id/reviews", async (req, res) => {
   try {
     const { id } = req.params;
-    let reviews = [];
-    let avgRating = 0;
-
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [] };
-      
-      reviews = (d.market_reviews || []).filter(r => r.reviewee_id === id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      
-      if (reviews.length > 0) {
-        const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
-        avgRating = (sum / reviews.length).toFixed(1);
-      }
-    }
-
-    res.json({ ok: true, reviews, avgRating: Number(avgRating), count: reviews.length });
+    /* FIX ЭТАП 5: двухрежимная выдача через marketDb (раньше в PG возвращался пустой список). */
+    const d = await marketDb.read();
+    const reviews = (d.market_reviews || []).filter((r) => r.reviewee_id === id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const avgRating = reviews.length > 0 ? Number((reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)) : 0;
+    res.json({ ok: true, reviews, avgRating, count: reviews.length });
   } catch (e) {
     console.error("[MARKET USER REVIEWS API ERROR]", e);
     res.status(500).json({ error: "server" });
@@ -1853,9 +1839,8 @@ app.get("/api/products/:id/reviews", async (req, res) => {
   try {
     const rawId = String(req.params.id || "");
     const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
-    const FILE = require("path").resolve(__dirname, "dev-db.json");
-    const fs = require("fs");
-    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [] };
+    /* FIX ЭТАП 5: двухрежимная выдача через marketDb. */
+    const d = await marketDb.read();
     const reviews = (d.market_reviews || [])
       .filter((r) => { const s = String(r.product_id || ""); return s === rawId || s === bareId || s === "sp-" + bareId; })
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
