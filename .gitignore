@@ -25,3 +25,5 @@ server/dev-admin.json
 # OS
 .DS_Store
 Thumbs.db
+build/
+vite/
