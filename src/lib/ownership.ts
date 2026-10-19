@@ -64,6 +64,23 @@ export function isOwnerOf(ownerId: string | null | undefined, userId: string): b
 }
 
 /**
+ * Единый признак владельца заказа на бирже: ownerId (новый формат)
+ * или user_id (серверный формат). Используется изоморфно с серверной
+ * проверкой владения (server/index.cjs), чтобы клиент и сервер считали
+ * владельца по одному правилу.
+ */
+export function orderOwnerIdLike(o: { ownerId?: string; user_id?: string }): string | undefined {
+  return o.ownerId || o.user_id || undefined;
+}
+
+/** Реактивное «это мой заказ» для компонентов ленты/деталей. */
+export function useIsMyOrder(o: { ownerId?: string; user_id?: string }): boolean {
+  const uid = useCurrentUserId();
+  const owner = orderOwnerIdLike(o);
+  return !!uid && !!owner && owner === uid;
+}
+
+/**
  * Защита мутаций стора: вернуть true, если операция запрещена.
  * Используется внутри методов seller-стора как единый guard.
  */

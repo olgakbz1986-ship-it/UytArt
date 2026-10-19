@@ -87,10 +87,12 @@ interface MarketState {
   addOrder: (o: Omit<MarketOrder, "id" | "date" | "status" | "responses" | "myOwn" | "ownerId"> & { master_requested?: string }) => void;
   respond: (id: string) => void;
 }
-/* Единый признак владельца заказа: ownerId (новый формат) или user_id (серверный формат). */
-export function orderOwnerId(o: MarketOrder): string | undefined {
-  return o.ownerId || o.user_id || undefined;
-}
+/* Единый признак владельца заказа: ownerId (новый формат) или user_id (серверный формат).
+   Реализация делегируется в src/lib/ownership.ts — единый модуль владения,
+   изоморфный серверной проверке (ЭТАП 1): клиент и сервер считают владельца по одному правилу. */
+export { orderOwnerIdLike as orderOwnerId } from "../lib/ownership";
+import { orderOwnerIdLike } from "../lib/ownership";
+
 export const useMarketStore = create<MarketState>()(
   persist(
     (set) => ({
@@ -242,7 +244,7 @@ export function MarketPage() {
      без кнопок редактирования/удаления и без чужих откликов. */
   const uid = user?.userId || "";
   const isMine = (o: MarketOrder) => {
-    const owner = orderOwnerId(o);
+    const owner = orderOwnerIdLike(o);
     return !!uid && !!owner && owner === uid;
   };
 

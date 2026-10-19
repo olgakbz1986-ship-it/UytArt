@@ -1499,9 +1499,12 @@ app.get("/api/masters", softGuard, async (_q, r) => {
     const city = await buyerCityFromQueryOrSession(_q);
     /* мастер доступен покупателю, если geography.delivery покрывает город
        (nationwide / список городов / базовый город) */
-    const enriched = (d.masters || []).map(normalizeGeo).map((m) => Object.assign(m, {
-      deliveryZone: m.deliveryZone || { mode: "nationwide" },
-    }));
+    /* FIX E2E-аудита: ранее отсутствующая география трактовалась как nationwide
+       по умолчанию — жёсткий фильтр был непроходим для записей без geography.
+       Теперь запись без явной географии остаётся без зоны и geoAllowed
+       трактует её как «гео не задан» (не исключаем), но НЕ как «везде»;
+       явно заданная география фильтруется строго. */
+    const enriched = (d.masters || []).map(normalizeGeo);
     r.json({ ok: true, masters: geo.geoFilter(enriched, city), filteredByCity: city || null });
   }
   catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
@@ -1643,6 +1646,29 @@ const FINAL_ORDER_STATUSES = ["completed", "delivered", "confirmed", "reviewed"]
 
 /* Покупка из каталога — тоже завершённая финансово подтверждённая сделка:
    покупатель может оставить отзыв на товар конкретного продавца. */
+/* Клиенту нужен честный признак «есть ли у меня оплаченная покупка», чтобы
+   не рендерить форму отзыва в DOM для чужих/гостей (ЭТАП 1 п.2).
+   Ответ совпадает с проверкой допуска POST /api/purchases/:productId/reviews. */
+app.get("/api/purchases/status", guard, async (req, res) => {
+  try {
+    const rawId = String(req.query.productId || "");
+    if (!rawId) return res.status(400).json({ error: "no_product_id" });
+    const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
+    const purchase = (d.purchases || []).find((x) => {
+      if (String(x.userId) !== String(req.userId) || x.status === "cancelled") return false;
+      const pid = String(x.productId || "");
+      return pid === rawId || pid === bareId || ("sp-" + pid) === rawId;
+    });
+    const already = !!(purchase && (d.market_reviews || []).some((r) => r.product_id && String(r.product_id).replace(/^sp-/, "") === bareId && String(r.reviewer_id) === String(req.userId)));
+    res.json({ ok: true, canReview: !!purchase && !already, purchased: !!purchase, alreadyReviewed: already });
+  } catch (e) {
+    console.error("[PURCHASE STATUS ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.post("/api/purchases/:productId/reviews", guard, async (req, res) => {
   try {
     const { rating, text } = req.body || {};
@@ -1651,7 +1677,9 @@ app.post("/api/purchases/:productId/reviews", guard, async (req, res) => {
     }
     const FILE = require("path").resolve(__dirname, "dev-db.json");
     const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
-    const rawId = String(req.params.id || "");
+    /* FIX аудита: маршрут объявлен как /:productId — обращение к req.params.id
+       давало бы пустую строку и 409 no_completed_deal для любой покупки. */
+    const rawId = String(req.params.productId || "");
     const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
     /* История транзакций покупателя: только реальная оплаченная покупка
        этого товара этим пользователем открывает доступ к форме отзыва. */

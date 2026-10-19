@@ -1204,9 +1204,12 @@ export function ProductEditorPage() {
               sellerName={(sellerReg as any)?.fullName || (sellerReg as any)?.name || (sellerReg as any)?.city || "Продавец"}
               processingDays={draft.processingDays}
               /* ЭТАП 2 (п.3): серверный калькулятор логистики в карточке —
-                 персональное предложение для города покупателя. */
-              productId={id}
-              buyerCity={useAppStore.getState().viewerCity || undefined}
+                 персональное предложение для города покупателя.
+                 FIX аудита: id может приходить с префиксом витрины "sp-" —
+                 серверный эндпоинт /api/products/:id/logistics ожидает чистый id,
+                 иначе калькулятор молчал на редактировании опубликованных товаров. */
+              productId={id ? (id.startsWith("sp-") ? id.slice(3) : id) : undefined}
+              buyerCity={useAppStore.getState().viewerCity || sellerReg.city || undefined}
               hasInstall={!!(draft as any).serviceMode && (draft as any).serviceMode !== "delivery"}
             />
           )}

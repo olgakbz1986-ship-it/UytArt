@@ -214,25 +214,89 @@ export function ProductViewCore(p: ProductViewCoreProps) {
 }
 
 /* ЭТАП 4 (§4.3): серверные отзывы по проданному товару — агрегация
-   финансово подтверждённых сделок (GET /api/products/:id/reviews). */
+   финансово подтверждённых сделок (GET /api/products/:id/reviews).
+   Форма отзыва доступна ТОЛЬКО покупателям с оплаченной покупкой этого
+   товара (ЭТАП 1 п.2: чужие управляющие элементы отсутствуют в DOM;
+   сервер дублирует проверку историей транзакций — POST вернёт 409 без неё). */
 interface ServerReview { id: string; reviewer_name: string; rating: number; text: string; created_at: string }
-function ProductServerReviews({ productId }: { productId?: string }) {
-  const [server, setServer] = useState<ServerReview[] | null>(null);
+function useMyPurchaseStatus(productId?: string): { canReview: boolean; loading: boolean } {
+  const [canReview, setCanReview] = useState(false);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    if (!productId) { setServer(null); return; }
+    if (!productId) { setCanReview(false); setLoading(false); return; }
     let alive = true;
-    fetch(`/api/products/${encodeURIComponent(productId)}/reviews`, { credentials: "include" })
+    fetch(`/api/purchases/status?productId=${encodeURIComponent(productId)}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (alive && j && j.ok) setServer(j.reviews || []); })
-      .catch(() => { /* деградация: показываем статичную заглушку */ });
+      .then((j) => { if (alive) setCanReview(!!(j && j.ok && j.canReview)); })
+      .catch(() => { /* гость/ошибка → формы отзыва нет в DOM */ })
+      .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [productId]);
+  return { canReview, loading };
+}
+function ProductServerReviews({ productId }: { productId?: string }) {
+  const [server, setServer] = useState<ServerReview[] | null>(null);
+  const { canReview } = useMyPurchaseStatus(productId);
+  const [rating, setRating] = useState(5);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const reload = () => {
+    if (!productId) { setServer(null); return; }
+    fetch(`/api/products/${encodeURIComponent(productId)}/reviews`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j && j.ok) setServer(j.reviews || []); })
+      .catch(() => { /* деградация: показываем статичную заглушку */ });
+  };
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [productId]);
+
+  const submit = async () => {
+    if (!productId || sending) return;
+    setSending(true); setErr(null);
+    try {
+      const r = await fetch(`/api/purchases/${encodeURIComponent(productId)}/reviews`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, text }),
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok && j && j.ok) { setSent(true); setText(""); reload(); }
+      else setErr((j && (j.message || j.error)) || "Не удалось отправить отзыв");
+    } finally { setSending(false); }
+  };
+
+  const reviewForm = canReview && !sent ? (
+    <div className="bg-surface rounded-[14px] shadow-card p-5 border border-line">
+      <p className="text-[13px] font-bold text-ink mb-2">Ваш отзыв о покупке <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-soft text-[#4d7327] text-[10.5px] font-bold align-middle"><ShieldCheck size={11} /> Проверенная покупка</span></p>
+      <div className="flex items-center gap-1 mb-2">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => setRating(n)} aria-label={`Оценка ${n}`}
+            className="cursor-pointer p-0.5"><Star size={18} className={n <= rating ? "text-accent" : "text-line"} fill={n <= rating ? "currentColor" : "none"} /></button>
+        ))}
+      </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={1000}
+        placeholder="Что понравилось или нет? Отзыв увидят другие покупатели."
+        className="w-full rounded-[10px] border border-line bg-white px-3 py-2 text-[13.5px] text-ink focus:outline-none focus:border-accent resize-none" />
+      {err && <p className="text-[12px] text-danger mt-1.5">{err}</p>}
+      <button onClick={submit} disabled={sending || text.trim().length < 3}
+        className="mt-2 h-10 px-5 rounded-[10px] bg-dark text-cream text-[13px] font-bold hover:bg-accent-deep transition-colors disabled:opacity-40 cursor-pointer">
+        {sending ? "Отправка…" : "Опубликовать отзыв"}
+      </button>
+    </div>
+  ) : null;
 
   if (!productId || !server || server.length === 0) {
-    return <p className="text-[14px] text-ink-mute">Отзывов пока нет — станьте первым!</p>;
+    return (
+      <div className="space-y-3">
+        {reviewForm}
+        {!canReview && <p className="text-[14px] text-ink-mute">Отзывов пока нет — станьте первым!</p>}
+      </div>
+    );
   }
   return (
     <div className="space-y-3">
+      {reviewForm}
       {server.map((r) => (
         <div key={r.id} className="bg-surface rounded-[14px] shadow-card p-5">
           <div className="flex items-center gap-2.5 mb-2">
