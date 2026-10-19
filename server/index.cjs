@@ -1015,16 +1015,33 @@ app.post("/api/orders/:id/messages", guard, async (req, res) => {
   }
 });
 
-app.get("/api/orders/:id/milestones", async (req, res) => {
+/* ЭТАП 1 (серверная часть): единый помощник проверки участника сделки.
+   Этапы заказа (milestones) — приватные рабочие данные конкретной сделки:
+   их видит и изменяет ТОЛЬКО владелец заказа или принятый мастер.
+   Гость или посторонний пользователь получает 401/403 до чтения данных. */
+async function orderParty(req, orderId) {
+  if (String(db.mode).indexOf("json-dev") === -1) return { ok: false, status: 501, error: "not_supported" };
+  const FILE = require("path").resolve(__dirname, "dev-db.json");
+  const fs = require("fs");
+  const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [], order_responses: [] };
+  const ord = (d.custom_orders || []).find(o => o.id === orderId);
+  if (!ord) return { ok: false, status: 404, error: "not_found" };
+  const accepted = (d.order_responses || []).find(r => r.order_id === orderId && r.status === "accepted");
+  const isOwner = String(ord.user_id) === String(req.userId);
+  const isMaster = !!(accepted && String(accepted.master_id) === String(req.userId));
+  if (!isOwner && !isMaster) return { ok: false, status: 403, error: "not_participant" };
+  return { ok: true, d, ord, accepted, isOwner, isMaster };
+}
+
+app.get("/api/orders/:id/milestones", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    let milestones = [];
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
-      milestones = (d.order_milestones || []).filter(m => m.order_id === id);
-    }
+    const ctx = await orderParty(req, id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
+    const milestones = (d.order_milestones || []).filter(m => m.order_id === id);
     res.json({ ok: true, milestones });
   } catch (e) {
     console.error("[MILESTONES API ERROR]", e);
@@ -1032,9 +1049,12 @@ app.get("/api/orders/:id/milestones", async (req, res) => {
   }
 });
 
-app.post("/api/orders/:id/milestones", async (req, res) => {
+app.post("/api/orders/:id/milestones", guard, async (req, res) => {
   try {
     const { id } = req.params;
+    /* Правило владения: создавать этап может только участник сделки. */
+    const ctx = await orderParty(req, id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
     const { title, description, status, photo_urls } = req.body;
     const newMilestone = {
       id: require("crypto").randomUUID(),
@@ -1061,15 +1081,18 @@ app.post("/api/orders/:id/milestones", async (req, res) => {
   }
 });
 
-app.put("/api/orders/:id/milestones/:mid", async (req, res) => {
+app.put("/api/orders/:id/milestones/:mid", guard, async (req, res) => {
   try {
     const { id, mid } = req.params;
     const { status, photo_urls } = req.body;
+    /* Правило владения: изменять этап может только участник сделки. */
+    const ctx = await orderParty(req, id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
       const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
-      const m = (d.order_milestones || []).find(x => x.id === mid);
+      const m = (d.order_milestones || []).find(x => x.id === mid && x.order_id === id);
       if (m) {
         m.status = status;
         if (photo_urls) m.photo_urls = photo_urls;
