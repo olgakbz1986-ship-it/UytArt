@@ -150,6 +150,15 @@ function geoAllowed(entity, buyerCity) {
   const inInstallList = installCities.some((c) => looseMatch(c, buyerCity));
   if (inDeliveryList || inInstallList) return true;
 
+  /* FIX (аудит, п.1): явная ветка mode:"cities" — город покупателя НЕ в
+     списке доставки/монтажа => запись ИСКЛЮЧАЕТСЯ из выборки даже при
+     пустом sellerCity (раньше строка «гео не задан» пропускала такие
+     записи, и хабаровский товар попадал к курянину). */
+  if (zone && zone.mode === "cities") {
+    if (sellerCity && looseMatch(sellerCity, buyerCity)) return true; // базовый город продавца тоже зона
+    return false;
+  }
+
   if (!zone || zone.mode === "nationwide") return true; // доставка по всей стране
   if (!sellerCity) return true;                          // гео не задан — не исключаем
 
