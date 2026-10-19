@@ -909,7 +909,9 @@ export const useSellerAccount = create<SellerAccountState>()(
             ids.includes(p.id) ? { ...p, price: Math.max(1, Math.round((p.price * (100 + percent)) / 100)) } : p
           ),
         })),
-      addMember: (m) => set((s) => ({ team: [...s.team, { ...m, id: "tm-" + Date.now() }] })),
+      /* FIX typecheck: сигнатура интерфейса обещает возврат id созданного
+         участника команды (string | null); возвращаем детерминированный id. */
+      addMember: (m) => { const id = "tm-" + Date.now(); set((s) => ({ team: [...s.team, { ...m, id }] })); return id; },
       removeMember: (id) => set((s) => ({ team: s.team.filter((m) => m.id !== id) })),
       requestWithdrawal: (amount) =>
         set((s) => ({

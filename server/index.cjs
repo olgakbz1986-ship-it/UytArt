@@ -1015,16 +1015,33 @@ app.post("/api/orders/:id/messages", guard, async (req, res) => {
   }
 });
 
-app.get("/api/orders/:id/milestones", async (req, res) => {
+/* ЭТАП 1 (серверная часть): единый помощник проверки участника сделки.
+   Этапы заказа (milestones) — приватные рабочие данные конкретной сделки:
+   их видит и изменяет ТОЛЬКО владелец заказа или принятый мастер.
+   Гость или посторонний пользователь получает 401/403 до чтения данных. */
+async function orderParty(req, orderId) {
+  if (String(db.mode).indexOf("json-dev") === -1) return { ok: false, status: 501, error: "not_supported" };
+  const FILE = require("path").resolve(__dirname, "dev-db.json");
+  const fs = require("fs");
+  const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { custom_orders: [], order_responses: [] };
+  const ord = (d.custom_orders || []).find(o => o.id === orderId);
+  if (!ord) return { ok: false, status: 404, error: "not_found" };
+  const accepted = (d.order_responses || []).find(r => r.order_id === orderId && r.status === "accepted");
+  const isOwner = String(ord.user_id) === String(req.userId);
+  const isMaster = !!(accepted && String(accepted.master_id) === String(req.userId));
+  if (!isOwner && !isMaster) return { ok: false, status: 403, error: "not_participant" };
+  return { ok: true, d, ord, accepted, isOwner, isMaster };
+}
+
+app.get("/api/orders/:id/milestones", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    let milestones = [];
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
-      milestones = (d.order_milestones || []).filter(m => m.order_id === id);
-    }
+    const ctx = await orderParty(req, id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
+    const milestones = (d.order_milestones || []).filter(m => m.order_id === id);
     res.json({ ok: true, milestones });
   } catch (e) {
     console.error("[MILESTONES API ERROR]", e);
@@ -1032,9 +1049,12 @@ app.get("/api/orders/:id/milestones", async (req, res) => {
   }
 });
 
-app.post("/api/orders/:id/milestones", async (req, res) => {
+app.post("/api/orders/:id/milestones", guard, async (req, res) => {
   try {
     const { id } = req.params;
+    /* Правило владения: создавать этап может только участник сделки. */
+    const ctx = await orderParty(req, id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
     const { title, description, status, photo_urls } = req.body;
     const newMilestone = {
       id: require("crypto").randomUUID(),
@@ -1061,15 +1081,18 @@ app.post("/api/orders/:id/milestones", async (req, res) => {
   }
 });
 
-app.put("/api/orders/:id/milestones/:mid", async (req, res) => {
+app.put("/api/orders/:id/milestones/:mid", guard, async (req, res) => {
   try {
     const { id, mid } = req.params;
     const { status, photo_urls } = req.body;
+    /* Правило владения: изменять этап может только участник сделки. */
+    const ctx = await orderParty(req, id);
+    if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
       const fs = require("fs");
       const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { order_milestones: [] };
-      const m = (d.order_milestones || []).find(x => x.id === mid);
+      const m = (d.order_milestones || []).find(x => x.id === mid && x.order_id === id);
       if (m) {
         m.status = status;
         if (photo_urls) m.photo_urls = photo_urls;
@@ -1191,8 +1214,37 @@ function devDbRead() {
   return { FILE, fs, d: fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [], masters: [], products: [] } };
 }
 
-app.get("/api/masters", (_q, r) => {
-  try { const { d } = devDbRead(); r.json({ ok: true, masters: d.masters || [] }); }
+/* ЭТАП 2: жёсткий гео-фильтр на уровне выборки. Город покупателя
+   берётся из query (?city=), либо из профиля пользователя в БД
+   (users.city) при авторизованной сессии. Записи из чужих регионов
+   исключаются ДО сериализации ответа — клиент физически не может
+   получить то, что не прошло фильтр. */
+const geo = require("./geo-filter.cjs");
+async function buyerCityFromQueryOrSession(req) {
+  const q = String(req.query && req.query.city || "").trim();
+  if (q) return q;
+  if (req.userId) {
+    try {
+      const u = await db.byId(req.userId);
+      if (u && u.city) return String(u.city);
+    } catch { /* профиль без города — фильтр не применяется */ }
+  }
+  return "";
+}
+
+app.get("/api/masters", softGuard, async (_q, r) => {
+  try {
+    const { d } = devDbRead();
+    const city = await buyerCityFromQueryOrSession(_q);
+    /* мастер доступен покупателю, если geography.delivery покрывает город
+       (nationwide / список городов / базовый город) */
+    const enriched = (d.masters || []).map((m) => Object.assign({}, m, {
+      sellerCity: (m.geography && m.geography.city) || m.city || "",
+      deliveryZone: (m.geography && m.geography.delivery) || m.deliveryZone || { mode: "nationwide" },
+      installCities: (m.geography && m.geography.install) || m.installCities || [],
+    }));
+    r.json({ ok: true, masters: geo.geoFilter(enriched, city), filteredByCity: city || null });
+  }
   catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
@@ -1229,9 +1281,43 @@ app.delete("/api/masters/:id", guard, (req, r) => {
   } catch (e) { console.error("[MASTERS DELETE ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.get("/api/products", (_q, r) => {
-  try { const { d } = devDbRead(); r.json({ ok: true, products: d.products || [] }); }
+app.get("/api/products", softGuard, async (_q, r) => {
+  try {
+    const { d } = devDbRead();
+    /* ЭТАП 2: жёсткий гео-фильтр выборки — в ответ попадают только товары,
+       чья доставка/монтаж покрывает город покупателя (или nationwide). */
+    const city = await buyerCityFromQueryOrSession(_q);
+    r.json({ ok: true, products: geo.geoFilter(d.products || [], city), filteredByCity: city || null });
+  }
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+/* ЭТАП 2 (п.3): калькулятор логистики для карточки товара.
+   Сервер резолвит город продавца из записи товара, берёт город
+   покупателя из сессии/query и возвращает конкретное предложение
+   СДЭК/Почты (цена + сроки) именно для этой пары городов, а также
+   подтверждение монтажа в городе покупателя для крупногабарита. */
+app.get("/api/products/:id/logistics", softGuard, async (req, res) => {
+  try {
+    const { d } = devDbRead();
+    const p = (d.products || []).find((x) => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: "not_found" });
+    const buyerCity = await buyerCityFromQueryOrSession(req);
+    const sellerCity = p.sellerCity || (p.deliveryZone && p.deliveryZone.city) || "";
+    if (!buyerCity || !sellerCity) return res.json({ ok: true, quote: null, deliverable: geo.geoAllowed(p, buyerCity), installAvailable: false });
+    const weightKg = Number(p.weight) ? Number(p.weight) / (p.weight > 50 ? 1000 : 1) : 1; /* граммы → кг для больших значений */
+    const quote = geo.logisticsQuote(sellerCity, buyerCity, { weightKg });
+    res.json({
+      ok: true,
+      sellerCity, buyerCity,
+      deliverable: geo.geoAllowed(p, buyerCity),
+      installAvailable: geo.installAllowed(p, buyerCity),
+      quote,
+    });
+  } catch (e) {
+    console.error("[LOGISTICS QUOTE ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
 });
 
 app.post("/api/products", guard, async (req, res) => {
@@ -1278,43 +1364,73 @@ app.delete("/api/products/:id", guard, (req, r) => {
   } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/market/orders/:id/reviews", async (req, res) => {
+/* ============================================================
+   ЭТАП 4 (сервер): отзыв разрешён ТОЛЬКО по завершённой и
+   финансово подтверждённой сделке между конкретными участниками.
+   Антинакрутка:
+   - автор отзыва — всегда req.userId из сессии (клиентский
+     reviewer_id игнорируется полностью);
+   - оцениваемый — принятый мастер сделки (reviewee_id из тела
+     игнорируется); подставить в рейтинг чужого аккаунта нельзя;
+   - требуется финальный статус заказа (completed/delivered/
+     confirmed/reviewed) либо закрытая эскроу-сделка (settled);
+   - одна сделка — один отзыв от каждого участника.
+   ============================================================ */
+const FINAL_ORDER_STATUSES = ["completed", "delivered", "confirmed", "reviewed"];
+
+app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
   try {
     const { id } = req.params;
-    const { reviewer_id, reviewee_id, rating, text } = req.body;
-    
-    if (!rating || rating < 1 || rating > 5) {
+    const { rating, text } = req.body;
+
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
       return res.status(400).json({ error: "Rating must be between 1 and 5" });
     }
+    if (String(db.mode).indexOf("json-dev") === -1) return res.status(501).json({ error: "not_supported" });
+
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [], custom_orders: [], order_responses: [] };
+
+    const ord = (d.custom_orders || []).find(o => o.id === id);
+    if (!ord) return res.status(404).json({ error: "not_found" });
+    const accepted = (d.order_responses || []).find(r => r.order_id === id && r.status === "accepted");
+    if (!accepted) return res.status(409).json({ error: "no_completed_deal", message: "Отзыв возможен только по завершённой сделке с принятым исполнителем." });
+
+    /* Финансовое подтверждение: финальный статус сделки или закрытый эскроу. */
+    const financiallyClosed = FINAL_ORDER_STATUSES.includes(String(ord.status)) ||
+      (ord.deal && ["completed", "settled", "released"].includes(String(ord.deal.status)));
+    if (!financiallyClosed) return res.status(409).json({ error: "deal_not_completed", message: "Сделка не завершена финансово: оставьте отзыв после подтверждения выполнения." });
+
+    /* Только участники конкретной сделки могут её оценивать. */
+    const isBuyer = String(ord.user_id) === String(req.userId);
+    const isMaster = String(accepted.master_id) === String(req.userId);
+    if (!isBuyer && !isMaster) return res.status(403).json({ error: "not_participant" });
+
+    /* Одна сторона — один отзыв по сделке (защита от накрутки). */
+    const dup = (d.market_reviews || []).find(r => r.order_id === id && String(r.reviewer_id) === String(req.userId));
+    if (dup) return res.status(409).json({ error: "already_reviewed" });
 
     const newReview = {
       id: require("crypto").randomUUID(),
       order_id: id,
-      reviewer_id: reviewer_id || "dev-user-1",
-      reviewee_id: reviewee_id || "dev-master-1",
+      reviewer_id: req.userId,                                   /* из сессии, не из тела */
+      reviewee_id: isBuyer ? accepted.master_id : ord.user_id,  /* оппонент по сделке */
       rating: Number(rating),
       text: text || "",
       created_at: new Date().toISOString()
     };
 
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [], custom_orders: [] };
-      if (!d.market_reviews) d.market_reviews = [];
-      
-      d.market_reviews.push(newReview);
-      
-      // Помечаем заказ как reviewed
-      if (d.custom_orders) {
-        const order = d.custom_orders.find(o => o.id === id);
-        if (order) {
-          order.reviewed = true;
-          order.updated_at = new Date().toISOString();
-        }
-      }
-      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    }
+    if (!d.market_reviews) d.market_reviews = [];
+    d.market_reviews.push(newReview);
+    /* Помечаем заказ как reviewed (не понижаем финальный статус). */
+    ord.reviewed = true;
+    if (!FINAL_ORDER_STATUSES.includes(String(ord.status))) ord.status = "completed";
+    ord.updated_at = new Date().toISOString();
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+
+    createNotification(newReview.reviewee_id, "review", "Новый отзыв о сделке",
+      `Ваша оценка по заказу «${ord.title || ""}»: ${newReview.rating}/5.`, `/market?focus=${id}`);
 
     res.json({ ok: true, review: newReview });
   } catch (e) {
