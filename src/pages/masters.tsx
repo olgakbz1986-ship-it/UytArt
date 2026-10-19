@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { MapPin, ShieldCheck, Flag, Store, MessageSquare } from "lucide-react";
+import { MapPin, ShieldCheck, Flag, Store, MessageSquare, Wrench } from "lucide-react";
 import { CITIES } from "../lib/geo";
 import { fmt, vendorById } from "../data/seed";
 import { useSellerReg, useSellerAccount, type SellerProfile } from "../lib/seller";
@@ -215,6 +215,15 @@ export function ShopPage() {
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold text-cream" style={{ background: master.legal.color }}>
               <span>{master.legal.emoji}</span>{master.legal.label}
             </span>
+            {/* ЭТАП 4 (§4.1): кнопка заказа — открывает форму индивидуального
+                заказа с защищённо предзаполненным исполнителем (invite=<id>).
+                Не отображается в собственном магазине. */}
+            {master.acceptsCustom && ownerId !== session?.userId && (
+              <Link to={`/market?invite=${encodeURIComponent(ownerId)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent text-cream text-[11.5px] font-bold hover:bg-accent-deep transition-colors">
+                <Wrench size={12} /> Заказать у мастера
+              </Link>
+            )}
             {master.verified && <Badge tone="success"><ShieldCheck size={12} /> Документы проверены</Badge>}
             {master.acceptsCustom && <Badge tone="honey">✦ Индивидуальные заказы</Badge>}
           </div>

@@ -84,7 +84,7 @@ export interface MarketOrder {
 interface MarketState {
   orders: MarketOrder[];
   responded: string[];
-  addOrder: (o: Omit<MarketOrder, "id" | "date" | "status" | "responses" | "myOwn" | "ownerId">) => void;
+  addOrder: (o: Omit<MarketOrder, "id" | "date" | "status" | "responses" | "myOwn" | "ownerId"> & { master_requested?: string }) => void;
   respond: (id: string) => void;
 }
 /* Единый признак владельца заказа: ownerId (новый формат) или user_id (серверный формат). */
@@ -115,6 +115,8 @@ export const useMarketStore = create<MarketState>()(
         }
         const verdict = moderateOrder(o);
         const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: (verdict.issues.length ? "moderation" : "published") as any, responses: 0, myOwn: !!uid, ownerId: uid || undefined, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings };
+        /* ЭТАП 4 (§4.1): адресный заказ — master_requested уже внутри o;
+           сервер перезафиксирует его и invited_by из сессии, подмена невозможна. */
         set((s) => ({ orders: [newOrder, ...s.orders] }));
         useNotifyStore.getState().push(verdict.issues.length ? { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + verdict.issues.length + ". " + verdict.issues.join(" ") + " Исправьте и отправьте снова." } : { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (verdict.warnings.length ? " Рекомендации: " + verdict.warnings.join(" ") : "") });
         
@@ -330,6 +332,14 @@ export function MarketPage() {
   const [respondOrderId, setRespondOrderId] = useState<string | null>(null);
   const [fErr, setFErr] = useState("");
   const [filterType, setFilterType] = useState("all");
+  /* ЭТАП 4 (§4.1): защищённое предзаполнение исполнителя — карточка мастера
+     открывает /market?invite=<masterId>&new=1; id приглашённого мастера
+     фиксируется в адресном заказе на сервере (POST /api/orders). */
+  const invitedMasterId = searchParams.get("invite") || "";
+  useEffect(() => {
+    if (invitedMasterId) { setEditOrderId(null); setWizardOpen(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invitedMasterId]);
   
   const REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
 
@@ -369,7 +379,7 @@ export function MarketPage() {
     }
     if (overLimit) { setFErr(buyerPlan === "premium" ? `Тариф Премиум: максимум ${fmtLimit(lim.marketOrders)} активных заказов. Завершите или удалите один из заказов.` : `Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
     if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
-    addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: refs[0]?.name, refType: refs[0]?.type });
+    addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: refs[0]?.name, refType: refs[0]?.type, master_requested: invitedMasterId || undefined });
     setFTitle(""); setFDesc(""); setRefs([]); setFErr("");
     setWizardOpen(false);
   };
@@ -555,7 +565,15 @@ export function MarketPage() {
       )}
 
       {/* AI-визард */}
-      <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : "Новый индивидуальный заказ"} wide>
+      <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : invitedMasterId ? "Адресный заказ мастеру" : "Новый индивидуальный заказ"} wide>
+        {/* ЭТАП 4 (§4.1): поле исполнителя заранее и защищённо заполнено id мастера;
+            снять или подменить его в форме нельзя — сервер перезафиксирует из сессии. */}
+        {invitedMasterId && !editOrderId && (
+          <div className="mb-4 flex items-center gap-2 bg-accent/10 border border-accent/30 rounded-[10px] px-4 py-2.5">
+            <ShieldCheck size={16} className="text-accent-deep shrink-0" />
+            <p className="text-[13px] text-ink font-semibold">Исполнитель закреплён: <span className="text-accent-deep">{invitedMasterId}</span>. Откликнуться на этот заказ сможет только этот мастер.</p>
+          </div>
+        )}
         <p className="text-[13px] text-ink-soft mb-5 flex items-center gap-2"><Sparkles size={15} className="text-ai" /> AI-помощник поможет мастеру понять задачу. Прикрепите референс и опишите детали.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Field label="Название" required>

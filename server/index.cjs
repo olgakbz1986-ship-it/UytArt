@@ -608,6 +608,12 @@ app.post("/api/orders", guard, async (req, res) => {
       deadline: b.term || b.deadline || "",
       term: b.term || b.deadline || "",
       region: b.region || "",
+      /* ЭТАП 4 (§4.1): адресный заказ «Заказать у мастера». Идентификатор
+         исполнителя защищённо фиксируется сервером из сессии автора заказа;
+         клиент передаёт только master_requested (выбор в форме). Подмена
+         чужого userId или снятие адреса невозможны — поле перезаписывается. */
+      master_requested: b.master_requested ? String(b.master_requested) : undefined,
+      invited_by: req.userId,
       status: b.status || "published",
       responses: Number(b.responses || 0),
       refName: b.refName,
@@ -822,6 +828,11 @@ app.post("/api/orders/:id/responses", guard, async (req, res) => {
       const ord0 = (d0.custom_orders || []).find(o => o.id === id);
       if (!ord0) return res.status(404).json({ error: "not_found" });
       if (ord0.user_id === req.userId) return res.status(403).json({ error: "own_order" });
+      /* ЭТАП 4 (§4.1): адресный заказ — откликаться может только приглашённый
+         мастер (или любой, если заказ публичный). Поле master_requested
+         зафиксировано сервером при создании; клиент его не подменит. */
+      if (ord0.master_requested && String(ord0.master_requested) !== String(req.userId))
+        return res.status(403).json({ error: "addressed_order", message: "Заказ адресный: откликнуться может только указанный исполнитель." });
       const dup = (d0.order_responses || []).find(r => r.order_id === id && r.master_id === req.userId);
       if (dup) return res.status(409).json({ error: "already_responded" });
     }
