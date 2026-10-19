@@ -1214,8 +1214,37 @@ function devDbRead() {
   return { FILE, fs, d: fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [], masters: [], products: [] } };
 }
 
-app.get("/api/masters", (_q, r) => {
-  try { const { d } = devDbRead(); r.json({ ok: true, masters: d.masters || [] }); }
+/* ЭТАП 2: жёсткий гео-фильтр на уровне выборки. Город покупателя
+   берётся из query (?city=), либо из профиля пользователя в БД
+   (users.city) при авторизованной сессии. Записи из чужих регионов
+   исключаются ДО сериализации ответа — клиент физически не может
+   получить то, что не прошло фильтр. */
+const geo = require("./geo-filter.cjs");
+async function buyerCityFromQueryOrSession(req) {
+  const q = String(req.query && req.query.city || "").trim();
+  if (q) return q;
+  if (req.userId) {
+    try {
+      const u = await db.byId(req.userId);
+      if (u && u.city) return String(u.city);
+    } catch { /* профиль без города — фильтр не применяется */ }
+  }
+  return "";
+}
+
+app.get("/api/masters", softGuard, async (_q, r) => {
+  try {
+    const { d } = devDbRead();
+    const city = await buyerCityFromQueryOrSession(_q);
+    /* мастер доступен покупателю, если geography.delivery покрывает город
+       (nationwide / список городов / базовый город) */
+    const enriched = (d.masters || []).map((m) => Object.assign({}, m, {
+      sellerCity: (m.geography && m.geography.city) || m.city || "",
+      deliveryZone: (m.geography && m.geography.delivery) || m.deliveryZone || { mode: "nationwide" },
+      installCities: (m.geography && m.geography.install) || m.installCities || [],
+    }));
+    r.json({ ok: true, masters: geo.geoFilter(enriched, city), filteredByCity: city || null });
+  }
   catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
@@ -1252,9 +1281,43 @@ app.delete("/api/masters/:id", guard, (req, r) => {
   } catch (e) { console.error("[MASTERS DELETE ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.get("/api/products", (_q, r) => {
-  try { const { d } = devDbRead(); r.json({ ok: true, products: d.products || [] }); }
+app.get("/api/products", softGuard, async (_q, r) => {
+  try {
+    const { d } = devDbRead();
+    /* ЭТАП 2: жёсткий гео-фильтр выборки — в ответ попадают только товары,
+       чья доставка/монтаж покрывает город покупателя (или nationwide). */
+    const city = await buyerCityFromQueryOrSession(_q);
+    r.json({ ok: true, products: geo.geoFilter(d.products || [], city), filteredByCity: city || null });
+  }
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+/* ЭТАП 2 (п.3): калькулятор логистики для карточки товара.
+   Сервер резолвит город продавца из записи товара, берёт город
+   покупателя из сессии/query и возвращает конкретное предложение
+   СДЭК/Почты (цена + сроки) именно для этой пары городов, а также
+   подтверждение монтажа в городе покупателя для крупногабарита. */
+app.get("/api/products/:id/logistics", softGuard, async (req, res) => {
+  try {
+    const { d } = devDbRead();
+    const p = (d.products || []).find((x) => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: "not_found" });
+    const buyerCity = await buyerCityFromQueryOrSession(req);
+    const sellerCity = p.sellerCity || (p.deliveryZone && p.deliveryZone.city) || "";
+    if (!buyerCity || !sellerCity) return res.json({ ok: true, quote: null, deliverable: geo.geoAllowed(p, buyerCity), installAvailable: false });
+    const weightKg = Number(p.weight) ? Number(p.weight) / (p.weight > 50 ? 1000 : 1) : 1; /* граммы → кг для больших значений */
+    const quote = geo.logisticsQuote(sellerCity, buyerCity, { weightKg });
+    res.json({
+      ok: true,
+      sellerCity, buyerCity,
+      deliverable: geo.geoAllowed(p, buyerCity),
+      installAvailable: geo.installAllowed(p, buyerCity),
+      quote,
+    });
+  } catch (e) {
+    console.error("[LOGISTICS QUOTE ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
 });
 
 app.post("/api/products", guard, async (req, res) => {

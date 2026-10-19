@@ -54,9 +54,13 @@ export function CatalogPage() {
   const [showOther, setShowOther] = useState(true);
   const [quality, setQuality] = useState(false);
 
-  // Загрузка серверных товаров при монтировании каталога
+  // Загрузка серверных товаров при монтировании каталога.
+  // ЭТАП 2: город покупателя передаётся серверу явно — жёсткий гео-фильтр
+  // применяется на уровне выборки (чужие регионы не доезжают до клиента).
   useEffect(() => {
-    fetch('/api/products')
+    const st = useAppStore.getState();
+    const city = st.viewerCity || (st.addresses.find((a) => a.isDefault)?.city || "");
+    fetch('/api/products' + (city ? '?city=' + encodeURIComponent(city) : ''), { credentials: 'include' })
       .then(r => r.json())
       .then(d => {
         if (d.ok && Array.isArray(d.products)) {

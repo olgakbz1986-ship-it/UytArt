@@ -69,6 +69,18 @@ export function MastersPage() {
     };
     
     syncMaster();
+    /* ЭТАП 2: серверный гео-фильтр списка мастеров — город покупателя
+       (viewerCity или адрес по умолчанию) передаётся в запросе; выборка
+       ограничивается на сервере ДО отправки ответа. */
+    const loadMasters = () => {
+      const st = useAppStore.getState();
+      const city = st.viewerCity || (st.addresses.find((a) => a.isDefault)?.city || "");
+      fetch('/api/masters' + (city ? '?city=' + encodeURIComponent(city) : ''), { credentials: 'include' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d && d.ok && Array.isArray(d.masters)) setServerMasters(d.masters); })
+        .catch(() => {});
+    };
+    loadMasters();
     // Подписываемся только на изменения, которые действительно важны
     const unsub = useSellerReg.subscribe((state) => {
       // Синхронизируем только при критических изменениях статуса
