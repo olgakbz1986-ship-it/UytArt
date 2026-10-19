@@ -608,6 +608,17 @@ app.post("/api/orders", guard, async (req, res) => {
       deadline: b.term || b.deadline || "",
       term: b.term || b.deadline || "",
       region: b.region || "",
+      /* ЭТАП 4 (§4.1): адресный заказ «Заказать у мастера». Идентификатор
+         исполнителя защищённо фиксируется сервером из сессии автора заказа;
+         клиент передаёт только master_requested (выбор в форме). Подмена
+         чужого userId или снятие адреса невозможны — поле перезаписывается. */
+      master_requested: b.master_requested ? String(b.master_requested) : undefined,
+      invited_by: req.userId,
+      /* ЭТАП 4 (§4.3): привязка сделки к конкретному товару продавца
+         (product_id продавца вида sp-<id>) — для агрегации отзывов в
+         карточку проданного товара. Структура БД не меняется. */
+      product_id: b.product_id ? String(b.product_id) : undefined,
+      seller_id: b.seller_id ? String(b.seller_id) : undefined,
       status: b.status || "published",
       responses: Number(b.responses || 0),
       refName: b.refName,
@@ -822,6 +833,11 @@ app.post("/api/orders/:id/responses", guard, async (req, res) => {
       const ord0 = (d0.custom_orders || []).find(o => o.id === id);
       if (!ord0) return res.status(404).json({ error: "not_found" });
       if (ord0.user_id === req.userId) return res.status(403).json({ error: "own_order" });
+      /* ЭТАП 4 (§4.1): адресный заказ — откликаться может только приглашённый
+         мастер (или любой, если заказ публичный). Поле master_requested
+         зафиксировано сервером при создании; клиент его не подменит. */
+      if (ord0.master_requested && String(ord0.master_requested) !== String(req.userId))
+        return res.status(403).json({ error: "addressed_order", message: "Заказ адресный: откликнуться может только указанный исполнитель." });
       const dup = (d0.order_responses || []).find(r => r.order_id === id && r.master_id === req.userId);
       if (dup) return res.status(409).json({ error: "already_responded" });
     }
@@ -1432,16 +1448,27 @@ async function buyerCityFromQueryOrSession(req) {
   return "";
 }
 
+/* Единая нормализация географии записи (товар/мастер): поле geography,
+   заданное продавцом в UI, приводится к контракту geo-filter
+   (sellerCity / deliveryZone / installCities) ПЕРЕД фильтрацией.
+   Структура БД не меняется — только проекция выборки. */
+function normalizeGeo(x) {
+  const g = x.geography || {};
+  return Object.assign({}, x, {
+    sellerCity: x.sellerCity || g.city || (x.deliveryZone && x.deliveryZone.city) || x.city || "",
+    deliveryZone: x.deliveryZone || g.delivery || (g.city ? { mode: "cities", cities: [g.city] } : null),
+    installCities: (Array.isArray(x.installCities) && x.installCities.length) ? x.installCities : (g.install || []),
+  });
+}
+
 app.get("/api/masters", softGuard, async (_q, r) => {
   try {
     const { d } = devDbRead();
     const city = await buyerCityFromQueryOrSession(_q);
     /* мастер доступен покупателю, если geography.delivery покрывает город
        (nationwide / список городов / базовый город) */
-    const enriched = (d.masters || []).map((m) => Object.assign({}, m, {
-      sellerCity: (m.geography && m.geography.city) || m.city || "",
-      deliveryZone: (m.geography && m.geography.delivery) || m.deliveryZone || { mode: "nationwide" },
-      installCities: (m.geography && m.geography.install) || m.installCities || [],
+    const enriched = (d.masters || []).map(normalizeGeo).map((m) => Object.assign(m, {
+      deliveryZone: m.deliveryZone || { mode: "nationwide" },
     }));
     r.json({ ok: true, masters: geo.geoFilter(enriched, city), filteredByCity: city || null });
   }
@@ -1489,11 +1516,7 @@ app.get("/api/products", softGuard, async (_q, r) => {
     const city = await buyerCityFromQueryOrSession(_q);
     /* Нормализация geography → deliveryZone/installCities (единый контракт
        для товаров и мастеров; структура БД не меняется — только проекция). */
-    const enriched = (d.products || []).map((p) => Object.assign({}, p, {
-      sellerCity: p.sellerCity || (p.geography && p.geography.city) || (p.deliveryZone && p.deliveryZone.city) || p.city || "",
-      deliveryZone: p.deliveryZone || (p.geography && p.geography.delivery) || (p.geography ? { mode: "cities", cities: [p.geography.city] } : null),
-      installCities: Array.isArray(p.installCities) && p.installCities.length ? p.installCities : ((p.geography && p.geography.install) || []),
-    }));
+    const enriched = (d.products || []).map(normalizeGeo);
     r.json({ ok: true, products: geo.geoFilter(enriched, city), filteredByCity: city || null });
   }
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
@@ -1510,15 +1533,16 @@ app.get("/api/products/:id/logistics", softGuard, async (req, res) => {
     const p = (d.products || []).find((x) => x.id === req.params.id);
     if (!p) return res.status(404).json({ error: "not_found" });
     const buyerCity = await buyerCityFromQueryOrSession(req);
-    const sellerCity = p.sellerCity || (p.deliveryZone && p.deliveryZone.city) || "";
-    if (!buyerCity || !sellerCity) return res.json({ ok: true, quote: null, deliverable: geo.geoAllowed(p, buyerCity), installAvailable: false });
+    const np = normalizeGeo(p);
+    const sellerCity = np.sellerCity;
+    if (!buyerCity || !sellerCity) return res.json({ ok: true, quote: null, deliverable: geo.geoAllowed(np, buyerCity), installAvailable: false });
     const weightKg = Number(p.weight) ? Number(p.weight) / (p.weight > 50 ? 1000 : 1) : 1; /* граммы → кг для больших значений */
     const quote = geo.logisticsQuote(sellerCity, buyerCity, { weightKg });
     res.json({
       ok: true,
       sellerCity, buyerCity,
-      deliverable: geo.geoAllowed(p, buyerCity),
-      installAvailable: geo.installAllowed(p, buyerCity),
+      deliverable: geo.geoAllowed(np, buyerCity),
+      installAvailable: geo.installAllowed(np, buyerCity),
       quote,
     });
   } catch (e) {
@@ -1623,6 +1647,7 @@ app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
       order_id: id,
       reviewer_id: req.userId,                                   /* из сессии, не из тела */
       reviewee_id: isBuyer ? accepted.master_id : ord.user_id,  /* оппонент по сделке */
+      product_id: ord.product_id || (ord.refType === "product" ? ord.refName : undefined), /* ЭТАП 4 (§4.3) */
       rating: Number(rating),
       text: text || "",
       created_at: new Date().toISOString()
@@ -1668,6 +1693,37 @@ app.get("/api/market/users/:id/reviews", async (req, res) => {
     res.json({ ok: true, reviews, avgRating: Number(avgRating), count: reviews.length });
   } catch (e) {
     console.error("[MARKET USER REVIEWS API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
+/* ЭТАП 4 (§4.3): серверная агрегация отзывов по КОНКРЕТНОМУ товару.
+   Отзыв привязан к сделке (market_reviews.product_id <- custom_orders.product_id),
+   поэтому в выборку попадают только отзывы финансово закрытых сделок
+   (антинакрутка на POST уже проверена; здесь — только выдача).
+   Поддержка двух форматов id: серверный (<uuid>) и клиентский (sp-<uuid>). */
+app.get("/api/products/:id/reviews", async (req, res) => {
+  try {
+    const rawId = String(req.params.id || "");
+    const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const fs = require("fs");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { market_reviews: [] };
+    const reviews = (d.market_reviews || [])
+      .filter((r) => r.product_id === rawId || r.product_id === bareId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    /* имена авторов — из users (без выдачи e-mail/телефонов) */
+    const uMap = {};
+    for (const u of d.users || []) uMap[String(u.id)] = u.name || u.login || "Покупатель";
+    const enriched = reviews.map((r) => ({
+      id: r.id, order_id: r.order_id, reviewer_id: r.reviewer_id,
+      reviewer_name: uMap[String(r.reviewer_id)] || "Покупатель",
+      rating: r.rating, text: r.text, created_at: r.created_at,
+    }));
+    const avg = enriched.length ? Number((enriched.reduce((s, r) => s + r.rating, 0) / enriched.length).toFixed(1)) : 0;
+    res.json({ ok: true, reviews: enriched, avgRating: avg, count: enriched.length });
+  } catch (e) {
+    console.error("[PRODUCT REVIEWS API ERROR]", e);
     res.status(500).json({ error: "server" });
   }
 });

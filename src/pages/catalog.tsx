@@ -2,7 +2,7 @@ import { useMarketProducts } from "../lib/market";
 import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2 } from "lucide-react";
+import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2, Truck, Wrench } from "lucide-react";
 import { SellerAboutModal } from "../components/SellerAboutModal";
 import {
   GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
@@ -18,6 +18,73 @@ import { ReviewsSection } from "../components/review";
 import { productRating } from "../lib/review";
 import { SpecSections } from "../components/SpecSections";
 import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
+
+/* ЭТАП 2 (§2.3): динамический калькулятор логистики в карточке товара.
+   Запрашивает серверный расчёт (GET /api/products/:id/logistics) для города
+   покупателя; отображает конкретное предложение СДЭК/Почты, сроки,
+   подтверждение доставки и возможности монтажа именно в городе покупателя. */
+interface LogisticsResp {
+  ok: boolean;
+  sellerCity?: string;
+  buyerCity?: string;
+  deliverable: boolean;
+  installAvailable: boolean;
+  quote: null | {
+    distanceKm: number;
+    methods: { id: string; name: string; priceRub: number; daysMin: number; daysMax: number }[];
+  };
+}
+function LogisticsQuoteBox({ productId, fallbackCity }: { productId: string; fallbackCity: string }) {
+  const viewerCity = useAppStore((s) => s.viewerCity);
+  const addresses = useAppStore((s) => s.addresses);
+  const buyerCity = viewerCity || (addresses.find((a) => a.isDefault)?.city || "");
+  const [data, setData] = useState<LogisticsResp | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/products/${encodeURIComponent(productId)}/logistics${buyerCity ? `?city=${encodeURIComponent(buyerCity)}` : ""}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive) setData(j as LogisticsResp | null); })
+      .catch(() => { if (alive) setData(null); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [productId, buyerCity]);
+
+  if (loading) {
+    return (
+      <div className="bg-cream/60 rounded-xl p-4 border border-line-soft animate-pulse text-[13px] text-ink-mute flex items-center gap-2">
+        <Truck size={16} className="text-ai" /> Рассчитываем доставку{buyerCity ? ` в г. ${buyerCity}` : ""}…
+      </div>
+    );
+  }
+  if (!data) return null;
+  const best = data.quote?.methods?.length ? [...data.quote.methods].sort((a, b) => a.priceRub - b.priceRub)[0] : null;
+  return (
+    <div className="bg-surface rounded-xl p-4 border border-accent/30 shadow-card space-y-2.5">
+      <div className="flex items-center gap-2 text-[14px] font-bold text-ink">
+        <Truck size={16} className="text-accent-deep" /> Доставка{data.buyerCity ? <> в г. <span className="text-accent-deep">{data.buyerCity}</span></> : ""}
+        {data.sellerCity && <span className="font-normal text-[12px] text-ink-mute">из г. {data.sellerCity}{data.quote?.distanceKm ? ` · ${data.quote.distanceKm} км` : ""}</span>}
+      </div>
+      {!data.deliverable && (
+        <p className="flex gap-2 text-[13px] text-error font-semibold"><Ban size={15} className="shrink-0 mt-0.5" /> Продавец не доставляет в ваш город — выберите другой регион в фильтрах.</p>
+      )}
+      {data.deliverable && data.quote && data.quote.methods.map((m) => (
+        <div key={m.id} className={`flex items-center justify-between gap-3 text-[13.5px] px-3 py-2 rounded-lg ${best?.id === m.id ? "bg-accent/10" : "bg-cream/60"}`}>
+          <span className="font-semibold text-ink">{m.name}</span>
+          <span className="text-ink-soft">{m.daysMin}–{m.daysMax} дн.</span>
+          <span className="font-extrabold text-ink">{fmt(m.priceRub)}</span>
+        </div>
+      ))}
+      {data.deliverable && !data.quote && (
+        <p className="text-[13px] text-ink-soft">Укажите город получения или адрес продавца ({fallbackCity || "не задан"}), чтобы рассчитать точную стоимость и сроки.</p>
+      )}
+      {data.installAvailable && (
+        <p className="flex gap-2 text-[13px] text-success font-bold"><Wrench size={15} className="shrink-0 mt-0.5" /> Монтаж доступен в г. {data.buyerCity}: ориентировочно 7–14 дней после доставки.</p>
+      )}
+    </div>
+  );
+}
 
 type SortId = "popular" | "price-asc" | "price-desc" | "new" | "rating";
 const SORTS: { id: SortId; label: string }[] = [
@@ -507,6 +574,8 @@ export function ProductPage() {
           {tab === "specs" && <SpecSections category={cat?.name || ""} specs={(sellerItem as any)?.specs || (p as any).specs || []} />}
           {tab === "delivery" && (
             <div className="space-y-3 text-[14px] text-ink-soft leading-relaxed">
+              {/* ЭТАП 2 (§2.3): динамический калькулятор логистики — серверный расчёт СДЭК/Почты для города покупателя */}
+              <LogisticsQuoteBox productId={p.id.startsWith("sp-") ? p.id.slice(3) : p.id} fallbackCity={(p as any).sellerCity || vendor?.city || ""} />
               <p className="flex gap-2.5"><ShieldCheck size={17} className="text-success shrink-0 mt-0.5" /> <span><strong className="text-ink">Безопасная сделка:</strong> деньги резервируются на транзитном счёте и уходят мастеру только после отправки.</span></p>
               <p className="flex gap-2.5"><MapPin size={17} className="text-ai shrink-0 mt-0.5" /> <span>{sellerItem?.deliveryZone && sellerItem.deliveryZone.mode !== "nationwide" ? <>Зона доставки продавца: <strong className="text-ink">{zoneLabel(sellerItem.deliveryZone, sellerItem.sellerCity || "")}</strong>. За пределы зоны товар не отправляется.</> : <>СДЭК, Boxberry и Почта России — 2–7 дней по России. Отправка из г. {(p as any).sellerCity || vendor?.city}.</>}</span></p>
               <p className="flex gap-2.5"><Ban size={17} className="text-error shrink-0 mt-0.5" /> <span>{custom ? "Товар изготавливается по индивидуальным параметрам и возврату не подлежит (абз. 4 п. 4 ст. 26.1 ЗоЗПП)." : "Возврат в течение 7 дней с момента получения (ст. 26.1 ЗоЗПП)."}</span></p>

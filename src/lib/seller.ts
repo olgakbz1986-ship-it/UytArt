@@ -656,6 +656,8 @@ export type DeliveryZone =
   | { mode: "city"; withDistrict?: boolean }
   | { mode: "radius"; km: number }
   | { mode: "region" }
+  /* ЭТАП 2 (п.1): явный список городов доставки (движок server/geo-filter.cjs) */
+  | { mode: "cities"; cities: string[] }
   | { mode: "nationwide" };
 export type ServiceMode = "online" | "visit" | "both";
 export type SlotTime = string;
