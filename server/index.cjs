@@ -583,11 +583,16 @@ tariffs.mount(app, tariffsCtx);
 
 app.post("/api/orders", guard, async (req, res) => {
   try {
-    /* ЭТАП 1 (§1.5): лимит активных индивидуальных заказов проверяется на
-       сервере по тарифу ИЗ БАЗЫ — правка localStorage клиента ничего не даёт. */
-    const lim = await tariffsCtx.serverCheckLimit(req.userId, "market_order", {});
-    if (!lim.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: lim.reason || ("Лимит активных заказов тарифа исчерпан (" + lim.limit + ")") });
     const b = req.body || {};
+    /* ЭТАП 1 (§1.5): лимит активных индивидуальных заказов проверяется на
+       сервере по тарифу ИЗ БАЗЫ — правка localStorage клиента ничего не даёт.
+       Покупки из каталога (source:"catalog") лимитом биржи НЕ ограничиваются —
+       это другой сценарий, гейтинг сохраняется только для market_order. */
+    const isCatalogPurchase = b.source === "catalog" && Array.isArray(b.items) && b.items.length > 0;
+    if (!isCatalogPurchase) {
+      const lim = await tariffsCtx.serverCheckLimit(req.userId, "market_order", {});
+      if (!lim.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: lim.reason || ("Лимит активных заказов тарифа исчерпан (" + lim.limit + ")") });
+    }
     const now = new Date().toISOString();
     const images = Array.isArray(b.images) ? b.images : Array.isArray(b.attachments) ? b.attachments : [];
     const newOrder = {
@@ -631,6 +636,33 @@ app.post("/api/orders", guard, async (req, res) => {
       created_at: b.date || b.created_at || now,
       updated_at: now
     };
+
+    /* Покупка из каталога (source:"catalog"): фиксируем состав в d.purchases —
+       это финансово подтверждённая транзакция между buyer и seller, служившая
+       источником товарной привязки отзыва (ЭТАП 4 §4.3) и истории сделок. */
+    if (isCatalogPurchase) {
+      try {
+        const FILE = require("path").resolve(__dirname, "dev-db.json");
+        const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
+        if (!d.purchases) d.purchases = [];
+        for (const it of b.items) {
+          const pid = String(it.productId || "").startsWith("sp-") ? String(it.productId).slice(3) : String(it.productId || "");
+          const prod = (d.products || []).find((x) => String(x.id) === pid || String(x.id) === String(it.productId));
+          d.purchases.push({
+            id: crypto.randomUUID(),
+            order_number: b.number || newOrder.id,
+            userId: req.userId,
+            productId: pid,
+            qty: Number(it.qty || 1),
+            price: Number(it.price || 0),
+            seller_id: prod ? String(prod.ownerId || prod.seller_id || "") : "",
+            status: "paid",
+            date: now,
+          });
+        }
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      } catch (_) { /* не блокируем создание заказа из-за журнала покупок */ }
+    }
 
     if (db.mode === "json-dev (бесплатно)") {
       const FILE = require("path").resolve(__dirname, "dev-db.json");
@@ -1609,6 +1641,53 @@ app.delete("/api/products/:id", guard, (req, r) => {
    ============================================================ */
 const FINAL_ORDER_STATUSES = ["completed", "delivered", "confirmed", "reviewed"];
 
+/* Покупка из каталога — тоже завершённая финансово подтверждённая сделка:
+   покупатель может оставить отзыв на товар конкретного продавца. */
+app.post("/api/purchases/:productId/reviews", guard, async (req, res) => {
+  try {
+    const { rating, text } = req.body || {};
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
+    const rawId = String(req.params.id || "");
+    const bareId = rawId.startsWith("sp-") ? rawId.slice(3) : rawId;
+    /* История транзакций покупателя: только реальная оплаченная покупка
+       этого товара этим пользователем открывает доступ к форме отзыва. */
+    const purchase = (d.purchases || []).find((x) => {
+      if (String(x.userId) !== String(req.userId) || x.status === "cancelled") return false;
+      const pid = String(x.productId || "");
+      return pid === rawId || pid === bareId || ("sp-" + pid) === rawId;
+    });
+    if (!purchase) return res.status(409).json({ error: "no_completed_deal", message: "Отзыв возможен только после покупки товара." });
+    const prod = (d.products || []).find((p) => String(p.id) === bareId);
+    const sellerId = String((prod && (prod.ownerId || prod.seller_id)) || purchase.seller_id || "");
+    if (!sellerId) return res.status(409).json({ error: "seller_not_found" });
+    const dup = (d.market_reviews || []).find((r) => r.product_id && String(r.product_id).replace(/^sp-/, "") === bareId && String(r.reviewer_id) === String(req.userId));
+    if (dup) return res.status(409).json({ error: "already_reviewed" });
+    const newReview = {
+      id: crypto.randomUUID(),
+      order_id: purchase.order_number || purchase.id,
+      reviewer_id: req.userId,          /* из сессии */
+      reviewee_id: sellerId,            /* владелец товара — из БД, не из тела */
+      product_id: "sp-" + bareId,
+      rating: Number(rating),
+      text: String(text || ""),
+      created_at: new Date().toISOString(),
+    };
+    if (!d.market_reviews) d.market_reviews = [];
+    d.market_reviews.push(newReview);
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    createNotification(sellerId, "review", "Новый отзыв о товаре",
+      `Оценка ${newReview.rating}/5 по покупке «${(prod && prod.name) || bareId}».`, `/shop/${sellerId}`);
+    res.json({ ok: true, review: newReview });
+  } catch (e) {
+    console.error("[PURCHASE REVIEW API ERROR]", e);
+    res.status(500).json({ error: "server" });
+  }
+});
+
 app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1647,7 +1726,26 @@ app.post("/api/market/orders/:id/reviews", guard, async (req, res) => {
       order_id: id,
       reviewer_id: req.userId,                                   /* из сессии, не из тела */
       reviewee_id: isBuyer ? accepted.master_id : ord.user_id,  /* оппонент по сделке */
-      product_id: ord.product_id || (ord.refType === "product" ? ord.refName : undefined), /* ЭТАП 4 (§4.3) */
+      /* ЭТАП 4 (§4.3): привязка отзыва к товару. Приоритет: явный product_id
+         сделки → seller_id + id последней купленной карточки покупателя
+         (покупка фиксируется в d.purchases при оформлении заказа из карточки).
+         Структура БД не меняется — только проекция существующих полей. */
+      product_id: (() => {
+        if (ord.product_id) return String(ord.product_id);
+        if (ord.refType === "product" && ord.refName) return String(ord.refName);
+        try {
+          const buys = (d.purchases || []).filter((x) => String(x.userId) === String(ord.user_id) && x.status !== "cancelled");
+          if (buys.length > 0) {
+            const last = buys.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0))[0];
+            const pid = String(last.productId || last.id || "");
+            /* совпадение продавца — обязательное условие привязки */
+            if (pid && String(ord.seller_id || accepted.master_id || "") && (!ord.seller_id || String(ord.seller_id) === String(accepted.master_id))) {
+              return pid.startsWith("sp-") ? pid : "sp-" + pid;
+            }
+          }
+        } catch (_) { /* мягкая деградация: отзыв остаётся без товарной привязки */ }
+        return undefined;
+      })(),
       rating: Number(rating),
       text: text || "",
       created_at: new Date().toISOString()
