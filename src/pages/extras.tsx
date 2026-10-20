@@ -917,7 +917,7 @@ export function PlansPage() {
    Регистрация продавца: 4 этапа (юрлицо → документы → модерация → оплата)
    + блок «О мастере». Используется на /seller/register и в /auth.
    ============================================================ */
-export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
+export function SellerRegWizard({ embedded = false, onLegalType }: { embedded?: boolean; onLegalType?: (t: string) => void }) {
   const s = useSellerReg();
   const login = useAppStore((st) => st.login);
   const session = useAppStore((st) => st.session);
@@ -929,6 +929,10 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   const sellerAcc = useSellerAccount();
 
   const info = sellerTypeInfo(s.legalType);
+
+  /* ПУНКТ 1: сообщаем родителю (форме регистрации) выбранный юридический тип,
+     чтобы он передал его в поле legalType запроса /auth/register. */
+  useEffect(() => { onLegalType?.(s.legalType || ""); }, [s.legalType, onLegalType]);
 
   /* OCR-имитация: файл «проверяется» 1.2с */
   useEffect(() => {

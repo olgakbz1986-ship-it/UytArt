@@ -285,7 +285,7 @@ export function AuthPage() {
           </div>
 
           {regTab === "seller" ? (
-            <SellerRegWizard embedded />
+            <SellerRegWizard embedded onLegalType={setRegLegalType} />
           ) : (
             <div className="max-w-[520px] mx-auto">
               {/* ПУНКТ 2/6: регистрация покупателя состоит из одного шага,
