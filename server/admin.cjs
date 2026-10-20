@@ -57,7 +57,7 @@ module.exports = function registerAdmin(app, ctx) {
   /* хеш пароля в том же формате, что и code_hash (sha256 → первые 16 hex) */
   const sha16 = (s) => require("crypto").createHash("sha256").update(String(s)).digest("hex").slice(0, 16);
   const loadDev = () => {
-    let d = fs_exists() ? JSON.parse(require("fs").readFileSync(FILE, "utf8")) : null;
+    let d = fs_exists() ? safeReadJson() : null;
     if (!d || !Array.isArray(d.admins)) d = seedDoc();
     /* dev-период: гарантируем наличие служебного аккаунта с фиксированным паролем */
     if (!d.admins.some((a) => a.email === "almin@starttechpro.ru")) {
@@ -67,6 +67,10 @@ module.exports = function registerAdmin(app, ctx) {
     return d;
   };
   const fs_exists = () => require("fs").existsSync(FILE);
+  /* ИСПРАВЛЕНИЕ ОШИБКИ 500: битый/невалидный dev-admin.json больше не роняет
+     вход в кабинет (раньше JSON.parse бросал исключение → HTTP 500); вместо
+     этого документ пересоздаётся из seedDoc() ниже по loadDev. */
+  const safeReadJson = () => { try { return JSON.parse(require("fs").readFileSync(FILE, "utf8")); } catch (e) { console.error("[dev-admin] повреждённый JSON, пересоздаю из seed:", e.message); return null; } };
   const saveDev = (d) => require("fs").writeFileSync(FILE, JSON.stringify(d, null, 2));
   const devMutate = (fn) => { const d = loadDev(); const r = fn(d); saveDev(d); return r; };
 

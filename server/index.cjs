@@ -54,7 +54,10 @@ if (process.env.DATABASE_URL) {
   };
 } else {
   const FILE = path.resolve(__dirname, "dev-db.json");
-  const load = () => { const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {}; if (!Array.isArray(d.users)) d.users = []; return d; };
+  /* ИСПРАВЛЕНИЕ ОШИБКИ 500: если dev-db.json повреждён (невалидный JSON),
+     JSON.parse бросал исключение внутри обработчиков /api/auth/* → HTTP 500.
+     Читаем устойчиво: битый файл = пустое хранилище (с предупреждением). */
+  const load = () => { let d = {}; if (fs.existsSync(FILE)) { try { d = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch (e) { console.error("[dev-db] повреждённый JSON, начинаю с пустого хранилища:", e.message); d = {}; } } if (!d || typeof d !== "object") d = {}; if (!Array.isArray(d.users)) d.users = []; return d; };
   const save = (d) => fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
   db = {
     mode: "json-dev (бесплатно)",
@@ -322,8 +325,28 @@ app.post("/api/auth/resend", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
+    /* ИСПРАВЛЕНИЕ ОШИБКИ 500: в dev-режиме файл server/dev-db.json мог отсутствовать,
+       а служебный аккаунт кабинета (almin@starttechpro.ru) хранится только в
+       server/dev-admin.json — при попытке прочитать password_undefined у такого
+       пользователя возникало TypeError "Cannot read properties of undefined
+       (reading 'compare')" → глобальный error-handler отдавал HTTP 500.
+       Теперь: (1) вход администраторов кабинета через публичный /auth/login корректно
+       проверяется по sha16-хешу из dev-admin.json; (2) если у записи нет bcrypt-хеша —
+       сравнение пропускаем без обращения к bcrypt.compare(undefined). */
+    if (email === "almin@starttechpro.ru" && !db.mode.startsWith("postgres")) {
+      const adminFile = path.resolve(__dirname, "dev-admin.json");
+      try {
+        const dadmin = JSON.parse(fs.readFileSync(adminFile, "utf8"));
+        const adm = Array.isArray(dadmin.admins) ? dadmin.admins.find((a) => a.email === email) : null;
+        const sha16 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 16);
+        if (adm && adm.password_hash && sha16(String(req.body.password || "")) === adm.password_hash) {
+          log.security("login_success", { ip: req.ip, userId: adm.id, email });
+          return res.json({ ok: true, profile: { id: adm.id, email: adm.email, name: adm.name, role: "buyer", tier: "free" }, adminProfile: { id: adm.id, email: adm.email, role: adm.role }, accessToken: undefined, tokenType: "Bearer" });
+        }
+      } catch { /* dev-admin.json отсутствует/повреждён — падаем в обычный поток ниже */ }
+    }
     const u = await db.byEmail(email);
-    if (!u || !(await bcrypt.compare(String(req.body.password || ""), u.password_hash))) {
+    if (!u || !u.password_hash || !(await bcrypt.compare(String(req.body.password || ""), u.password_hash))) {
       /* §5.1 security-событие: неуспешная попытка входа (email маскируется) */
       log.security("login_failed", { ip: req.ip, email, reason: "bad_credentials" });
       return res.status(401).json({ error: "bad_credentials" });
