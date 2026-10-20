@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PasswordInput } from "../components/PasswordInput";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Smartphone, Mail, CheckCircle2, Store } from "lucide-react";
-import { useAppStore } from "../lib/store";
+import { useAppStore, type UserRole } from "../lib/store";
 import { Btn, Field } from "../components/ui";
 import { SellerRegWizard } from "./extras";
 import { adminApi } from "../lib/admin-api";
@@ -177,13 +177,15 @@ export function AuthPage() {
     /* АВТОМАТИЧЕСКИЙ ВХОД: в dev-режиме (без подтверждения email) сразу
        выполняем вход и редирект в кабинет с правильным именем и ролью. */
     if (!r.needConfirm && r.userId) {
+      const autoRole: UserRole = r.role === "seller" ? "seller" : "buyer";
       useAppStore.getState().login({
         id: r.userId,
         name: r.name || reg.name.trim(),
         email: r.email || reg.email.trim().toLowerCase(),
-        role: (r.role === "seller" ? "seller" : "buyer") as any
-      } as any);
-      nav(r.role === "seller" ? "/seller/dashboard" : "/profile");
+        phone: reg.phone || undefined,
+        role: autoRole
+      });
+      nav(autoRole === "seller" ? "/seller/dashboard" : "/profile");
       return;
     }
     /* ПУНКТ 5: режим с подтверждением email — плавный переход на экран подтверждения
