@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PasswordInput } from "../components/PasswordInput";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Smartphone, Mail, CheckCircle2, Info, Sparkles, Store } from "lucide-react";
+import { Smartphone, Mail, CheckCircle2, Store } from "lucide-react";
 import { useAppStore } from "../lib/store";
 import { Btn, Field } from "../components/ui";
 import { SellerRegWizard } from "./extras";
@@ -18,22 +18,27 @@ import { adminApi } from "../lib/admin-api";
    ============================================================ */
 export function AuthPage() {
   const [sp] = useSearchParams();
+  /* ПУНКТ 5: после подтверждения email сервер редиректит на /#/auth?email=... —
+     подставляем этот email в форму входа, чтобы пользователю не пришлось вводить его заново. */
+  const preEmail = sp.get("email") || "";
   const login = useAppStore((s) => s.login);
   const authLogin = useAppStore((s) => s.authLogin);
   const authRegister = useAppStore((s) => s.authRegister);
   const nav = useNavigate();
 
-  const [tab, setTab] = useState<"sms" | "email">("sms");
+  const [emailForm, setEmailForm] = useState({ email: preEmail, password: "" });
+  const [tab, setTab] = useState<"sms" | "email">(preEmail ? "email" : "sms");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const [emailForm, setEmailForm] = useState({ email: "", password: "" });
   const [regOpen, setRegOpen] = useState(sp.get("mode") === "register");
   const [regTab, setRegTab] = useState<"buyer" | "seller">(sp.get("role") === "seller" ? "seller" : "buyer");
-  const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, styles: [] as string[] });
+  /* ПУНКТ 2/6: регистрация покупателя — один шаг (имя, email, телефон, пароль, согласие).
+     Устаревшие шаги выбора категорий/стилей удалены вместе с полем styles. */
+  const [reg, setReg] = useState({ name: "", email: "", phone: "", password: "", tos: false });
   const [confirmInfo, setConfirmInfo] = useState<null | { email: string; devUrl?: string }>(null);
 
   /* ── Кабинет: тихий вход для служебных email (публично не упоминается).
@@ -99,8 +104,15 @@ export function AuthPage() {
     if (code !== "4242") { setError("Неверный код. Для демо введите 4242"); return; }
     setBusy(true);
     setTimeout(() => {
-      login({ id: "u" + Date.now(), name: "Покупатель Quantiform", email: phone + "@starttechpro.ru", phone, role: "buyer" });
-      nav("/profile");
+      /* ПУНКТ 3: демо-вход использует данные, введённые пользователем:
+         имя из формы регистрации (если не введено — «Пользователь» + последние
+         4 цифры телефона); роль — с выбранной вкладки регистрации, а не жёстко "buyer". */
+      const digits = phone.replace(/\D/g, "");
+      const fallbackName = "Пользователь" + (digits.slice(-4) || "");
+      const name = reg.name.trim() || fallbackName;
+      const role = regTab || "buyer";
+      login({ id: "u" + Date.now(), name, email: reg.email.trim() || (phone + "@starttechpro.ru"), phone, role });
+      nav(role === "seller" ? "/seller/dashboard" : "/profile");
     }, 500);
   };
 
@@ -138,18 +150,45 @@ export function AuthPage() {
     }
   };
 
-  const STYLES8 = ["Сканди", "Лофт", "Джапанди", "Неоклассика", "Бохо", "Минимализм", "Прованс", "Эко"];
+  /* ПУНКТ 4: клиентская валидация email перед отправкой на сервер —
+     email нет пустым, содержит @ и доменную часть (совпадает с регуляркой сервера). */
+  const isValidEmail = (v: string) => /^\S+@\S+\.\S+$/.test(v.trim());
+
   const finishReg = async () => {
+    setError("");
+    /* Дополнительная проверка перед запросом — предотвращает заведомо некорректные запросы */
+    if (!isValidEmail(reg.email)) { setError("Проверьте email: нужен формат name@domain.ru"); return; }
     setBusy(true);
-    const r = await authRegister({ name: reg.name, email: reg.email, password: reg.password });
+    const r = await authRegister({ name: reg.name.trim(), email: reg.email.trim().toLowerCase(), password: reg.password, role: regTab || "buyer", legalType: "" });
     { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[reg.email.trim().toLowerCase()] = reg.password; localStorage.setItem(vk, JSON.stringify(vv)); }
     setBusy(false);
     if (!r.ok) {
-      setError(r.error === "exists" ? "Такой email уже зарегистрирован — войдите" : r.error === "short_password" ? "Пароль должен быть не короче 8 символов" : "Ошибка регистрации, попробуйте ещё раз");
-      setRegOpen(false);
+      /* ПУНКТ 4: специфичные сообщения для каждой ошибки сервера */
+      setError(
+        r.error === "exists" ? "Такой email уже зарегистрирован — перейдите ко входу (кнопка «Войти»)" :
+        r.error === "bad_email" ? "Некорректный email — проверьте формат адреса" :
+        r.error === "short_password" ? "Пароль должен быть не короче 8 символов" :
+        r.error === "bad_name" ? "Имя должно быть не короче 2 символов" :
+        "Ошибка регистрации, попробуйте ещё раз"
+      );
+      /* остаёмся на форме регистрации: пользователь может исправить данные или войти */
       return;
     }
-    setConfirmInfo({ email: reg.email, devUrl: r.devConfirmUrl });
+    /* АВТОМАТИЧЕСКИЙ ВХОД: в dev-режиме (без подтверждения email) сразу
+       выполняем вход и редирект в кабинет с правильным именем и ролью. */
+    if (!r.needConfirm && r.userId) {
+      useAppStore.getState().login({
+        id: r.userId,
+        name: r.name || reg.name.trim(),
+        email: r.email || reg.email.trim().toLowerCase(),
+        role: (r.role === "seller" ? "seller" : "buyer") as any
+      } as any);
+      nav(r.role === "seller" ? "/seller/dashboard" : "/profile");
+      return;
+    }
+    /* ПУНКТ 5: режим с подтверждением email — плавный переход на экран подтверждения
+       без перезагрузки страницы; dev-ссылка от сервера показывается прямо на экране. */
+    setConfirmInfo({ email: reg.email.trim().toLowerCase(), devUrl: r.devConfirmUrl });
   };
 
   return (
@@ -245,94 +284,26 @@ export function AuthPage() {
             <SellerRegWizard embedded />
           ) : (
             <div className="max-w-[520px] mx-auto">
-              <div className="flex items-center gap-2 mb-7">
-                {[1, 2, 3, 4].map((s) => (
-                  <span key={s} className={`h-1.5 rounded-full transition-all duration-300 flex-1 ${s <= reg.stage ? "bg-accent" : "bg-line-soft"}`} />
-                ))}
+              {/* ПУНКТ 2/6: регистрация покупателя состоит из одного шага,
+                  поэтому индикатор прогресса (4 полоски) удалён как избыточный. */}
+              <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4 fade-up">
+                <h1 className="font-display font-bold text-[24px] text-ink">Создайте аккаунт</h1>
+                <Field label="Имя" required><input className="field" value={reg.name} onChange={(e) => setReg({ ...reg, name: e.target.value })} placeholder="Анна" /></Field>
+                <Field label="Email" required><input className="field" type="email" autoComplete="email" inputMode="email" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
+                <Field label="Телефон"><input className="field" value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} placeholder="+7 (___) ___-__-__" /></Field>
+                <Field label="Пароль" required hint="Минимум 8 символов"><PasswordInput autoComplete="new-password" value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} placeholder="••••••" /></Field>
+                <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
+                  <input type="checkbox" checked={reg.tos} onChange={(e) => setReg({ ...reg, tos: e.target.checked })} className="mt-0.5" />
+                  <span className="text-[13px] text-ink-soft leading-relaxed">
+                    Я принимаю условия <Link to="/legal/buyer_tos" className="font-bold text-accent-deep underline">Оферты</Link> и <Link to="/legal/privacy" className="font-bold text-accent-deep underline">Политики конфиденциальности</Link> <span className="text-error">*</span>
+                  </span>
+                </label>
+                {error && <p className="text-[13px] font-semibold text-error fade-up">{error}</p>}
+                <Btn size="lg" className="w-full" disabled={busy || !reg.tos || reg.name.trim().length < 2 || !isValidEmail(reg.email) || reg.password.length < 8}
+                  onClick={finishReg}>
+                  {busy ? "Создаём аккаунт…" : "Зарегистрироваться"}
+                </Btn>
               </div>
-
-              {reg.stage === 1 && (
-                <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4">
-                  <h1 className="font-display font-bold text-[24px] text-ink">Создайте аккаунт</h1>
-                  <Field label="Имя" required><input className="field" value={reg.name} onChange={(e) => setReg({ ...reg, name: e.target.value })} placeholder="Анна" /></Field>
-                  <Field label="Email" required><input className="field" type="email" autoComplete="email" inputMode="email" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
-                  <Field label="Телефон"><input className="field" value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} placeholder="+7 (___) ___-__-__" /></Field>
-                  <Field label="Пароль" required hint="Минимум 6 символов"><PasswordInput autoComplete="new-password" value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} placeholder="••••••" /></Field>
-                  <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
-                    <input type="checkbox" checked={reg.tos} onChange={(e) => setReg({ ...reg, tos: e.target.checked })} className="mt-0.5" />
-                    <span className="text-[13px] text-ink-soft leading-relaxed">
-                      Я принимаю условия <Link to="/legal/buyer_tos" className="font-bold text-accent-deep underline">Оферты</Link> и <Link to="/legal/privacy" className="font-bold text-accent-deep underline">Политики конфиденциальности</Link> <span className="text-error">*</span>
-                    </span>
-                  </label>
-                  <Btn size="lg" className="w-full" disabled={!reg.tos || reg.name.trim().length < 2 || !reg.email.includes("@") || reg.password.length < 6}
-                    onClick={() => setReg({ ...reg, stage: 2 })}>
-                    Продолжить
-                  </Btn>
-                </div>
-              )}
-
-              {reg.stage === 2 && (
-                <div className="bg-surface rounded-2xl shadow-card p-7">
-                  <h1 className="font-display font-bold text-[24px] text-ink mb-1.5">Что вам нравится?</h1>
-                  <p className="text-[13.5px] text-ink-soft mb-6">AI-дизайнер будет учитывать это в подборках.</p>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {["Декор и дом", "Одежда и обувь", "Аксессуары", "Техника", "Фурнитура", "Быт и сад", "Красота", "Хобби"].map((c) => (
-                      <label key={c} className="flex items-center gap-2.5 border border-line rounded-xl px-4 py-3 cursor-pointer hover:border-dark transition-colors text-[13.5px] font-semibold text-ink">
-                        <input type="checkbox" defaultChecked /> {c}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flex gap-3 mt-7">
-                    <Btn variant="outline" className="flex-1" onClick={() => setReg({ ...reg, stage: 1 })}>Назад</Btn>
-                    <Btn className="flex-1" onClick={() => setReg({ ...reg, stage: 3 })}>Дальше</Btn>
-                  </div>
-                </div>
-              )}
-
-              {reg.stage === 3 && (
-                <div className="bg-surface rounded-2xl shadow-card p-7">
-                  <h1 className="font-display font-bold text-[24px] text-ink mb-1.5">Ваш стиль</h1>
-                  <p className="text-[13.5px] text-ink-soft mb-6">Выберите хотя бы два направления.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {STYLES8.map((s) => {
-                      const on = reg.styles.includes(s);
-                      return (
-                        <button key={s} onClick={() => setReg({ ...reg, styles: on ? reg.styles.filter((x) => x !== s) : [...reg.styles, s] })}
-                          className={`px-4 min-h-[44px] rounded-full text-[13px] font-bold transition-all duration-200 cursor-pointer ${on ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-3 mt-7">
-                    <Btn variant="outline" className="flex-1" onClick={() => setReg({ ...reg, stage: 2 })}>Назад</Btn>
-                    <Btn className="flex-1" disabled={reg.styles.length < 2} onClick={() => setReg({ ...reg, stage: 4 })}>Дальше</Btn>
-                  </div>
-                </div>
-              )}
-
-              {reg.stage === 4 && (
-                <div className="bg-surface rounded-2xl shadow-card p-7 text-center">
-                  <span className="inline-flex w-16 h-16 rounded-full bg-ai-soft text-ai items-center justify-center mb-5"><Sparkles size={30} /></span>
-                  <h1 className="font-display font-bold text-[24px] text-ink mb-2">Персональные рекомендации</h1>
-                  <p className="text-[13.5px] text-ink-soft leading-relaxed max-w-sm mx-auto mb-5">
-                    Мы подберём товары под стили «{reg.styles.join("», «")}» и ваши интересы.
-                    AI-персонализацию можно включить прямо сейчас.
-                  </p>
-                  <div className="text-left mb-6">
-                    <label className="flex items-start gap-3 cursor-pointer select-none">
-                      <input type="checkbox" checked={reg.ai} onChange={(e) => setReg({ ...reg, ai: e.target.checked })} className="mt-0.5" />
-                      <span className="text-[13px] text-ink-soft flex items-start gap-1.5">
-                        <Info size={15} className="text-ai shrink-0 mt-0.5" /> Разрешаю использовать данные для AI-персонализации (необязательно)
-                      </span>
-                    </label>
-                  </div>
-                  <div className="flex gap-3">
-                    <Btn variant="outline" className="flex-1" onClick={() => setReg({ ...reg, stage: 3 })}>Назад</Btn>
-                    <Btn className="flex-1" disabled={busy} onClick={finishReg}>{busy ? "Создаём аккаунт…" : "Зарегистрироваться"}</Btn>
-                  </div>
-                </div>
-              )}
 
               <p className="text-center mt-6 text-[13.5px] text-ink-soft">
                 Уже есть аккаунт?{" "}

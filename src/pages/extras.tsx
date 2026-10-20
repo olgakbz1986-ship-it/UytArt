@@ -973,12 +973,16 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
       useNotifyStore.getState().push({ kind: "alert", title: "Оплата взноса не прошла", text: payRes.error === "payment_not_confirmed" ? "Платёж не подтверждён провайдером. Попробуйте ещё раз или выберите другой способ." : "Сервис оплаты недоступен: " + (payRes.error || "сеть") });
       return;
     }
-    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd, role: "seller", legalType: s.legalType || "self_employed" });
+    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: String(s.email).trim().toLowerCase(), password: pwd, role: "seller", legalType: s.legalType || "self_employed" });
     { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[s.email.trim().toLowerCase()] = pwd; localStorage.setItem(vk, JSON.stringify(vv)); }
     if (regRes.ok && regRes.needConfirm) {
       useNotifyStore.getState().push({ kind: "report", title: "Подтвердите email", text: "Письмо отправлено на " + s.email + (regRes.devConfirmUrl ? ". Dev-ссылка: " + regRes.devConfirmUrl : "") });
-    } else if (!regRes.ok && regRes.error !== "exists") {
-      useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт входа не создан на сервере", text: "Локальный кабинет работает, но вход с другого устройства будет недоступен: " + (regRes.error || "сеть") });
+    } else if (!regRes.ok && regRes.error === "exists") {
+      /* ПУНКТ 4: понятное сообщение при занятом email — предлагаем войти */
+      useNotifyStore.getState().push({ kind: "alert", title: "Такой email уже зарегистрирован", text: "Аккаунт с этим email уже существует — войдите в него вместо регистрации." });
+      return;
+    } else if (!regRes.ok) {
+      useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт входа не создан на сервере", text: "Локальный кабинет работает, но вход с другого устройства будет недоступен: " + (regRes.error === "bad_email" ? "некорректный email" : regRes.error === "short_password" ? "пароль короче 8 символов" : regRes.error === "bad_name" ? "имя короче 2 символов" : regRes.error || "сеть") });
     }
     const existingSeller = Object.values(useAppStore.getState().accounts)
       .flat()

@@ -31,7 +31,7 @@ async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
 export const api = {
   health: () => req("/health"),
   register: (p: { name: string; email: string; password: string; role?: string; legalType?: string }) =>
-    req<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string }>("/auth/register", { method: "POST", body: JSON.stringify(p) }),
+    req<{ ok: boolean; userId?: string; name?: string; email?: string; role?: string; needConfirm?: boolean; devConfirmUrl?: string; error?: string }>("/auth/register", { method: "POST", body: JSON.stringify(p) }),
   login: (email: string, password: string) =>
     req<{ ok: boolean; profile?: ApiProfile; tariff?: ApiTariff; error?: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   logout: () => req("/auth/logout", { method: "POST" }),
