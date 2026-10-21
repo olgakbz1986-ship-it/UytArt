@@ -108,7 +108,7 @@ export function AuthPage() {
     if (!emailForm.email.includes("@")) { setError("Проверьте email"); return; }
     /* служебный email кабинета: сервер распознаёт адрес и переводит вход в шаг кода */
     if (await startAdminOtp()) return;
-    if (emailForm.password.length < 6) { setError("Введите пароль (минимум 6 символов)"); return; }
+    if (emailForm.password.length < 8) { setError("Введите пароль (минимум 6 символов)"); return; }
     setError("");
     setBusy(true);
     const r = await authLogin(emailForm.email.trim(), emailForm.password);
@@ -199,7 +199,7 @@ export function AuthPage() {
             /* OTP-шаг служебного входа: нейтральный, без упоминания кабинета */
             <div className="bg-surface rounded-2xl shadow-card p-7 space-y-4 fade-up">
               <Field label="Код подтверждения" required hint={adminHint}>
-                <input className="field tracking-[6px] text-center font-bold text-[20px]" value={adminCode} onChange={(e) => setAdminCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" inputMode="numeric" autoComplete="one-time-code" />
+                <input className="field tracking-[6px] text-center font-bold text-[20px]" value={adminCode} onChange={(e) => setAdminCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••••" inputMode="numeric" autoComplete="one-time-code" />
               </Field>
               {error && <p className="text-[13px] font-semibold text-error fade-up">{error}</p>}
               <Btn size="lg" className="w-full" disabled={busy || adminCode.length !== 6} onClick={adminVerify}>{busy ? "Проверяем…" : "Подтвердить вход"}</Btn>
@@ -211,7 +211,7 @@ export function AuthPage() {
                 <input className="field" type="email" autoComplete="email" inputMode="email" value={emailForm.email} onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })} placeholder="anna@mail.ru" />
               </Field>
               <Field label="Пароль" required>
-                <PasswordInput autoComplete="current-password" value={emailForm.password} onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })} placeholder="••••••" />
+                <PasswordInput autoComplete="current-password" value={emailForm.password} onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })} placeholder="••••••••" />
               </Field>
               {error && <p className="text-[13px] font-semibold text-error fade-up">{error}</p>}
               <Btn size="lg" className="w-full" disabled={busy} onClick={emailLogin}>{busy ? "Входим…" : "Войти"}</Btn>
@@ -257,14 +257,14 @@ export function AuthPage() {
                   <Field label="Имя" required><input className="field" value={reg.name} onChange={(e) => setReg({ ...reg, name: e.target.value })} placeholder="Анна" /></Field>
                   <Field label="Email" required><input className="field" type="email" autoComplete="email" inputMode="email" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} placeholder="anna@mail.ru" /></Field>
                   <Field label="Телефон"><input className="field" value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} placeholder="+7 (___) ___-__-__" /></Field>
-                  <Field label="Пароль" required hint="Минимум 6 символов"><PasswordInput autoComplete="new-password" value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} placeholder="••••••" /></Field>
+                  <Field label="Пароль" required hint="Минимум 8 символов"><PasswordInput autoComplete="new-password" value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} placeholder="••••••••" /></Field>
                   <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
                     <input type="checkbox" checked={reg.tos} onChange={(e) => setReg({ ...reg, tos: e.target.checked })} className="mt-0.5" />
                     <span className="text-[13px] text-ink-soft leading-relaxed">
                       Я принимаю условия <Link to="/legal/buyer_tos" className="font-bold text-accent-deep underline">Оферты</Link> и <Link to="/legal/privacy" className="font-bold text-accent-deep underline">Политики конфиденциальности</Link> <span className="text-error">*</span>
                     </span>
                   </label>
-                  <Btn size="lg" className="w-full" disabled={!reg.tos || reg.name.trim().length < 2 || !reg.email.includes("@") || reg.password.length < 6}
+                  <Btn size="lg" className="w-full" disabled={!reg.tos || reg.name.trim().length < 2 || !reg.email.includes("@") || reg.password.length < 8}
                     onClick={() => setReg({ ...reg, stage: 2 })}>
                     Продолжить
                   </Btn>

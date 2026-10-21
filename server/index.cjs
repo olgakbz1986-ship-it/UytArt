@@ -93,7 +93,7 @@ app.use(helmet({
 }));
 /* CORS: строгий whitelist. В продакшене НИКОГДА "*" в origin.
    credentials включены — нужны httpOnly-куки с refresh-токеном (§1.3). */
-const DEV_ORIGINS = ["http://localhost:3000", "http://192.168.0.109:3000", "http://localhost:5173", "http://127.0.0.1:5173"];
+const DEV_ORIGINS = ["http://localhost:3000", "http://192.168.0.109:3000", "http://192.168.0.167:3000", "http://localhost:5173", "http://127.0.0.1:5173"];
 const PROD_ORIGINS = ["https://quantiform.ru", "https://www.quantiform.ru"];
 const ALLOWED_ORIGINS = new Set(
   (process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : [])
