@@ -1491,7 +1491,7 @@ function createNotification(userId, type, title, text, link) {
 function devDbRead() {
   const FILE = require("path").resolve(__dirname, "dev-db.json");
   const fs = require("fs");
-  return { FILE, fs, d: fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [], masters: [], products: [] } };
+  return { FILE, fs, d: fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { users: [], custom_orders: [], order_responses: [], order_messages: [], masters: [], shops: [], products: [] } };
 }
 
 /* ЭТАП 2: жёсткий гео-фильтр на уровне выборки. Город покупателя
@@ -1542,6 +1542,18 @@ app.get("/api/masters", softGuard, async (_q, r) => {
   catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
+/* Лента магазинов: зеркальный эндпоинт к /api/masters. Карточки магазинов
+   создаются лениво при первом POST /api/shops (массив d.shops). */
+app.get("/api/shops", softGuard, async (_q, r) => {
+  try {
+    const { d } = devDbRead();
+    const city = await buyerCityFromQueryOrSession(_q);
+    const enriched = (d.shops || []).map(normalizeGeo);
+    r.json({ ok: true, shops: geo.geoFilter(enriched, city), filteredByCity: city || null });
+  }
+  catch (e) { console.error("[SHOPS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
 app.post("/api/masters", guard, (req, r) => {
   try {
     const m = req.body || {};
@@ -1559,6 +1571,26 @@ app.post("/api/masters", guard, (req, r) => {
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
     r.json({ ok: true });
   } catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
+});
+
+/* Upsert карточки магазина: правило владения идентично мастерам —
+   id карточки совпадает с id аккаунта продавца-владельца. */
+app.post("/api/shops", guard, (req, r) => {
+  try {
+    const m = req.body || {};
+    if (!m.id) return r.status(400).json({ error: "no_id" });
+    if (String(m.id) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
+    const { FILE, fs, d } = devDbRead();
+    if (!d.shops) d.shops = [];
+    const idx = d.shops.findIndex((x) => x.id === m.id);
+    if (idx >= 0) {
+      d.shops[idx] = Object.assign({}, d.shops[idx], m, { updated_at: new Date().toISOString() });
+    } else {
+      d.shops.push(Object.assign({}, m, { owner_id: req.userId, created_at: new Date().toISOString() }));
+    }
+    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    r.json({ ok: true });
+  } catch (e) { console.error("[SHOPS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
 /* Удаление карточки мастера — только владельцем. */

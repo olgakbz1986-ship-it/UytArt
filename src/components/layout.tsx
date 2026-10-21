@@ -361,6 +361,7 @@ export function Header() {
     { to: "/catalog", label: "Каталог" },
     { to: "/market", label: "Заказы" },
     { to: "/masters", label: "Мастера" },
+    { to: "/shops", label: "Магазины" },
     { to: "/ai-designer", label: "AI-дизайнер" },
     { to: "/about", label: "О нас" },
     { to: "/contacts", label: "Контакты" },
