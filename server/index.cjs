@@ -305,9 +305,17 @@ app.post("/api/auth/register", async (req, res) => {
     if (await db.byEmail(email)) return res.status(409).json({ error: "exists" });
     const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
-    await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp });
+    const newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp });
     const dev = await sendConfirm(email, name, token);
-    res.json({ ok: true, needConfirm: db.mode.startsWith("postgres"), devConfirmUrl: dev || undefined });
+    res.json({ 
+      ok: true, 
+      userId: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      needConfirm: db.mode.startsWith("postgres"), 
+      devConfirmUrl: dev || undefined 
+    });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });
 

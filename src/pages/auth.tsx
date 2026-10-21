@@ -149,6 +149,13 @@ export function AuthPage() {
       setRegOpen(false);
       return;
     }
+    // АВТО-ВХОД: если подтверждение не требуется (демо-режим), сразу входим в систему
+    if (r.userId && !r.needConfirm) {
+      login({ id: r.userId, name: r.name, email: r.email, role: r.role || "buyer" });
+      nav("/profile");
+      return;
+    }
+    
     setConfirmInfo({ email: reg.email, devUrl: r.devConfirmUrl });
   };
 
