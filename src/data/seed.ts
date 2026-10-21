@@ -53,6 +53,7 @@ export const GROUP_IMG: Record<string, string> = {
   digital: "/img/digital.jpg",
   services: "/img/services.jpg",
   foodcourt: "/img/foodcourt.jpg",
+  medicine: "/img/medicine.jpg",
 };
 
 /* ---------- категории с подкатегориями ---------- */
