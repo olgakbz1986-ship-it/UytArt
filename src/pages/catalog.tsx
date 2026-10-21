@@ -153,6 +153,22 @@ export function CatalogPage() {
   const browseMode = !q && group === "all" && cat === "all";
 
   const market = useMarketProducts();
+  /* Счётчики сервисных лент второго уровня каталога: уникальные владельцы
+     товаров витрины (sp-) текущей группы; для «Мастеров» — только те, у кого
+     включён флаг isMaster (профиль продавца или сам товар). */
+  const { groupShopOwners, groupMasterOwners } = useMemo(() => {
+    const shops = new Set<string>();
+    const masters = new Set<string>();
+    const profiles = useSellerReg.getState().profilesByAccount;
+    market.forEach((p: any) => {
+      if (!p.id.startsWith("sp-") || !p.ownerId) return;
+      if (catBySlug(p.categoryId)?.group !== group) return;
+      shops.add(p.ownerId);
+      const isM = profiles[p.ownerId]?.isMaster || p.isMaster;
+      if (isM) masters.add(p.ownerId);
+    });
+    return { groupShopOwners: shops, groupMasterOwners: masters };
+  }, [market, group]);
   const items = useMemo(() => {
     let l = market.filter((x) => (x.id.startsWith("sp-") || x.id.startsWith("dp-")) && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
     if (q) {
@@ -235,6 +251,19 @@ export function CatalogPage() {
         <>
           <div className="bg-surface rounded-2xl shadow-card p-3 mb-6">
             <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute px-2 pb-2">Категории</p>
+            {/* Сервисные ленты: магазины и мастера, отфильтрованные по текущей группе */}
+            <Link to={`/shops?group=${group}`}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors ${sp.get("shops") === "1" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+              <span>🏪</span>
+              <span className="flex-1 text-left leading-tight">Магазины</span>
+              <span className={`text-[11px] ${sp.get("shops") === "1" ? "text-cream/60" : "text-ink-mute"}`}>{groupShopOwners.size}</span>
+            </Link>
+            <Link to={`/masters?group=${group}`}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors ${sp.get("masters") === "1" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+              <span>🛠️</span>
+              <span className="flex-1 text-left leading-tight">Мастера</span>
+              <span className={`text-[11px] ${sp.get("masters") === "1" ? "text-cream/60" : "text-ink-mute"}`}>{groupMasterOwners.size}</span>
+            </Link>
             <button onClick={() => (window.location.hash = `#/catalog?group=${group}`)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors ${cat === "all" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
               ✦ Все категории

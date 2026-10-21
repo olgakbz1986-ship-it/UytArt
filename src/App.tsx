@@ -16,6 +16,7 @@ const AiDesignerPage = React.lazy(() => import("./features/ai-designer/AiDesigne
 const ProfilePage = React.lazy(() => import("./pages/profile"));
 const ProductEditorPage = React.lazy(() => import("./pages/ProductEditor").then((m) => ({ default: m.ProductEditorPage })));
 const MastersPage = React.lazy(() => import("./pages/masters").then((m) => ({ default: m.MastersPage })));
+const ShopsPage = React.lazy(() => import("./pages/masters").then((m) => ({ default: m.ShopsPage })));
 const ShopPage = React.lazy(() => import("./pages/masters").then((m) => ({ default: m.ShopPage })));
 const PlansPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.PlansPage })));
 const MarketPage = React.lazy(() => import("./pages/extras").then((m) => ({ default: m.MarketPage })));
@@ -125,6 +126,7 @@ function AppInner() {
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/masters" element={<MastersPage />} />
+              <Route path="/shops" element={<ShopsPage />} />
               <Route path="/shop/:slug" element={<ShopPage />} />
               <Route path="/ai-assistant" element={<AiPage />} />
               <Route path="/ai-designer" element={<AiDesignerPage />} />

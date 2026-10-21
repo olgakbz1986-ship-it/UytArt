@@ -26,6 +26,7 @@ const GROUP_LABELS: Record<string, string> = {
   plumbing_comms: "🚿 Сантехника",
   services: "🤝 Услуги",
   tech: "📱 Электроника",
+  medicine: "🩺 Медицина",
 };
 
 const POPULAR_SLUGS = ["vases-cachepots", "figurines-sculptures", "paintings-posters-panels", "womens-clothing", "home-aromas", "candles-holders", "photo-frames-albums", "decorative-figures-souvenirs"];
