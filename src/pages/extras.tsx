@@ -16,8 +16,8 @@ import { persist } from "zustand/middleware";
 import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
-  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye} from "lucide-react";
+  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, Home, Shirt, Clock,
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { CITIES, safeDistrictLabel } from "../lib/geo";
 import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from "../lib/inn";
@@ -2580,7 +2580,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
    ============================================================ */
 const aboutStats: [string, string][] = [
   ["1 240", "мастеров и производств"],
-  ["8", "групп товаров"],
+  ["16", "групп товаров, включая цифровые активы и фудкорт"],
   ["41", "категория и сотни подкатегорий"],
   ["74", "города доставки по России"],
 ];
@@ -2607,6 +2607,7 @@ const aboutValues = [
   ["Прозрачность и честность", "Никаких скрытых условий, поддельных отзывов или недобросовестных продавцов. Каждая сделка защищена."],
   ["Поддержка локального производства", "Мы развиваем культуру осознанного потребления, где качественные авторские вещи служат годами и передают свою ценность."],
   ["Инновации без границ", "Мы постоянно внедряем новые технологии и функции, чтобы сделать ваш опыт покупки максимально удобным и вдохновляющим."],
+  ["Созидательное участие", "Технологии должны не заменять человеческое творчество, а усиливать его, делая каждого пользователя соавтором своего уникального пространства"],
 ];
 
 export function AboutPage() {
@@ -2636,10 +2637,11 @@ export function AboutPage() {
           </Reveal>
           <Reveal delay={240}>
             <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-5">
-              Мы закрываем этот разрыв. Quantiform — это первая в России вертикальная экосистема нового поколения, где
-              передовые технологии искусственного интеллекта встречаются с талантами мастеров со всей страны. Мы объединяем
-              широкий ассортимент уникальных товаров, возможность индивидуальных заказов и интеллектуальный подбор в едином
-              пространстве. Мы превращаем хаотичный поиск в осмысленный процесс создания вашего идеального мира.
+              Мы закрываем этот разрыв. Quantiform — это первая в России платформа созидательного потребления нового
+              поколения, где искусственный интеллект становится соавтором пользователя, помогая не просто купить вещь, а
+              создать целостное пространство или образ — от визуализации интерьера до индивидуального заказа. Здесь
+              передовые технологии встречаются с талантами мастеров со всей страны, превращая хаотичный поиск в
+              осмысленный процесс создания вашего идеального мира.
             </p>
           </Reveal>
           <Reveal delay={320}>
@@ -2652,6 +2654,72 @@ export function AboutPage() {
               ))}
             </div>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- AI-дизайнер: центральная секция визуального соавторства ---------- */}
+      <section className="bg-dark/[0.03] border-y border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            <Reveal>
+              <p className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">
+                <Sparkles size={14} /> Фирменная технология
+              </p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">AI-дизайнер: ваше визуальное соавторство</h2>
+              <p className="text-[15px] leading-[1.75] text-ink-soft mt-5">
+                Quantiform меняет саму логику покупки: вы больше не ищете отдельную вещь — вы создаёте целостное
+                пространство или образ вместе с искусственным интеллектом. Механика проста:
+              </p>
+              <ul className="mt-5 space-y-3">
+                {[
+                  "Загрузите фото своей комнаты — или своё собственное фото, если речь об образе.",
+                  "Получите три концепции дизайна или образа с уже подобранными товарами из каталога Quantiform.",
+                  "Сравните варианты бок о бок и купите всё понравившееся решение в один клик.",
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-accent-soft text-accent-deep flex items-center justify-center shrink-0 mt-0.5"><CheckCircle2 size={14} /></span>
+                    <p className="text-[14.5px] leading-relaxed text-ink-soft">{t}</p>
+                  </li>
+                ))}
+              </ul>
+              <Link to="/ai-designer" className="inline-flex items-center gap-2 mt-7 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                Попробовать AI-дизайнер <ArrowRight size={16} />
+              </Link>
+            </Reveal>
+            {/* мок интерфейса AI-дизайнера */}
+            <Reveal delay={100}>
+              <div className="bg-surface rounded-2xl shadow-lift p-5 sm:p-6 border border-line-soft max-w-md lg:ml-auto w-full">
+                <div className="flex items-center gap-2.5 pb-4 border-b border-line-soft">
+                  <span className="w-9 h-9 rounded-full bg-ai-soft text-ai flex items-center justify-center"><Sparkles size={17} /></span>
+                  <div>
+                    <p className="text-[13.5px] font-bold text-ink">AI-дизайнер Quantiform</p>
+                    <p className="text-[11px] text-ink-mute">интерьер гостиной · 18 м²</p>
+                  </div>
+                </div>
+                <div className="py-4">
+                  <div className="rounded-xl border border-dashed border-accent/60 bg-cream/40 flex flex-col items-center justify-center gap-2 py-6">
+                    <span className="w-11 h-11 rounded-full bg-accent-soft text-accent-deep flex items-center justify-center"><Upload size={19} /></span>
+                    <p className="text-[12.5px] font-semibold text-ink-soft">Перетащите фото комнаты или вашего образа</p>
+                  </div>
+                </div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute mb-2.5">Три концепции готовы</p>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[["🛋️", "Сканди"], ["🏺", "Бохо"], ["✨", "Минимал"]].map(([e, l]) => (
+                    <div key={l} className="rounded-xl bg-cream border border-line-soft p-2.5 text-center hover:border-accent transition-colors cursor-default">
+                      <span className="block h-12 rounded-lg bg-gradient-to-br from-accent/15 to-ai/15 flex items-center justify-center text-[22px]">{e}</span>
+                      <p className="text-[11px] font-bold text-ink mt-1.5">{l}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                  <span className="text-[12px] text-ink-mute">Подобрано товаров: 12</span>
+                  <button type="button" className="inline-flex items-center gap-1.5 h-9 px-4 rounded-[10px] bg-dark text-cream text-[12.5px] font-bold hover:bg-dark-deep transition-colors">
+                    <ShoppingBag size={14} /> В корзину
+                  </button>
+                </div>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
@@ -2677,7 +2745,7 @@ export function AboutPage() {
         </div>
       </section>
 
-      {/* ---------- 5 столпов превосходства ---------- */}
+      {/* ---------- 6 столпов превосходства ---------- */}
       <section className="bg-surface/60 border-y border-line-soft">
         <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
           <Reveal>
@@ -2686,7 +2754,7 @@ export function AboutPage() {
               <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">Это будущее e-commerce нового поколения</h2>
               <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
                 Мы проанализировали лучшие мировые практики (от Etsy и Westwing до Houzz и Pinterest) и создали решение,
-                которое объединяет их сильные стороны, устраняя фундаментальные недостатки. Наши 5 столпов превосходства:
+                которое объединяет их сильные стороны, устраняя фундаментальные недостатки. Наши 6 столпов превосходства:
               </p>
             </div>
           </Reveal>
@@ -2734,7 +2802,44 @@ export function AboutPage() {
               </div>
             </Reveal>
 
-            {/* 2. Индивидуальные заказы */}
+            {/* 2. AI-дизайнер */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                {/* мок концепций AI-дизайнера */}
+                <div className="bg-surface rounded-2xl shadow-lift p-5 max-w-md border border-line-soft lg:order-1 order-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[12px] font-bold uppercase tracking-wide text-accent-deep">Концепции от AI-дизайнера</p>
+                    <Badge tone="honey">3 варианта</Badge>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[["🛋️", "Сканди"], ["🌿", "Бохо"], ["🖤", "Лофт"]].map(([e, l]) => (
+                      <div key={l} className="rounded-xl bg-cream border border-line-soft p-2 text-center">
+                        <span className="block h-12 rounded-lg bg-gradient-to-br from-accent/15 to-ai/15 flex items-center justify-center text-[20px]">{e}</span>
+                        <p className="text-[10.5px] font-bold text-ink mt-1.5">{l}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                    <span className="text-[12px] text-ink-mute">Shoppable: 12 товаров</span>
+                    <span className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[10px] bg-dark text-cream text-[12px] font-bold"><ShoppingBag size={13} /> В корзину</span>
+                  </div>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="02" icon={Sparkles} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">AI-дизайнер: визуальное соавторство</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Уникальная фича, которой нет ни на одной площадке в России: загрузите фото комнаты или своё фото — и
+                    получите три готовые концепции интерьера или образа. Каждая концепция shoppable: все подобранные товары
+                    уже найдены в каталоге Quantiform, сравнивайте варианты и покупайте целостное решение в один клик.
+                  </p>
+                  <Link to="/ai-designer" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Попробовать AI-дизайнер <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 2.5 Индивидуальные заказы мастерам */}
             <Reveal>
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 {/* мок заказа */}
@@ -2756,8 +2861,7 @@ export function AboutPage() {
                   </div>
                 </div>
                 <div className="lg:order-2 order-1">
-                  <PillarNum n="02" icon={Wrench} />
-                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Индивидуальные заказы мастерам</h3>
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink">Индивидуальные заказы мастерам</h3>
                   <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
                     Уникальная функция, которой нет ни у одного маркетплейса в России. Вы можете разместить индивидуальный
                     заказ с детальным описанием, эскизами или фото-референсами, и мастера со всей страны откликнутся на ваш
@@ -2778,10 +2882,10 @@ export function AboutPage() {
                   <PillarNum n="03" icon={Boxes} />
                   <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Широкий ассортимент уникальных товаров</h3>
                   <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
-                    Мы не ограничиваемся одной категорией. Quantiform — это экосистема, где представлены интерьерный декор и
-                    авторская мебель, уникальная одежда и аксессуары ручной работы, ювелирные изделия, керамика, текстиль,
-                    предметы искусства, персональные подарки и товары для хобби — и многое другое от проверенных мастеров и
-                    небольших производств.
+                    Quantiform — это экосистема из 16 групп товаров: от интерьерного декора и авторской мебели до медицины,
+                    уникальной одежды и аксессуаров ручной работы, ювелирных изделий, керамики, текстиля и предметов
+                    искусства — вплоть до цифровых активов (ИИ-агенты, промты, 3D-модели) и локального фудкорта. Всё это —
+                    от проверенных мастеров и небольших производств.
                   </p>
                   <Link to="/catalog" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
                     Смотреть каталог <ArrowRight size={16} />
@@ -2827,7 +2931,7 @@ export function AboutPage() {
               </div>
             </Reveal>
 
-            {/* 5. Безопасность */}
+            {/* 5. Безопасная сделка */}
             <Reveal>
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 <div>
@@ -2857,6 +2961,41 @@ export function AboutPage() {
                 </div>
               </div>
             </Reveal>
+
+            {/* 6. Премиум-экосистема */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                {/* мок премиум-возможностей */}
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md border border-line-soft lg:order-1 order-2">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-4">Премиум-возможности</p>
+                  <div className="space-y-3">
+                    {[["🛍️", "Дропы −20% каждую неделю"], ["⏱️", "Куратор отвечает за 30 минут"], ["📈", "Авто-отчёт агента еженедельно"], ["🏷️", "White-label со своим доменом"]].map(([e, t]) => (
+                      <div key={t} className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-lg bg-premium-soft flex items-center justify-center text-[15px] shrink-0">{e}</span>
+                        <p className="text-[13px] font-semibold text-ink leading-snug">{t}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Link to="/plans" className="inline-flex items-center gap-2 mt-5 pt-4 border-t border-line-soft w-full text-[13px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Сравнить тарифы <ArrowRight size={15} />
+                  </Link>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="06" icon={Crown} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Премиум-экосистема</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Подписка Quantiform — это реальные инструменты роста для обеих сторон. Покупателям: закрытые еженедельные
+                    дропы со скидкой 20%, кураторская линия с ответом за 30 минут и VIP-бейджи. Продавцам: еженедельные
+                    авто-отчёты AI-агента, A/B-тестирование карточек товаров, white-label витрина с кастомным доменом,
+                    импорт товаров из CSV и персональный менеджер с гарантированным SLA.
+                  </p>
+                  <Link to="/plans" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Возможности Premium <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
           </div>
         </div>
       </section>
@@ -2870,19 +3009,81 @@ export function AboutPage() {
         <div className="space-y-5">
           <Reveal>
             <AudienceBand icon={Gift} tone="accent" title="Для ценителей уникальности"
-              text="Для тех, кто устал от однотипных решений масс-маркета и ищет вещи, которые расскажут историю о его владельце. Для людей, которые хотят найти идеальный подарок, обустроить пространство со вкусом или просто приобрести что-то особенное, не тратя сотни часов на поиски."
+              text="Анна загрузила фото гостиной, AI предложил три варианта в скандинавском стиле, и она собрала весь интерьер из каталога за один вечер. Так работает созидательное потребление: вы не ищете вещи по отдельности — вы создаёте целостное пространство."
               link={{ to: "/catalog", label: "Исследовать каталог" }} />
           </Reveal>
           <Reveal delay={80}>
             <AudienceBand icon={Wrench} tone="ai" title="Для мастеров и творцов"
-              text="Для художников, дизайнеров, ремесленников, экспертов 3D-печати, швей, ювелиров и небольших производств. Мы даем вам премиальную витрину, доступ к платежеспособной аудитории, инструменты для приема индивидуальных заказов и технологические решения, которые раньше были доступны только крупным брендам."
+              text="Мастерская использует A/B-тесты обложек, получает еженедельный прогноз продаж от AI-агента и управляет бренд-витриной, увеличивая конверсию. Технологический арсенал крупного бренда — теперь в распоряжении каждого мастера."
               link={{ to: "/seller/register", label: "Открыть мастерскую" }} />
           </Reveal>
           <Reveal delay={160}>
             <AudienceBand icon={Palette} tone="premium" title="Для дизайнеров и профессионалов"
-              text="Мы становимся вашим надежным технологическим партнером. Находите проверенных мастеров, формируйте заказы для клиентов в пару кликов, получайте прозрачное вознаграждение за рекомендации через наш B2B-портал и используйте AI-инструменты для визуализации проектов."
-              link={{ to: "/ai-assistant", label: "AI-инструменты" }} />
+              text="Используйте AI-дизайнер для быстрой визуализации идей клиента, подбирайте товары через B2B-портал и получайте прозрачное вознаграждение за рекомендации. От концепции до реализации проекта — в рамках одной платформы."
+              link={{ to: "/ai-designer", label: "AI-инструменты" }} />
           </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- почему это лучше традиционного подхода ---------- */}
+      <section className="bg-surface/60 border-y border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Сравнение подходов</p>
+            <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight max-w-2xl">Почему это лучше традиционного подхода</h2>
+            <p className="text-[15px] leading-relaxed text-ink-soft mt-4 max-w-2xl">
+              Классический дизайн интерьера — это месяцы работы и большие бюджеты. Quantiform AI сжимает этот путь до
+              нескольких минут, не жертвуя качеством результата.
+            </p>
+          </Reveal>
+          <div className="grid md:grid-cols-2 gap-5 mt-12">
+            <Reveal>
+              <div className="bg-surface rounded-2xl border border-line-soft p-6 sm:p-7 h-full">
+                <div className="flex items-center gap-3 mb-5">
+                  <span className="w-11 h-11 rounded-xl bg-cream border border-line-soft flex items-center justify-center text-ink-mute"><Clock size={21} /></span>
+                  <h3 className="font-display font-bold text-[20px] text-ink">Традиционный дизайн</h3>
+                </div>
+                <ul className="space-y-3.5">
+                  {[
+                    "Недели поиска идей, мастеров и подходящих товаров по разным площадкам",
+                    "Высокие чеки за консультацию и визуализацию проекта",
+                    "Разрозненная покупка мебели: сроки, стили и бюджеты не сходятся",
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-cream border border-line-soft text-ink-mute flex items-center justify-center shrink-0 mt-0.5"><X size={13} /></span>
+                      <p className="text-[14.5px] leading-relaxed text-ink-soft">{t}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+            <Reveal delay={100}>
+              <div className="bg-dark text-cream rounded-2xl shadow-lift p-6 sm:p-7 h-full relative overflow-hidden">
+                <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 85% 10%, rgba(217,142,50,0.22) 0, transparent 45%)" }} />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-5">
+                    <span className="w-11 h-11 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Zap size={21} /></span>
+                    <h3 className="font-display font-bold text-[20px]">Quantiform AI</h3>
+                  </div>
+                  <ul className="space-y-3.5">
+                    {[
+                      "Три варианта интерьера или образа за считанные минуты",
+                      "Бесплатная генерация концепций с уже подобранными товарами из каталога",
+                      "Мгновенная покупка всего решения в один клик с гарантией безопасной сделки",
+                    ].map((t) => (
+                      <li key={t} className="flex items-start gap-3">
+                        <span className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center shrink-0 mt-0.5"><CheckCircle2 size={14} /></span>
+                        <p className="text-[14.5px] leading-relaxed text-cream/85">{t}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/ai-designer" className="inline-flex items-center gap-2 mt-7 text-[14px] font-bold text-accent hover:text-cream transition-colors">
+                    Попробовать AI-дизайнер <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
@@ -2954,17 +3155,17 @@ export function AboutPage() {
           <div className="grid md:grid-cols-3 gap-5">
             <Reveal>
               <JoinCard tone="accent" emoji="🛍️" role="Если вы покупатель"
-                text="Начните диалог с нашим AI-ассистентом прямо сейчас, разместите индивидуальный заказ мастеру или исследуйте тысячи уникальных товаров от проверенных продавцов."
-                link={{ to: "/ai-assistant", label: "Начать с AI" }} />
+                text="Начните диалог с AI-дизайнером прямо сейчас: загрузите фото комнаты и соберите целостный интерьер из каталога за один вечер. Или разместите индивидуальный заказ мастеру — технологии и таланты уже ждут вас."
+                link={{ to: "/ai-designer", label: "Начать с AI-дизайнером" }} />
             </Reveal>
             <Reveal delay={80}>
               <JoinCard tone="ai" emoji="🛠️" role="Если вы мастер или производитель"
-                text="Подайте заявку на верификацию и откройте свою цифровую мастерскую для тысяч ценителей качественных вещей по всей России. Получайте не только стандартные заказы, но и индивидуальные проекты от клиентов, которые ценят ваш талант."
+                text="Подайте заявку на верификацию и откройте цифровую мастерскую с белым ярлыком (white-label) на своём домене для тысяч ценителей качественных вещей по всей России. Получайте не только стандартные заказы, но и индивидуальные проекты от клиентов, которые ценят ваш талант."
                 link={{ to: "/seller/register", label: "Стать продавцом" }} />
             </Reveal>
             <Reveal delay={160}>
               <JoinCard tone="premium" emoji="✏️" role="Если вы дизайнер или профессионал"
-                text="Используйте наши B2B-инструменты для работы с клиентами, получайте вознаграждение за рекомендации и создавайте проекты вместе с проверенными мастерами."
+                text="Используйте наши B2B-инструменты для работы с клиентами, получайте вознаграждение за рекомендации и создавайте проекты вместе с проверенными мастерами. Сравните тарифы и выберите силу своего аккаунта."
                 link={{ to: "/plans", label: "B2B-возможности" }} />
             </Reveal>
           </div>
