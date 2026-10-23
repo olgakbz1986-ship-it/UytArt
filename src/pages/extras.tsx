@@ -3241,33 +3241,156 @@ function JoinCard({ tone, emoji, role, text, link }: {
 /* ============================================================
    Правовая информация — индекс документов (/legal)
    ============================================================ */
-const LEGAL_INDEX: { to: string; title: string; desc: string }[] = [
-  { to: "/legal/buyer_tos", title: "Пользовательское соглашение (Оферта)", desc: "Условия покупки на платформе, статус агрегатора, ответственность сторон." },
-  { to: "/legal/privacy", title: "Политика конфиденциальности", desc: "Как мы обрабатываем персональные данные по 152-ФЗ." },
-  { to: "/legal/data_processing", title: "Политика обработки персональных данных", desc: "Порядок сбора, хранения и защиты персональных данных." },
-  { to: "/legal/escrow_rules", title: "Правила безопасной сделки", desc: "Резервирование средств на транзитном счёте до подтверждения отправки." },
-  { to: "/legal/return_policy", title: "Правила возврата товара", desc: "Возврат в течение 7 дней, за исключением товаров на заказ." },
-  { to: "/legal/seller_agreement", title: "Агентский договор для мастеров", desc: "Условия работы продавцом: комиссия, гарантии, индемнификация." },
-  { to: "/legal/market_rules", title: "Правила биржи заказов", desc: "Порядок размещения индивидуальных заказов и откликов мастеров." },
-];
+const printDoc = (title: string, content: string) => {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(`<html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:Georgia,serif;max-width:800px;margin:2rem auto;line-height:1.6;white-space:pre-wrap">${content}</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+};
 
 export function LegalIndexPage() {
+  const activeDocs = LEGAL_DOCUMENTS.filter((d) => !d.archived);
+  const archivedDocs = LEGAL_DOCUMENTS.filter((d) => d.archived);
+  const goodsRules = legalDoc("goods_rules");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+
   return (
-    <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
-      <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Правовая информация</h1>
-      <p className="text-[14px] text-ink-soft mb-8">Здесь собраны все юридические документы и правила платформы Quantiform.</p>
+    <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-10">
+      <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Документы</h1>
+      <p className="text-[14px] text-ink-soft mb-8">Правовой пакет платформы Quantiform версии 2026-10: одиннадцать документов, архив редакций и действующие правила.</p>
+
+      {/* Правовой статус платформы */}
+      <Reveal>
+        <section className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck size={18} className="text-accent-deep" />
+            <p className="font-display font-bold text-[17px] text-ink">Правовой статус платформы</p>
+          </div>
+          <p className="text-[14px] leading-relaxed text-ink-soft">
+            Quantiform является владельцем агрегатора информации о товарах и услугах по статье 12 Закона о защите прав потребителей,
+            информационным посредником по статье 1253.1 Гражданского кодекса и посреднической цифровой платформой по Федеральному закону
+            от 31 июля 2025 года номер 289-ФЗ. Платформа не является продавцом, изготовителем, эскроу-агентом или платёжным агентом.
+          </p>
+        </section>
+      </Reveal>
+
+      {/* Согласия и их версии */}
+      <Reveal delay={80}>
+        <section className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText size={18} className="text-accent-deep" />
+            <p className="font-display font-bold text-[17px] text-ink">Согласия и их версии</p>
+          </div>
+          <ul className="space-y-2">
+            {[
+              "Оферта для покупателя версии 3.0 принимается при регистрации.",
+              "Политика обработки персональных данных версии 4.0 принимается при регистрации.",
+              "Согласия на AI-профилирование и на использование изображения принимаются при использовании соответствующих сервисов.",
+              "Перечень и версии согласий определяются офертой и политикой персональных данных.",
+            ].map((t) => (
+              <li key={t} className="flex gap-3 text-[14px] leading-relaxed text-ink-soft">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 mt-2" />
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </Reveal>
+
+      {/* Запрещённые и ограниченные к обороту товары */}
+      <Reveal delay={160}>
+        <section className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 mb-10">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={18} className="text-accent-deep" />
+            <p className="font-display font-bold text-[17px] text-ink">Запрещённые и ограниченные к обороту товары</p>
+          </div>
+          <p className="text-[14px] leading-relaxed text-ink-soft">
+            К размещению на платформе не допускаются лекарственные средства, алкогольная и спиртосодержащая продукция, табак и
+            никотинсодержащая продукция, оружие и его основные части, а также иные товары, оборот которых ограничен или запрещён
+            законодательством Российской Федерации. Медицинские изделия размещаются только при наличии регистрационных удостоверений,
+            категория «Медицина» не включает лекарственные средства.
+          </p>
+          {goodsRules && (
+            <Link to={`/legal/${goodsRules.doc_type}`} className="inline-flex items-center gap-1.5 mt-4 text-[13px] font-bold text-accent-deep hover:text-ink transition-colors">
+              Правила оборота товаров на платформе <ArrowRight size={15} />
+            </Link>
+          )}
+        </section>
+      </Reveal>
+
+      {/* Сетка активных документов */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {LEGAL_INDEX.map((d) => (
-          <Link key={d.to} to={d.to}
-            className="group bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col">
-            <p className="font-display font-bold text-[16px] text-ink leading-snug group-hover:text-accent-deep transition-colors">{d.title}</p>
-            <p className="text-[13px] text-ink-soft mt-2 leading-relaxed">{d.desc}</p>
-            <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-bold text-accent-deep">
-              Читать документ <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform duration-200" />
-            </span>
-          </Link>
+        {activeDocs.map((d, i) => (
+          <Reveal key={d.doc_type} delay={Math.min(i * 60, 300)}>
+            <div className="bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col h-full">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <p className="font-display font-bold text-[16px] text-ink leading-snug">{d.title}</p>
+                <Badge tone="honey" className="shrink-0">v{d.version}</Badge>
+              </div>
+              {d.effectiveDate && (
+                <p className="text-[12px] text-ink-mute mb-3">Действует с {fmtDate(d.effectiveDate)}</p>
+              )}
+              <p className="text-[13px] text-ink-soft leading-relaxed mb-3">{d.summary}</p>
+              {(d.keyPoints ?? []).slice(0, 3).length > 0 && (
+                <ul className="space-y-1.5 mb-4">
+                  {(d.keyPoints ?? []).slice(0, 3).map((kp) => (
+                    <li key={kp} className="flex gap-2 text-[12.5px] leading-snug text-ink-soft">
+                      <CheckCircle2 size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span>{kp}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-auto pt-2 flex items-center gap-2">
+                <Link to={`/legal/${d.doc_type}`}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-[10px] text-[13px] font-bold bg-dark text-cream hover:bg-dark-deep transition-colors">
+                  Читать <ArrowRight size={14} />
+                </Link>
+                <Btn variant="outline" size="sm" title="Печать и сохранение" onClick={() => printDoc(d.title, d.content)}>
+                  Печать и сохранение
+                </Btn>
+              </div>
+            </div>
+          </Reveal>
         ))}
       </div>
+
+      {/* Архив редакций */}
+      {archivedDocs.length > 0 && (
+        <div className="mt-10 bg-surface rounded-2xl shadow-card border border-line-soft overflow-hidden">
+          <button type="button" onClick={() => setArchiveOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-2 p-5 text-left cursor-pointer hover:bg-cream transition-colors">
+            <span className="font-display font-bold text-[15px] text-ink">Архив редакций</span>
+            {archiveOpen ? <Minus size={16} className="text-ink-mute" /> : <Plus size={16} className="text-ink-mute" />}
+          </button>
+          {archiveOpen && (
+            <div className="px-5 pb-5 space-y-3">
+              {archivedDocs.map((d) => {
+                const replacement = d.supersededBy ? legalDoc(d.supersededBy) : undefined;
+                return (
+                  <div key={d.doc_type} className="rounded-xl border border-line-soft bg-cream p-4">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <p className="font-bold text-[14px] text-ink">{d.title}</p>
+                      <Badge tone="neutral">v{d.version}</Badge>
+                      <Badge tone="warning">объединён</Badge>
+                    </div>
+                    <p className="text-[12.5px] text-ink-soft leading-relaxed">{d.summary}</p>
+                    {replacement && (
+                      <Link to={`/legal/${replacement.doc_type}`}
+                        className="inline-flex items-center gap-1.5 mt-2 text-[12.5px] font-bold text-accent-deep hover:text-ink transition-colors">
+                        Действующая редакция: {replacement.title} v{replacement.version} <ArrowRight size={14} />
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="text-[12px] text-ink-mute mt-8">Оператор платформы: {OPERATOR.name} · ИНН {OPERATOR.inn} · {OPERATOR.legalEmail}</p>
     </div>
   );
@@ -3288,7 +3411,7 @@ export function LegalPage() {
           {LEGAL_DOCUMENTS.map((d) => (
             <Link key={d.doc_type} to={`/legal/${d.doc_type}`}
               className={`block px-3 py-2.5 rounded-[10px] text-[13px] font-semibold transition-colors ${d.doc_type === type ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream hover:text-ink"}`}>
-              {d.title}
+              {d.title}{d.archived ? " (архив)" : ""}
             </Link>
           ))}
         </nav>
@@ -3297,9 +3420,53 @@ export function LegalPage() {
             <div className="flex items-center gap-3 flex-wrap mb-2">
               <h1 className="font-display font-bold text-[clamp(22px,3vw,30px)] text-ink">{doc.title}</h1>
               <Badge tone="ai">v{doc.version}</Badge>
+              {doc.archived && <Badge tone="warning">архив</Badge>}
             </div>
-            <p className="text-[13px] text-ink-mute mb-6">{doc.summary}</p>
-            <Markdown text={doc.content} />
+            <div className="flex items-center gap-3 flex-wrap mb-6">
+              {doc.effectiveDate && (
+                <p className="text-[13px] text-ink-mute inline-flex items-center gap-1.5">
+                  <Calendar size={13} /> Дата вступления в силу: {fmtDate(doc.effectiveDate)}
+                </p>
+              )}
+              <Btn variant="outline" size="sm" title="Печать и сохранение" onClick={() => printDoc(doc.title, doc.content)}>
+                Печать
+              </Btn>
+            </div>
+            {doc.archived ? (
+              <div className="rounded-xl border border-line-soft bg-cream p-6">
+                <Markdown text={doc.content} />
+                {doc.supersededBy && (() => {
+                  const replacement = legalDoc(doc.supersededBy!);
+                  return replacement ? (
+                    <Link to={`/legal/${replacement.doc_type}`}
+                      className="mt-5 inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13.5px] font-bold bg-dark text-cream hover:bg-dark-deep transition-colors">
+                      Перейти к действующей редакции: {replacement.title} v{replacement.version} <ArrowRight size={15} />
+                    </Link>
+                  ) : null;
+                })()}
+              </div>
+            ) : (
+              <>
+                <p className="text-[13px] text-ink-mute mb-6">{doc.summary}</p>
+                <Markdown text={doc.content} />
+                {(doc.keyPoints ?? []).length > 0 && (
+                  <section className="mt-8 pt-6 border-t border-line-soft">
+                    <p className="font-display font-bold text-[18px] text-ink mb-3">Ключевые положения</p>
+                    <ul className="space-y-2">
+                      {(doc.keyPoints ?? []).map((kp) => (
+                        <li key={kp} className="flex gap-3 text-[14px] leading-relaxed text-ink-soft">
+                          <CheckCircle2 size={15} className="text-accent shrink-0 mt-1" />
+                          <span>{kp}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </>
+            )}
+            <Link to="/legal" className="inline-flex items-center gap-1.5 mt-8 text-[13px] font-bold text-accent-deep hover:text-ink transition-colors">
+              Ко всем документам <ArrowRight size={15} />
+            </Link>
             <p className="text-[12px] text-ink-mute mt-8 pt-6 border-t border-line-soft">Оператор: {OPERATOR.name} · ИНН {OPERATOR.inn} · {OPERATOR.legalEmail}</p>
           </div>
         ) : (
