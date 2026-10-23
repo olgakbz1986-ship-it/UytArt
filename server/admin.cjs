@@ -465,6 +465,125 @@ module.exports = function registerAdmin(app, ctx) {
       next();
     };
   }
+  /* Пункт Ж: мягкая авторизация для публичных маршрутов тейкдауна —
+     если токен сессии есть, заполняем req.userId, иначе гость продолжает. */
+  function softAuth(req, res, next) {
+    const p = parseToken(req);
+    if (p && p.scope !== "admin") req.userId = p.sub;
+    next();
+  }
+
+  /* ============================================================
+     ПУНКТ Ж: ОЧЕРЕДЬ ТЕЙКДАУНА С СУТОЧНЫМ ТАЙМЕРОМ (ст. 1253.1 ГК РФ)
+     Хранение: dev-db.json (server/dev-db.json), массив products + takedown_queue.
+     ============================================================ */
+  const DEVDATA = require("path").resolve(__dirname, "dev-db.json");
+  const TAKEDOWN_DEADLINE_MS = 24 * 60 * 60 * 1000; /* сутки с момента получения уведомления */
+  function loadDevData() {
+    let d = {};
+    if (fs.existsSync(DEVDATA)) { try { d = JSON.parse(fs.readFileSync(DEVDATA, "utf8")); } catch { d = {}; } }
+    if (!d || typeof d !== "object") d = {};
+    if (!Array.isArray(d.products)) d.products = [];
+    /* инициализация очереди при отсутствии */
+    if (!Array.isArray(d.takedown_queue)) d.takedown_queue = [];
+    return d;
+  }
+  function saveDevData(d) { fs.writeFileSync(DEVDATA, JSON.stringify(d, null, 2)); }
+
+  /* Служебная функция зачистки: записи со статусами pending / waiting_counter
+     с истёкшим deadline переводятся в auto_blocked с меткой auto_blocked_at —
+     суточный срок исполнения не зависит от человеческой задержки. */
+  function sweepTakedownQueue() {
+    let d;
+    try { d = loadDevData(); } catch { return; }
+    const now = Date.now();
+    let changed = false;
+    for (const rec of (d.takedown_queue || [])) {
+      if ((rec.status === "pending" || rec.status === "waiting_counter") && rec.deadline && now > Date.parse(rec.deadline)) {
+        rec.status = "auto_blocked";
+        rec.auto_blocked_at = new Date(now).toISOString();
+        const pr = (d.products || []).find((x) => String(x.id) === String(rec.disputed_product_id));
+        if (pr) pr.blocked = true;
+        changed = true;
+      }
+    }
+    if (changed) saveDevData(d);
+  }
+  /* Зачистка выполняется middleware на всех маршрутах /api/admin/* ... */
+  app.use("/api/admin", (req, res, next) => { try { sweepTakedownQueue(); } catch (e) { console.error("[takedown-sweep]", e.message); } next(); });
+  /* ... и фоновым интервалом каждые 5 минут (unref — не мешает завершению процесса). */
+  setInterval(sweepTakedownQueue, 5 * 60 * 1000).unref?.();
+
+  /* POST /api/takedown — приём уведомления правообладателя (публичный, мягкая
+     авторизация). Валидация полноты по пункту 2 статьи 1253.1 ГК РФ. */
+  app.post("/api/takedown", express.json(), softAuth, (req, res) => {
+    try {
+      const b = req.body || {};
+      const REQUIRED = ["claimant_name", "claimant_contact", "disputed_product_id", "ip_ground", "evidence_url"];
+      const missing = REQUIRED.filter((k) => !String(b[k] == null ? "" : b[k]).trim());
+      if (missing.length) return res.status(400).json({ error: "incomplete_notice", missing });
+      const d = loadDevData();
+      const receivedAtMs = Date.now();
+      const received_at = new Date(receivedAtMs).toISOString();
+      /* Немедленная превентивная блокировка спорного товара */
+      const pr = (d.products || []).find((x) => String(x.id) === String(b.disputed_product_id));
+      if (pr) pr.blocked = true;
+      const rec = {
+        id: rid("td"),
+        claimant_name: String(b.claimant_name).trim(),
+        claimant_contact: String(b.claimant_contact).trim(),
+        disputed_product_id: String(b.disputed_product_id).trim(),
+        ip_ground: String(b.ip_ground).trim(),
+        evidence_url: String(b.evidence_url).trim(),
+        received_at,
+        /* дедлайн = received_at + 24 часа (ст. 1253.1 ГК РФ) */
+        deadline: new Date(receivedAtMs + TAKEDOWN_DEADLINE_MS).toISOString(),
+        status: "blocked",
+        counter_notice: null,
+        resolved_at: null,
+        auto_blocked_at: null,
+      };
+      d.takedown_queue.unshift(rec);
+      saveDevData(d);
+      return res.status(201).json({ ok: true, id: rec.id, deadline: rec.deadline });
+    } catch (e) { console.error("[TAKEDOWN ERROR]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* POST /api/takedown/:id/counter — встречное уведомление лица, разместившего
+     товар (мягкая авторизация). Доступ к товару автоматически НЕ восстанавливается:
+     разблокировка возможна только после внутреннего арбитража или подтверждения
+     отсутствия судебного иска (маршрут GET /api/admin/takedown-queue + действия). */
+  app.post("/api/takedown/:id/counter", express.json(), softAuth, (req, res) => {
+    try {
+      const d = loadDevData();
+      const rec = (d.takedown_queue || []).find((x) => String(x.id) === String(req.params.id));
+      if (!rec) return res.status(404).json({ error: "not_found" });
+      if (rec.status !== "blocked") return res.status(409).json({ error: "wrong_status", status: rec.status });
+      const b = req.body || {};
+      const text = String(b.text || "").trim();
+      if (!text) return res.status(400).json({ error: "incomplete_counter", missing: ["text"] });
+      rec.status = "counter_noticed";
+      rec.counter_notice = {
+        from_user_id: b.from_user_id != null ? String(b.from_user_id) : (req.userId || null),
+        text,
+        received_at: new Date().toISOString(),
+      };
+      saveDevData(d);
+      return res.json({ ok: true, record: rec });
+    } catch (e) { console.error("[TAKEDOWN COUNTER ERROR]", e); res.status(500).json({ error: "server" }); }
+  });
+
+  /* GET /api/admin/takedown-queue — список очереди под администраторской защитой,
+     сортировка по received_at по убыванию. */
+  app.get("/api/admin/takedown-queue", adminGuard, (req, res) => {
+    try {
+      const d = loadDevData();
+      const items = (d.takedown_queue || [])
+        .slice()
+        .sort((a, b) => Date.parse(b.received_at || 0) - Date.parse(a.received_at || 0));
+      res.json({ ok: true, items });
+    } catch (e) { console.error("[TAKEDOWN QUEUE ERROR]", e); res.status(500).json({ error: "server" }); }
+  });
 
   /* ---------- OTP login flow ----------------------------------------------- */
   /* Пароли служебных аккаунтов (dev-период): password_hash — sha256 от пароля,

@@ -1,6 +1,2 @@
 *.tmp
-node_modules/
-dist/
-server/dev-db.json
-server/dev-admin.json
-.env.local
+*.bak
