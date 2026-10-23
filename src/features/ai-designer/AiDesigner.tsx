@@ -12,6 +12,8 @@ import {
   ShoppingBag, Trash2, Replace, ChevronLeft, Eye, Save, Info, ScanLine, Shirt, Home as HomeIcon, Camera,
 } from "lucide-react";
 import { fmt } from "../../data/seed";
+import { LEGAL_VERSIONS } from "../../data/seed";
+import { useAppStore } from "../../lib/store";
 import { Badge, Btn, Rating } from "../../components/ui";
 import { useDesignerStore, listSavedProjects } from "../../lib/ai-designer/store";
 import { AI_DESIGNER_CONFIG } from "../../lib/ai-designer/config";
@@ -228,6 +230,22 @@ function IdleScreen() {
 }
 
 /* ============================================================
+   Реестр согласий (Итерация два, Пункт А.5): отправка записи согласия
+   на сервер (PUT /api/consents). Тихий отказ без сервера — локальный
+   реестр в persist-хранилище всё равно зафиксирован.
+   ============================================================ */
+async function pushConsent(rec: { document: string; version: string; timestamp: string }) {
+  try {
+    await fetch("/api/consents", {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rec),
+    });
+  } catch { /* сервер недоступен — запись остаётся в локальном реестре */ }
+}
+
+/* ============================================================
    Загрузка фото (uploading)
    ============================================================ */
 function UploadStep({ onDone }: { onDone?: () => void }) {
@@ -239,7 +257,21 @@ function UploadStep({ onDone }: { onDone?: () => void }) {
   const modelMode = project?.modelMode ?? false;
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  /* Пункт А.5: явное согласие на использование изображения гражданина
+     (ст. 152.1 ГК РФ). Без него кнопка продолжения (загрузки фото) неактивна. */
+  const hasImageConsent = useAppStore((s) => s.consents.some((c) => c.document === "ai_terms" && c.version === LEGAL_VERSIONS.ai_terms));
+  const [imageConsent, setImageConsent] = useState(hasImageConsent);
+  const [consentBlocked, setConsentBlocked] = useState(false);
   void onDone;
+
+  const onConsentChange = (checked: boolean) => {
+    setImageConsent(checked);
+    if (checked) {
+      setConsentBlocked(false);
+      const rec = useAppStore.getState().addConsent({ document: "ai_terms", version: LEGAL_VERSIONS.ai_terms });
+      void pushConsent(rec);
+    }
+  };
 
   const handleFile = async (file?: File | null) => {
     if (!file) return;
@@ -272,25 +304,43 @@ function UploadStep({ onDone }: { onDone?: () => void }) {
         </label>
       )}
 
+      {/* Пункт А.5: явное согласие на использование изображения гражданина
+          (ст. 152.1 ГК РФ) — без него загрузка/продолжение неактивны */}
+      <label className="flex items-start gap-3 bg-surface border border-line rounded-[14px] p-4 mb-4 cursor-pointer select-none">
+        <input type="checkbox" checked={imageConsent} onChange={(e) => onConsentChange(e.target.checked)} className="mt-0.5 accent-[#b98a2f]" />
+        <span>
+          <span className="block text-[13.5px] font-semibold text-ink">Я даю согласие на использование моего изображения <span className="text-error">*</span></span>
+          <span className="block text-[12.5px] text-ink-soft mt-0.5 leading-relaxed">
+            В соответствии со ст. 152.1 ГК РФ согласие на использование изображения гражданина требуется отдельно от
+            согласия на обработку персональных данных. Подтверждаю, что распространение загруженного изображения
+            (обработка AI-сервисами платформы и подбор товаров) осуществляется с моего согласия. Версия условий
+            использования AI-сервисов: {LEGAL_VERSIONS.ai_terms}.
+          </span>
+        </span>
+      </label>
+      {consentBlocked && !imageConsent && (
+        <p className="text-[12.5px] font-semibold text-error mb-3 fade-up">Отметьте согласие на использование изображения, чтобы продолжить.</p>
+      )}
+
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => { e.preventDefault(); if (!imageConsent) return; setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files?.[0]); }}
+        onDrop={(e) => { e.preventDefault(); if (!imageConsent) { setConsentBlocked(true); return; } setDragOver(false); handleFile(e.dataTransfer.files?.[0]); }}
         className={cx(
           "border-2 border-dashed rounded-[18px] p-10 text-center transition-colors",
           dragOver ? "border-accent bg-honey/40" : "border-line bg-surface",
         )}
       >
         <Upload size={30} className="mx-auto text-accent-deep mb-3" />
-        <p className="text-[14px] text-ink font-medium mb-1">Перетащите фото сюда или выберите файл</p>
+        <p className="text-[14px] text-ink font-medium mb-1">{imageConsent ? "Перетащите фото сюда или выберите файл" : "Сначала подтвердите согласие на использование изображения"}</p>
         <p className="text-[12px] text-ink-mute mb-4">JPG, JPEG, PNG, WebP · до 15 МБ · от 1024 px по длинной стороне</p>
-        <Btn variant="outline" onClick={() => inputRef.current?.click()}>Выбрать фото</Btn>
+        <Btn variant="outline" disabled={!imageConsent} onClick={() => inputRef.current?.click()}>Выбрать фото</Btn>
         <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0])} />
         {/* быстрый доступ к камере на мобильных (iOS Safari / Android Chrome) */}
         {/Android|iPhone|iPad|iPod/i.test(navigator.userAgent ?? "") && (
           <div className="mt-3">
-            <Btn variant="ghost" onClick={() => {
+            <Btn variant="ghost" disabled={!imageConsent} onClick={() => {
               const cam = document.createElement("input");
               cam.type = "file";
               cam.accept = "image/*";
@@ -327,8 +377,22 @@ function UploadStep({ onDone }: { onDone?: () => void }) {
 
       <p className="text-[11.5px] text-ink-mute mt-6 leading-relaxed">
         Фото используется только для создания дизайна и подбора товаров. Вы можете удалить проект в любой момент.{" "}
-        <Link to="/legal/privacy" className="underline hover:text-ink">Подробнее о обработке данных</Link>
+        <Link to="/legal/privacy" className="underline hover:text-ink">Подробнее о обработке данных</Link>{" · "}
+        <Link to="/legal/ai_terms" className="underline hover:text-ink">Условия использования AI-сервисов (ред. {LEGAL_VERSIONS.ai_terms})</Link>
       </p>
+
+      {/* Явная кнопка продолжения: неактивна без согласия по ст. 152.1 ГК РФ */}
+      <div className="flex gap-3 mt-7">
+        <Btn variant="outline" className="flex-1" onClick={useDesignerStore.getState().backToStart}>Назад</Btn>
+        <Btn
+          className="flex-1"
+          disabled={!imageConsent || !project?.sourceImageId && !modelMode}
+          title={!imageConsent ? "Сначала подтвердите согласие на использование изображения (ст. 152.1 ГК РФ)" : undefined}
+          onClick={() => { if (!imageConsent) { setConsentBlocked(true); return; } inputRef.current?.click(); }}
+        >
+          {project?.sourceImageId || modelMode ? "Продолжить" : "Загрузить фото и продолжить"}
+        </Btn>
+      </div>
     </div>
   );
 }
