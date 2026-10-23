@@ -560,7 +560,11 @@ export function downloadText(filename: string, content: string, mime = "text/csv
    резервируются продавцом; каталог ставит товары слота первыми с
    бейджем «Реклама».
    ============================================================ */
-export interface TopSlot { id: string; category: string; reservedAt: string; adLabel: "Реклама"; positions: 3; }
+/* Пункт Г (38-ФЗ): adToken — временный внутренний идентификатор размещения
+   вида ord-<идентификатор слота>. Заменяется реальным токеном единого реестра
+   интернет-рекламы (ОРД), полученным через оператора рекламных данных,
+   перед публикацией рекламного материала. */
+export interface TopSlot { id: string; category: string; reservedAt: string; adLabel: "Реклама"; positions: 3; adToken?: string; }
 interface TopSlotsState {
   slots: Record<string, TopSlot[]>; /* key = ownerId */
   reserve: (category: string) => TopSlot | null;
@@ -574,6 +578,10 @@ export const useTopSlots = create<TopSlotsState>()(
         if (!currentSellerFeatures().topPositions) return null;
         const uid = useAppStore.getState().session?.userId || "guest";
         const slot: TopSlot = { id: nid("slot"), category, reservedAt: new Date().toISOString(), adLabel: "Реклама", positions: 3 };
+        /* Временный внутренний идентификатор размещения (ord- + id слота);
+           перед публикацией заменяется реальным токеном единого реестра
+           интернет-рекламы, полученным через оператора рекламных данных. */
+        slot.adToken = "ord-" + slot.id;
         set((s) => ({ slots: { ...s.slots, [uid]: [slot, ...(s.slots[uid] || []).filter((x) => x.category !== category)].slice(0, 10) } }));
         fetch("/api/seller/top-positions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }) }).catch(() => {});
         return slot;
@@ -602,21 +610,29 @@ export const MEDIA_KIT = {
   outputsPerMonth: PROMO_MONTHLY_LIMIT,
   specs: { banner: "600×200 JPG/PNG", text: "до 120 символов", landing: "карточка товара или бренд-витрина" },
 };
-export interface PromoBooking { id: string; month: string; placement: string; creative: string; status: "scheduled" | "published"; }
+/* Пункт Г (38-ФЗ): creative — креатив плюс обязательный токен ОРД
+   (ordToken). Без реального токена единого реестра интернет-рекламы
+   бронирование промо-рассылки не подтверждается. */
+export interface PromoBooking { id: string; month: string; placement: string; creative: string; ordToken?: string; status: "scheduled" | "published"; }
 interface PromoState {
   bookings: PromoBooking[];
-  book: (placement: string, creative: string) => { ok: boolean; error?: string; booking?: PromoBooking };
+  book: (placement: string, creative: string, ordToken?: string) => { ok: boolean; error?: string; needOrdToken?: boolean; booking?: PromoBooking };
 }
 export const usePromoBookings = create<PromoState>()(
   persist(
     (set, get) => ({
       bookings: [],
-      book: (placement, creative) => {
+      book: (placement, creative, ordToken) => {
         if (!currentSellerFeatures().promoMailout) return { ok: false, error: "Промо в рассылках доступно только на Корпоративном Премиум" };
+        /* Токен ОРД обязателен: публикация промо-материала без реального токена
+           единого реестра интернет-рекламы запрещена (38-ФЗ, /legal/ad_rules). */
+        if (!String(ordToken || "").trim()) {
+          return { ok: false, needOrdToken: true, error: "Бронирование не подтверждено: публикация промо-материала без реального токена ОРД (единого реестра интернет-рекламы) запрещена. Подробнее: /legal/ad_rules" };
+        }
         const month = new Date().toISOString().slice(0, 7);
         const used = get().bookings.filter((b) => b.month === month).length;
         if (used >= PROMO_MONTHLY_LIMIT) return { ok: false, error: "Использованы все " + PROMO_MONTHLY_LIMIT + " выхода этого месяца" };
-        const b: PromoBooking = { id: nid("pb"), month, placement, creative, status: "scheduled" };
+        const b: PromoBooking = { id: nid("pb"), month, placement, creative, ordToken: String(ordToken).trim(), status: "scheduled" };
         set((s) => ({ bookings: [b, ...s.bookings].slice(0, 60) }));
         fetch("/api/seller/promo/book", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ placement, creative }) }).catch(() => {});
         return { ok: true, booking: b };

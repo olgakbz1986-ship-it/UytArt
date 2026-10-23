@@ -29,7 +29,7 @@ export function Btn({ children, onClick, variant = "primary", size = "md", disab
 
 /* ---------- бейджи ---------- */
 export type BadgeTone = "honey" | "dark" | "premium" | "success" | "error" | "ai" | "neutral" | "warning";
-export function Badge({ children, tone = "neutral", className = "" }: { children: ReactNode; tone?: BadgeTone; className?: string }) {
+export function Badge({ children, tone = "neutral", className = "", title }: { children: ReactNode; tone?: BadgeTone; className?: string; title?: string }) {
   const tones: Record<BadgeTone, string> = {
     honey: "bg-accent-soft text-accent-deep",
     dark: "bg-dark text-cream",
@@ -41,7 +41,7 @@ export function Badge({ children, tone = "neutral", className = "" }: { children
     warning: "bg-amber-100 text-amber-800 border border-amber-200",
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold leading-none ${tones[tone]} ${className}`}>
+    <span title={title} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold leading-none ${tones[tone]} ${className}`}>
       {children}
     </span>
   );

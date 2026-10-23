@@ -13,6 +13,7 @@ import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { ProductGrid } from "../components/product";
 import { Badge, Btn, GroupImg, ProductImg, Rating } from "../components/ui";
+import { useTopSlots } from "../lib/premium";
 import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
 import { productRating } from "../lib/review";
@@ -469,6 +470,19 @@ export function ProductPage() {
             {p.isNew && <Badge tone="dark">Новинка</Badge>}
             {p.oldPrice && <Badge tone="honey">−{Math.round((1 - p.price / p.oldPrice) * 100)}%</Badge>}
             {custom && <Badge tone="error"><Ban size={12} /> Товар на заказ: возврат невозможен</Badge>}
+            {/* Пункт Г (38-ФЗ): бейдж «Реклама» для категорий с занятым топ-слотом;
+                атрибут title и мелкий текст содержат идентификатор размещения adToken. */}
+            {(() => {
+              const allSlots = Object.values(useTopSlots.getState().slots).flat();
+              const slot = allSlots.find((s) => s.category === (cat?.name || p.categoryId));
+              if (!slot) return null;
+              return (
+                <>
+                  <Badge tone="warning" className="ml-1" title={slot.adToken}>Реклама</Badge>
+                  {slot.adToken && <span className="text-[9px] text-ink-mute self-center">{slot.adToken}</span>}
+                </>
+              );
+            })()}
           </div>
           <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] leading-tight text-ink">{p.name}</h1>
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
