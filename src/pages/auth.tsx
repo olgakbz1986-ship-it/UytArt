@@ -2,9 +2,10 @@ import { useState } from "react";
 import { PasswordInput } from "../components/PasswordInput";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Smartphone, Mail, CheckCircle2, Info, Sparkles, Store } from "lucide-react";
-import { useAppStore } from "../lib/store";
+import { useAppStore, type ConsentRecord } from "../lib/store";
 import { Btn, Field } from "../components/ui";
 import { SellerRegWizard } from "./extras";
+import { LEGAL_VERSIONS } from "../data/seed";
 import { adminApi } from "../lib/admin-api";
 
 /* ============================================================
@@ -33,7 +34,7 @@ export function AuthPage() {
   const [emailForm, setEmailForm] = useState({ email: "", password: "" });
   const [regOpen, setRegOpen] = useState(sp.get("mode") === "register");
   const [regTab, setRegTab] = useState<"buyer" | "seller">(sp.get("role") === "seller" ? "seller" : "buyer");
-  const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, styles: [] as string[] });
+  const [reg, setReg] = useState({ stage: 1, name: "", email: "", phone: "", password: "", tos: false, ai: false, age: "" as "" | "adult" | "minor", styles: [] as string[] });
   const [confirmInfo, setConfirmInfo] = useState<null | { email: string; devUrl?: string }>(null);
 
   /* ── Кабинет: тихий вход для служебных email (публично не упоминается).
@@ -139,9 +140,29 @@ export function AuthPage() {
   };
 
   const STYLES8 = ["Сканди", "Лофт", "Джапанди", "Неоклассика", "Бохо", "Минимализм", "Прованс", "Эко"];
+
+  /* Реестр согласий (Пункт А): версии фиксируются из LEGAL_VERSIONS на момент
+     регистрации, метка времени — текущая. age_consent хранит в поле version
+     выбранный вариант («18+» или «14-18 с согласием представителя»). */
+  const buildRegConsents = (): ConsentRecord[] => {
+    const ts = new Date().toISOString();
+    const list: ConsentRecord[] = [
+      { document: "buyer_tos", version: LEGAL_VERSIONS.buyer_tos, timestamp: ts },   /* оферта покупателя */
+      { document: "privacy", version: LEGAL_VERSIONS.privacy, timestamp: ts },       /* политика персональных данных */
+      { document: "age_consent", version: reg.age === "minor" ? "14-18_representative_consent" : "18+", timestamp: ts },
+    ];
+    if (reg.ai) list.push({ document: "ai_terms", version: LEGAL_VERSIONS.ai_terms, timestamp: ts });
+    return list;
+  };
+
   const finishReg = async () => {
+    /* Возрастной чек-бокс (Пункт Д): без выбора возрастного согласия регистрация не отправляется */
+    if (!reg.age) { setError("Отметьте возрастное согласие"); return; }
     setBusy(true);
-    const r = await authRegister({ name: reg.name, email: reg.email, password: reg.password });
+    const consents = buildRegConsents();
+    const r = await authRegister({ name: reg.name, email: reg.email, password: reg.password, consents });
+    /* локальный реестр согласий (persist-хранилище) */
+    consents.forEach((c) => useAppStore.getState().addConsent(c));
     { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[reg.email.trim().toLowerCase()] = reg.password; localStorage.setItem(vk, JSON.stringify(vv)); }
     setBusy(false);
     if (!r.ok) {
@@ -271,7 +292,18 @@ export function AuthPage() {
                       Я принимаю условия <Link to="/legal/buyer_tos" className="font-bold text-accent-deep underline">Оферты</Link> и <Link to="/legal/privacy" className="font-bold text-accent-deep underline">Политики конфиденциальности</Link> <span className="text-error">*</span>
                     </span>
                   </label>
-                  <Btn size="lg" className="w-full" disabled={!reg.tos || reg.name.trim().length < 2 || !reg.email.includes("@") || reg.password.length < 8}
+                  {/* Пункт Д: обязательный возрастной чек-бокс — без выбора регистрация не отправляется */}
+                  <div className="space-y-2 pt-1">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input type="radio" name="age_consent" checked={reg.age === "adult"} onChange={() => setReg({ ...reg, age: "adult" })} className="mt-0.5" />
+                      <span className="text-[13px] text-ink-soft leading-relaxed">Мне исполнилось 18 лет <span className="text-error">*</span></span>
+                    </label>
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input type="radio" name="age_consent" checked={reg.age === "minor"} onChange={() => setReg({ ...reg, age: "minor" })} className="mt-0.5" />
+                      <span className="text-[13px] text-ink-soft leading-relaxed">Мне от 14 до 18 лет, есть согласие законного представителя <span className="text-error">*</span></span>
+                    </label>
+                  </div>
+                  <Btn size="lg" className="w-full" disabled={!reg.tos || !reg.age || reg.name.trim().length < 2 || !reg.email.includes("@") || reg.password.length < 8}
                     onClick={() => setReg({ ...reg, stage: 2 })}>
                     Продолжить
                   </Btn>

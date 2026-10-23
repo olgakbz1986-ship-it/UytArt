@@ -49,6 +49,15 @@ export interface Order {
   payMethod: string;
 }
 
+/* Реестр согласий (Итерация два, Пункт А): фиксация версии документа,
+   на которую пользователь дал согласие, с меткой времени. Записи хранятся
+   в persist-хранилище и дублируются на сервере (PUT /api/consents). */
+export interface ConsentRecord {
+  document: string; /* doc_type: buyer_tos | privacy | age_consent | ai_terms ... */
+  version: string;  /* версия документа из LEGAL_VERSIONS (или собственная метка) */
+  timestamp: string; /* ISO-метка проставления согласия */
+}
+
 /* следующий статус для демо-продвижения заказа */
 export const NEXT_STATUS: Record<OrderStatus, OrderStatus> = {
   paid: "shipped",
@@ -71,10 +80,14 @@ interface AppState {
   bonusBalance: number;
   bonusBySeller: Record<string, number>;
   bonusHistory: BonusEntry[];
+  /* Реестр согласий с фиксацией версий документов (Пункт А) */
+  consents: ConsentRecord[];
+
+  addConsent: (c: Omit<ConsentRecord, "timestamp"> & { timestamp?: string }) => ConsentRecord;
 
   login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
-  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string }>;
+  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string }>;
   authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   restoreSession: () => Promise<void>;
   setActiveAccount: (email: string, role: UserRole, sellerType?: SellerType) => void;
@@ -112,6 +125,18 @@ export const useAppStore = create<AppState>()(
       bonusBalance: 0,
       bonusBySeller: {},
       bonusHistory: [],
+      consents: [],
+
+      /* Реестр согласий (Пункт А): дописывает запись {document, version, timestamp}
+         в persist-хранилище; повторная подпись того же документа/версии не дублируется. */
+      addConsent: (c) => {
+        const rec: ConsentRecord = { document: c.document, version: c.version, timestamp: c.timestamp || new Date().toISOString() };
+        set((s) => {
+          const exists = s.consents.some((x) => x.document === rec.document && x.version === rec.version);
+          return exists ? s : { consents: [...s.consents, rec] };
+        });
+        return rec;
+      },
 
       /* Вход: сохраняем аккаунт в реестр по email, опционально делаем активным */
       login: (u, makeActive = true) => set((s) => {

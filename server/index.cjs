@@ -305,7 +305,12 @@ app.post("/api/auth/register", async (req, res) => {
     if (await db.byEmail(email)) return res.status(409).json({ error: "exists" });
     const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
-    const newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp });
+    /* Итерация два, Пункт А: реестр согласий с фиксацией версий. Клиент передаёт
+       массив {document, version, timestamp}; нормализуем и сохраняем в запись
+       пользователя (dev-db — поле consents; postgres-колонка не определена —
+       записываем только если update поддержит произвольные поля). */
+    const consents = normalizeConsents(req.body.consents);
+    const newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
     const dev = await sendConfirm(email, name, token);
     res.json({ 
       ok: true, 
@@ -430,6 +435,48 @@ app.get("/api/auth/me", guard, async (req, res) => {
 app.patch("/api/profile", guard, async (req, res) => {
   const u = await db.update(req.userId, { name: req.body.name !== undefined ? String(req.body.name).trim() : undefined, phone: req.body.phone !== undefined ? String(req.body.phone).trim() : undefined });
   res.json({ ok: true, profile: profileOf(u) });
+});
+
+/* ============================================================
+   Итерация два, Пункт А: серверный реестр согласий с фиксацией версий.
+   Запись согласия = { document, version, timestamp } — доказательство
+   того, НА КАКУЮ ВЕРСИЮ документа пользователь дал согласие (152-ФЗ,
+   ст. 152.1 ГК РФ, оферта). Хранится в записи пользователя (dev-db).
+   ============================================================ */
+function normalizeConsents(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((c) => c && typeof c === "object" && typeof c.document === "string" && typeof c.version === "string")
+    .map((c) => ({
+      document: String(c.document).slice(0, 64),
+      version: String(c.version).slice(0, 32),
+      timestamp: (typeof c.timestamp === "string" && !Number.isNaN(Date.parse(c.timestamp))) ? new Date(c.timestamp).toISOString() : new Date().toISOString(),
+    }));
+}
+
+/* PUT /api/consents — дописывает переданную запись согласия в реестр
+   пользователя (guard: только авторизованные). Идемпотентно: дубликат
+   пары document+version не добавляется. Тело: одна запись {document,
+   version, timestamp} либо массив записей. */
+app.put("/api/consents", guard, async (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body) ? req.body : [req.body];
+    const recs = normalizeConsents(incoming);
+    if (!recs.length) return res.status(400).json({ error: "bad_consent" });
+    const u = await db.byId(req.userId);
+    if (!u) return res.status(404).json({ error: "gone" });
+    const registry = normalizeConsents(u.consents);
+    let added = 0;
+    for (const r of recs) {
+      const dup = registry.some((x) => x.document === r.document && x.version === r.version);
+      if (!dup) { registry.push(r); added++; }
+    }
+    /* dev-db (json): Object.assign сохраняет произвольные поля.
+       postgres без колонки consents — поле не будет записано (защита от 500). */
+    try { await db.update(req.userId, db.mode.startsWith("postgres") ? {} : { consents: registry }); } catch { /* noop */ }
+    log.info("consent_recorded", { userId: req.userId, documents: recs.map((r) => r.document), added });
+    res.json({ ok: true, consents: registry });
+  } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });
 
 
