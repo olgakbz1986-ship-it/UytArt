@@ -1632,3 +1632,65 @@ export function IntelScreen() {
     </div>
   );
 }
+
+/* ════════════════ ОЧЕРЕДЬ ИНТЕЛЛЕКТУАЛЬНОЙ СОБСТВЕННОСТИ (пункт Ж, ст. 1253.1 ГК РФ) ════════════════ */
+/* Публичный приём уведомлений: POST /api/takedown (не /api/admin — прямой fetch).
+   Суточный дедлайн: обратный отсчёт обновляется не реже раза в минуту. */
+export function IpTakedownScreen() {
+  const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.takedownQueue());
+  const { can } = useCabinet(); const { push } = useToast();
+  const [nowTs, setNowTs] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNowTs(Date.now()), 30_000); return () => clearInterval(t); }, []);
+  const act = async (id: string, action: string) => {
+    const r: any = await adminApi.takedownAction(id, { action, reason: "арбитраж очереди ИС" });
+    if (r?.ok) { push("Решение арбитража зафиксировано"); reload(); } else push(mapErrLocal(r), "err");
+  };
+  const countdown = (rec: any) => {
+    if (!rec.deadline) return null;
+    const msLeft = Date.parse(rec.deadline) - nowTs;
+    if (msLeft <= 0) return <span className="text-[12px] font-bold text-error">Срок истёк</span>;
+    const h = Math.floor(msLeft / 3_600_000);
+    const m = Math.floor((msLeft % 3_600_000) / 60_000);
+    return <span className="text-[12px] font-semibold text-ink">Осталось {h} ч {m} мин</span>;
+  };
+  if (loading) return <LoadingBlock rows={5} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  const items: any[] = data?.items || [];
+  return (
+    <div className="space-y-5">
+      <Panel title="Очередь интеллектуальной собственности" sub="Уведомления правообладателей по ст. 1253.1 ГК РФ: блокировка немедленно, дедлайн обработки — 24 часа с момента получения; встречное уведомление доступ не восстанавливает">
+        {!items.length ? <EmptyState title="Очередь пуста" why="Уведомлений правообладателей нет; приём открыт через POST /api/takedown." /> : (
+          <div className="space-y-3">
+            {items.map((rec: any) => (
+              <div key={rec.id} className="border border-line rounded-xl p-4">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <b className="text-[13px]">Товар: {rec.disputed_product_id}</b>
+                  <St s={rec.status} />
+                  <span className="ml-auto">{countdown(rec)}</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2">
+                  <Info label="Правообладатель" v={rec.claimant_name} />
+                  <Info label="Основание" v={rec.ip_ground} />
+                  <Info label="Дата получения" v={new Date(rec.received_at).toLocaleString("ru-RU")} />
+                  <Info label="Дедлайн (24 ч)" v={new Date(rec.deadline).toLocaleString("ru-RU")} />
+                </div>
+                <p className="text-[12px] text-ink-mute mb-2">Доказательства: <a className="underline text-ink-soft" href={rec.evidence_url} target="_blank" rel="noreferrer">{rec.evidence_url}</a></p>
+                {rec.counter_notice && (
+                  <p className="text-[12.5px] text-ink-soft bg-line-soft/60 border border-line rounded-xl px-3.5 py-2.5 mb-2">
+                    Встречное уведомление от {rec.counter_notice.from_user_id || "—"} ({new Date(rec.counter_notice.received_at).toLocaleString("ru-RU")}): {rec.counter_notice.text}
+                  </p>
+                )}
+                <div className="flex gap-2 flex-wrap">
+                  <Btn size="sm" variant="outline" disabled={!can("moderate")} onClick={() => act(rec.id, "unlock")}>Разблокировать</Btn>
+                  <Btn size="sm" variant="outline" disabled={!can("moderate")} onClick={() => act(rec.id, "confirm_block")}>Подтвердить блокировку</Btn>
+                  <Btn size="sm" disabled={!can("disputes_resolve")} onClick={() => act(rec.id, "arbitration")}>Арбитраж</Btn>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+

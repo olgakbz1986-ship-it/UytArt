@@ -293,6 +293,47 @@ const AGENT_CHAT = z.object({
   history: z.array(z.object({ role: z.string().max(20), content: z.string().max(8000) })).max(50).catch([]),
 });
 
+/* ---------- стоп-лист запрещённых товаров (пункт Е) ---------- */
+/* Правила оборота отдельных категорий товаров: платформа автоматически
+   блокирует размещение товаров, название или описание которых содержит
+   стоп-слова запрещённых категорий. Решение может быть оспорено
+   предоставлением разрешительных документов (/legal/goods_rules). */
+const PROHIBITED_STOP_WORDS = [
+  "лекарствен", "препарат", "рецептурн",
+  "алкогол", "спирт",
+  "табак", "никотин",
+  "оруж", "патрон",
+  "взрывчат", "наркот",
+];
+
+/**
+ * validateProhibitedGoods — серверный стоп-лист запрещённых товаров.
+ * @param {{name?:string, description?:string, group?:string, category?:string}} goods
+ * @returns {{blocked:boolean, reason?:string, word?:string}}
+ */
+function validateProhibitedGoods(goods) {
+  const g = goods || {};
+  const name = String(g.name || "").toLowerCase();
+  const description = String(g.description || "").toLowerCase();
+  const haystack = name + " " + description;
+  const group = String(g.group || "").toLowerCase();
+  const category = String(g.category || "").toLowerCase();
+
+  /* Лекарственные средства в группах medicine/лекарства блокируются безусловно */
+  if ((group === "medicine" || category === "medicine") &&
+      (haystack.includes("лекарствен") || haystack.includes("рецептурн"))) {
+    const word = haystack.includes("лекарствен") ? "лекарствен" : "рецептурн";
+    return { blocked: true, reason: "medicine_restricted", word };
+  }
+
+  for (const w of PROHIBITED_STOP_WORDS) {
+    if (haystack.includes(w)) {
+      return { blocked: true, reason: "stop_word", word: w };
+    }
+  }
+  return { blocked: false };
+}
+
 /* ---------- служебные функции ---------- */
 /** Универсальный вызов safeParse: возвращает { ok, data } или { ok:false, errors }. */
 function validate(schema, payload) {

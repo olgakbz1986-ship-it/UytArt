@@ -20,6 +20,8 @@ const cfg = require("./config.cjs");
    (email/телефоны/карты) настроено внутри logger.cjs; пароли, полные токены
    и номера карт в логи не попадают никогда. */
 const log = require("./logger.cjs");
+/* Пункт Е: серверный стоп-лист запрещённых товаров (validateProhibitedGoods) */
+const { validateProhibitedGoods } = require("./validators.cjs");
 
 const PORT = process.env.PORT || 8787;
 /* Секрет стабилен между перезапусками только если задан JWT_SECRET в .env
@@ -1713,6 +1715,18 @@ app.post("/api/products", guard, async (req, res) => {
   try {
     const p = req.body || {};
     if (!p.id) return res.status(400).json({ error: "no_id" });
+    /* Пункт Е: серверный стоп-лист запрещённых товаров. Проверка выполняется
+       сразу после id и до проверок владения/тарифных лимитов — как при создании,
+       так и при обновлении товара (обход правкой карточки невозможен). */
+    const prohibited = validateProhibitedGoods({ name: p.name, description: p.description, group: p.group, category: p.category });
+    if (prohibited.blocked) {
+      return res.status(400).json({
+        error: "prohibited_goods",
+        reason: prohibited.reason,
+        word: prohibited.word,
+        message: "Размещение данного товара запрещено правилами платформы. Подробнее: /legal/goods_rules",
+      });
+    }
     /* Правило владения товара: ownerId всегда берётся из токена сессии.
        Клиент не может присвоить товар другому пользователю или создать анонимный товар. */
     const { FILE, fs, d } = devDbRead();

@@ -46,6 +46,9 @@ export const adminApi = {
   sellerAction: (id: string, body: any) => post(`/sellers/${id}/action`, body),
   moderation: () => req("/moderation"),
   modDecision: (id: string, body: any) => post(`/moderation/${id}/decision`, body),
+  /* Пункт Ж: очередь тейкдауна (ст. 1253.1 ГК РФ) */
+  takedownQueue: () => req("/takedown-queue"),
+  takedownAction: (id: string, body: any) => post(`/takedown-queue/${id}/action`, body),
   categoryUpdate: (id: string, body: any) => put(`/categories/${id}`, body),
   orders: (params: Record<string, string> = {}) => req("/orders?" + new URLSearchParams(params).toString()),
   orderOp: (id: string, body: any) => post(`/orders/${id}/op`, body),
