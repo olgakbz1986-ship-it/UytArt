@@ -15,6 +15,25 @@ const DELIVERY = [
   { id: "boxberry", label: "Boxberry", price: 300, days: "3–7 дней" },
 ];
 
+/* Письменная информация о порядке и сроках возврата (Итерация два, Пункт В) */
+export const RETURN_NOTICE_TEXT =
+  "Товар надлежащего качества подлежит возврату в течение 7 дней с момента передачи; " +
+  "изделие на заказ надлежащего качества возврату не подлежит; " +
+  "при обнаружении недостатков действуют статьи 18–29 Закона о защите прав потребителей; " +
+  "порядок заявки описан в политике возвратов";
+
+function ReturnNoticeBlock() {
+  return (
+    <div className="bg-cream border border-line rounded-[10px] px-4 py-3">
+      <p className="text-[12.5px] font-bold text-ink mb-1">Порядок и сроки возврата</p>
+      <p className="text-[12px] text-ink-soft leading-relaxed">
+        {RETURN_NOTICE_TEXT}.{" "}
+        <Link to="/legal/return_policy" className="font-bold text-accent-deep underline">Политика возвратов</Link>
+      </p>
+    </div>
+  );
+}
+
 export function CartPage() {
   const cart = useAppStore((s) => s.cart);
   const setQty = useAppStore((s) => s.setQty);
@@ -46,7 +65,6 @@ export function CartPage() {
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-7">Корзина</h1>
       <div className="space-y-3.5">
         {rows.map((r) => (
-          /* ТЗ 10.3: на мобильных товар занимает всю ширину, итог и кнопка — sticky внизу */
           <div key={r.productId} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-3 sm:gap-4">
             <Link to={`/product/${r.p!.slug}`} className="w-[64px] h-[56px] xs:w-[84px] xs:h-[72px] rounded-[10px] overflow-hidden shrink-0 group">
               <ProductImg p={r.p!} />
@@ -87,7 +105,6 @@ export function CartPage() {
         </Link>
       </div>
 
-      {/* мобильная sticky-панель итога (ТЗ 10.3) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-[80] bg-cream/95 backdrop-blur-md border-t border-line px-4 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-lift">
         <div className="flex items-center gap-3">
           <div className="min-w-0">
@@ -181,10 +198,16 @@ export function CheckoutPage() {
       <div className="max-w-[640px] mx-auto px-4 py-24 text-center fade-up">
         <span className="inline-flex w-20 h-20 rounded-full bg-success-soft text-success items-center justify-center mb-6"><CheckCircle2 size={42} /></span>
         <h1 className="font-display font-bold text-[30px] text-ink mb-3">Заказ {done} оформлен</h1>
-        <p className="text-[14.5px] text-ink-soft leading-relaxed max-w-md mx-auto mb-8">
+        <p className="text-[14.5px] text-ink-soft leading-relaxed max-w-md mx-auto mb-6">
           Деньги зарезервированы на транзитном счёте (безопасная сделка). Мастер получит их после отправки.
           Чек по 54-ФЗ придёт на email.
         </p>
+
+        {/* Письменная информация о порядке и сроках возврата (Пункт В) */}
+        <div className="max-w-md mx-auto mb-8 text-left">
+          <ReturnNoticeBlock />
+        </div>
+
         <div className="flex gap-3 justify-center flex-wrap">
           <Link to="/profile" className="h-[52px] px-7 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors flex items-center">Мои заказы</Link>
           <Link to="/catalog" className="h-[52px] px-7 rounded-[10px] border border-line bg-surface text-[15px] font-semibold hover:bg-cream transition-colors flex items-center">В каталог</Link>
@@ -279,6 +302,8 @@ export function CheckoutPage() {
                 </label>
               </div>
             )}
+            {/* Письменная информация о порядке и сроках возврата (Пункт В) */}
+            <ReturnNoticeBlock />
           </div>
         </div>
 

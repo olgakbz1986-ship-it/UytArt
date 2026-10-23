@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing , Trash2} from "lucide-react";
 import { useMarketProducts } from "../lib/market";
 import { CATEGORIES, fmt, catBySlug, groupById } from "../data/seed";
@@ -14,7 +14,7 @@ import { useNotifyStore } from "../lib/notify";
 import { startAgentWorker } from "../lib/agent";
 import { createPortal } from "react-dom";
 
-/* ---------- глобальные тосты уведомлений (ТЗ 12.4): мобильные — низ экрана, десктоп — правый верх ---------- */
+/* ---------- глобальные тосты уведомлений ---------- */
 const TOAST_DISMISS_MS = 6000;
 
 export function Toasts() {
@@ -22,7 +22,6 @@ export function Toasts() {
   const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const seenRef = useRef<Set<string>>(new Set());
 
-  /* новые непрочитанные уведомления появляются как тосты один раз за сессию */
   useEffect(() => {
     const fresh = items.filter((i) => !i.read && !seenRef.current.has(i.id));
     if (fresh.length === 0) return;
@@ -30,7 +29,6 @@ export function Toasts() {
     setVisibleIds((prev) => [...prev, ...fresh.map((i) => i.id)].slice(-3));
   }, [items]);
 
-  /* автоскрытие самого старого тоста */
   useEffect(() => {
     if (visibleIds.length === 0) return;
     const t = window.setTimeout(() => setVisibleIds((p) => p.slice(1)), TOAST_DISMISS_MS);
@@ -60,13 +58,11 @@ export function Toasts() {
   );
 }
 
-
 function NotifyBell() {
   const items = useNotifyStore((s) => s.items);
   const nav = useNavigate();
   const markRead = useNotifyStore((s) => s.markRead);
-  
-  // Обертка для синхронизации прочтения с сервером
+
   const handleMarkRead = (id: string) => {
     markRead(id);
     fetch(`/api/notifications/${id}/read`, { method: 'PUT' }).catch(console.error);
@@ -78,12 +74,10 @@ function NotifyBell() {
   const unread = items.filter((i) => !i.read).length;
   useEffect(() => {
     if (open) {
-      // 1. Очистка старых прочитанных (существующая логика)
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const toClean = items.filter((i) => i.read && i.createdAt < sevenDaysAgo);
       toClean.forEach((i) => remove(i.id));
 
-      // 2. Синхронизация с API уведомлений биржи (Этап 9)
       fetch('/api/notifications')
         .then(res => res.json())
         .then(data => {
@@ -122,7 +116,6 @@ function NotifyBell() {
   };
 
   const clearRead = () => { items.filter((i) => i.read).forEach((i) => remove(i.id)); };
-
 
   const [filter, setFilter] = useState<"all" | "unread" | "pending">("all");
   const pending = items.filter((i) => i.kind === "confirm" && !i.resolved).length;
@@ -344,6 +337,78 @@ function SmartSearch() {
   );
 }
 
+/* ---------- Cookie-баннер с категориями (Итерация два, Пункт Б) ---------- */
+const COOKIE_CATEGORIES: { key: "functional" | "analytics" | "marketing"; title: string; desc: string }[] = [
+  { key: "functional", title: "Функциональные", desc: "Запоминают выбранные настройки: город, тему оформления, содержимое корзины и избранного." },
+  { key: "analytics", title: "Аналитические", desc: "Помогают понять, какие разделы и товары востребованы, чтобы улучшать сервис (собираются в обезличенном виде)." },
+  { key: "marketing", title: "Маркетинговые", desc: "Используются для показа релевантных предложений и оценки эффективности кампаний. Включаются только с вашего согласия." },
+];
+
+export function CookieBanner() {
+  const location = useLocation();
+  const cookieConsent = useAppStore((s) => s.cookieConsent);
+  const setCookieConsent = useAppStore((s) => s.setCookieConsent);
+  const [customized, setCustomized] = useState(false);
+  const [toggles, setToggles] = useState({ functional: false, analytics: false, marketing: false });
+
+  if (cookieConsent || location.pathname.startsWith("/admin")) return null;
+
+  const acceptAll = () => setCookieConsent({ functional: true, analytics: true, marketing: true });
+  const onlyNecessary = () => setCookieConsent({ functional: false, analytics: false, marketing: false });
+  const saveCustom = () => setCookieConsent(toggles);
+
+  return (
+    <div role="dialog" aria-modal="false" aria-label="Уведомление об использовании cookie"
+      className="fixed z-[150] left-3 right-3 bottom-3 md:left-auto md:right-5 md:bottom-5 md:w-[420px] pop-in">
+      <div className="bg-surface border border-line rounded-2xl shadow-lift p-4 sm:p-5">
+        <p className="text-[13.5px] font-display font-bold text-ink mb-1.5">Мы используем файлы cookie</p>
+        <p className="text-[12.5px] leading-snug text-ink-soft mb-3">
+          Сайту нужны строго необходимые файлы cookie для работы. Дополнительные категории включаются только с вашего согласия.
+          Подробнее — <Link to="/legal/privacy" className="font-semibold text-accent-deep hover:underline">cookie-матрица в политике конфиденциальности</Link>.
+        </p>
+
+        {customized && (
+          <div className="flex flex-col gap-2 mb-3 border-t border-line-soft pt-3">
+            <label className="flex items-start gap-2.5 opacity-70 cursor-not-allowed">
+              <input type="checkbox" checked disabled className="mt-0.5" aria-label="Строго необходимые файлы cookie — всегда включены" />
+              <span>
+                <span className="block text-[12.5px] font-bold text-ink">Строго необходимые</span>
+                <span className="block text-[11.5px] text-ink-soft leading-snug">Обеспечивают работу корзины, авторизации и безопасности. Включены всегда, основание — ст. 18.1 ФЗ-152.</span>
+              </span>
+            </label>
+            {COOKIE_CATEGORIES.map((c) => (
+              <label key={c.key} className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={toggles[c.key]} className="mt-0.5"
+                  onChange={(e) => setToggles((t) => ({ ...t, [c.key]: e.target.checked }))}
+                  aria-label={`Разрешить ${c.title.toLowerCase()} файлы cookie`} />
+                <span>
+                  <span className="block text-[12.5px] font-bold text-ink">{c.title}</span>
+                  <span className="block text-[11.5px] text-ink-soft leading-snug">{c.desc}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button onClick={acceptAll}
+            className="h-10 px-4 rounded-[10px] bg-dark text-cream text-[13px] font-bold hover:bg-dark-deep transition-colors cursor-pointer">
+            Принять все
+          </button>
+          <button onClick={onlyNecessary}
+            className="h-10 px-4 rounded-[10px] border border-line bg-surface text-ink text-[13px] font-bold hover:border-dark transition-colors cursor-pointer">
+            Только необходимые
+          </button>
+          <button onClick={() => (customized ? saveCustom() : setCustomized(true))}
+            className="h-10 px-4 rounded-[10px] text-[13px] font-bold text-accent-deep hover:text-accent hover:underline cursor-pointer">
+            {customized ? "Сохранить выбор" : "Настроить"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- шапка ---------- */
 export function Header() {
   const cart = useAppStore((s) => s.cart);
@@ -423,15 +488,12 @@ export function Header() {
               {cartCount > 0 && <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-accent text-ink text-[10px] font-bold flex items-center justify-center">{cartCount}</span>}
             </Link>
             {session ? (
-              /* после регистрации «Войти» заменяется именем пользователя (покупатель)
-                 или названием организации (продавец) — клик открывает соответствующий кабинет */
               (() => {
                 const isSeller = sellerReg.status === "active" && session.role === "seller";
                 const cabinetTo = isSeller ? "/seller/dashboard" : "/profile";
                 const displayName = isSeller ? sellerReg.shopName : session.name.split(" ")[0];
                 return (
                   <div className="flex items-center gap-2">
-
                     <Link
                       to={cabinetTo}
                       title={isSeller ? "Кабинет продавца" : "Личный кабинет"}
@@ -461,6 +523,9 @@ export function Header() {
           </div>
         </div>
       </header>
+
+      {/* Cookie-баннер с категориями (Пункт Б) */}
+      <CookieBanner />
 
       {menuOpen && (
         <div className="fixed inset-0 z-[94]" role="dialog" aria-modal="true" aria-label="Меню">
@@ -496,7 +561,7 @@ export function Header() {
   );
 }
 
-/* ---------- иконки соцсетей (инлайн-SVG, монохром) ---------- */
+/* ---------- иконки соцсетей ---------- */
 function TelegramIcon() {
   return (
     <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -519,7 +584,7 @@ function PinterestIcon() {
   );
 }
 
-/* ---------- футер: одна строка — копирайт слева, почта и соцсети справа ---------- */
+/* ---------- футер ---------- */
 export function Footer() {
   return (
     <footer className="bg-dark text-cream mt-16">

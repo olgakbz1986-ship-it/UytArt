@@ -9,16 +9,15 @@ export type UserRole = "buyer" | "seller";
 export interface User {
   id: string; name: string; email: string; phone?: string;
   role: UserRole;
-  sellerType?: SellerType; /* только для role="seller" */
-  avatar?: string;   /* data-URL, до 256px */
+  sellerType?: SellerType;
+  avatar?: string;
   city?: string;
   birth?: string;
   about?: string;
   region?: string;
-  tariff?: string; /* ID тарифа */
+  tariff?: string;
 }
 
-/* Единый объект активной сессии */
 export interface ActiveSession {
   userId: string;
   role: UserRole;
@@ -49,16 +48,25 @@ export interface Order {
   payMethod: string;
 }
 
-/* Реестр согласий (Итерация два, Пункт А): фиксация версии документа,
-   на которую пользователь дал согласие, с меткой времени. Записи хранятся
-   в persist-хранилище и дублируются на сервере (PUT /api/consents). */
+/* Реестр согласий (Итерация два, Пункт А) */
 export interface ConsentRecord {
-  document: string; /* doc_type: buyer_tos | privacy | age_consent | ai_terms ... */
-  version: string;  /* версия документа из LEGAL_VERSIONS (или собственная метка) */
-  timestamp: string; /* ISO-метка проставления согласия */
+  document: string;
+  version: string;
+  timestamp: string;
 }
 
-/* следующий статус для демо-продвижения заказа */
+/* Cookie-баннер с категориями (Итерация два, Пункт Б) */
+export interface CookieConsentCategories {
+  necessary: true;
+  functional: boolean;
+  analytics: boolean;
+  marketing: boolean;
+}
+export interface CookieConsent {
+  categories: CookieConsentCategories;
+  timestamp: string;
+}
+
 export const NEXT_STATUS: Record<OrderStatus, OrderStatus> = {
   paid: "shipped",
   shipped: "delivered",
@@ -67,9 +75,7 @@ export const NEXT_STATUS: Record<OrderStatus, OrderStatus> = {
 };
 
 interface AppState {
-  /* Реестр всех аккаунтов пользователя (по email) */
-  accounts: Record<string, User[]>; /* key = email */
-  /* Единая активная сессия */
+  accounts: Record<string, User[]>;
   session: ActiveSession | null;
   cart: CartItem[];
   cartEvents: { productId: string; ts: string }[];
@@ -80,10 +86,11 @@ interface AppState {
   bonusBalance: number;
   bonusBySeller: Record<string, number>;
   bonusHistory: BonusEntry[];
-  /* Реестр согласий с фиксацией версий документов (Пункт А) */
   consents: ConsentRecord[];
+  cookieConsent: CookieConsent | null;
 
   addConsent: (c: Omit<ConsentRecord, "timestamp"> & { timestamp?: string }) => ConsentRecord;
+  setCookieConsent: (categories: Omit<CookieConsentCategories, "necessary"> & { necessary?: true }) => CookieConsent;
 
   login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
@@ -126,9 +133,17 @@ export const useAppStore = create<AppState>()(
       bonusBySeller: {},
       bonusHistory: [],
       consents: [],
+      cookieConsent: null,
 
-      /* Реестр согласий (Пункт А): дописывает запись {document, version, timestamp}
-         в persist-хранилище; повторная подпись того же документа/версии не дублируется. */
+      setCookieConsent: (categories) => {
+        const rec: CookieConsent = {
+          categories: { necessary: true, functional: !!categories.functional, analytics: !!categories.analytics, marketing: !!categories.marketing },
+          timestamp: new Date().toISOString(),
+        };
+        set({ cookieConsent: rec });
+        return rec;
+      },
+
       addConsent: (c) => {
         const rec: ConsentRecord = { document: c.document, version: c.version, timestamp: c.timestamp || new Date().toISOString() };
         set((s) => {
@@ -138,7 +153,6 @@ export const useAppStore = create<AppState>()(
         return rec;
       },
 
-      /* Вход: сохраняем аккаунт в реестр по email, опционально делаем активным */
       login: (u, makeActive = true) => set((s) => {
         const emailKey = u.email.toLowerCase();
         const existing = s.accounts[emailKey] || [];
@@ -166,23 +180,15 @@ export const useAppStore = create<AppState>()(
         return { accounts: updatedAccounts, session: newSession };
       }),
 
-      /* Выход: полная очистка активной сессии + запрос на сервер */
       logout: () => { api.logout().catch(() => {}); set({ session: null }); },
 
-      /* Реальная аутентификация через бэкенд StartTechPro */
       authRegister: async (p) => api.register(p),
       authLogin: async (email, password) => {
         const r = await api.login(email, password);
         if (!r.ok || !r.profile) return { ok: false, error: r.error };
         const pr = r.profile;
-        /* ЭТАП 1 (§1.3): тариф приходит С СЕРВЕРА вместе с профилем;
-           localStorage — только кэш, источник истины — база сервера. */
         applyServerTariff(r.tariff);
         useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
-        /* Тихая проверка админской сессии: если в cookie OTP-сессия кабинета —
-           запоминаем профиль (кабинет подхватит его сам). Никаких принудительных
-           редиректов отсюда: навигацией владеет страница входа — это исключает
-           конкуренцию двух редиректов и «моргание» чужой страницей. */
         try {
           const m = await fetch("/api/admin/me", { credentials: "include" }).then((x) => x.json());
           if (m && m.ok && m.profile) {
@@ -196,12 +202,10 @@ export const useAppStore = create<AppState>()(
           const r = await api.me();
           if (r.ok && r.profile) {
             const pr = r.profile;
-            /* §1.3: при восстановлении сессии тариф тоже приходит с сервера */
             applyServerTariff(r.tariff);
             useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
           }
-        } catch { /* сервер недоступен — остаёмся в демо-режиме */ }
-        /* тихая проверка сессии кабинета (приватная зона, никаких публичных следов) */
+        } catch { /* сервер недоступен */ }
         try {
           const m = await fetch("/api/admin/me", { credentials: "include" }).then((x) => x.json());
           if (m && m.ok && m.profile) {
@@ -211,7 +215,6 @@ export const useAppStore = create<AppState>()(
         } catch { /* нет сервера — демо */ }
       },
 
-      /* Переключение на другой аккаунт из реестра по email+role */
       setActiveAccount: (email, role, sellerType) => set((s) => {
         const emailKey = email.toLowerCase();
         const list = s.accounts[emailKey] || [];
