@@ -320,6 +320,7 @@ function vMiddleware(schema) {
 module.exports = {
   validate,
   vMiddleware,
+  validateProhibitedGoods,
   LEGAL_TYPES, BUYER_PLANS, SELLER_PLANS, ALL_PLANS, PACK_IDS, ACTIONS, COHORTS,
   REGISTER, LOGIN, RESEND, PROFILE_PATCH,
   TARIFF_SET, REGISTRATION_FEE, SUB_CREATE, PACK_CREATE,
