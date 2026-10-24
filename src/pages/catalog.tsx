@@ -125,6 +125,12 @@ export function CatalogPage() {
   const [region, setRegion] = useState<string>("all"); /* город покупателя (или "all") */
   const [showOther, setShowOther] = useState(true);
   const [quality, setQuality] = useState(false);
+  /* Умный поиск города с сохранением в глобальном стейте */
+  const [cityInput, setCityInput] = useState(region === "all" ? "" : region);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  useEffect(() => {
+    setCityInput(region === "all" ? "" : region);
+  }, [region]);
 
   // Загрузка серверных товаров при монтировании каталога.
   // ЭТАП 2: город покупателя передаётся серверу явно — жёсткий гео-фильтр
@@ -321,15 +327,49 @@ export function CatalogPage() {
             ) : (
               <Link to="/plans" className="text-[12.5px] font-bold text-premium" title="Доступно на платных тарифах">★ Премиум-фильтры</Link>
             )}
-            <select value={region} onChange={(e) => setRegion(e.target.value)} aria-label="Город доставки"
-              className="h-[44px] px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium cursor-pointer outline-none focus:border-ai">
-              <option value="all">🌍 Вся Россия</option>
-              {[...new Set(CITIES.map((c) => c.district))].map((d) => (
-                <optgroup key={d} label={d}>
-                  {CITIES.filter((c) => c.district === d).sort((a, b) => a.name.localeCompare(b.name, "ru")).map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                </optgroup>
-              ))}
-            </select>
+            {/* Умный поиск города */}
+            <div className="relative w-48">
+              <input
+                type="text"
+                value={cityInput}
+                onChange={(e) => {
+                  setCityInput(e.target.value);
+                  setShowCityDropdown(true);
+                  if (!e.target.value.trim()) {
+                    setRegion("all");
+                    useAppStore.setState({ viewerCity: "" });
+                  }
+                }}
+                onFocus={() => setShowCityDropdown(true)}
+                onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
+                placeholder="🏙️ По городу..."
+                className="h-[44px] w-full px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium outline-none focus:border-ai placeholder:text-ink-mute/50"
+              />
+              {showCityDropdown && cityInput.trim().length > 0 && (
+                <div className="absolute top-full left-0 mt-1 w-full bg-surface border border-line rounded-[10px] shadow-xl z-50 max-h-60 overflow-y-auto">
+                  {CITIES.filter(c => c.name.toLowerCase().includes(cityInput.toLowerCase()))
+                    .slice(0, 10)
+                    .map(c => (
+                      <button
+                        key={c.name}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setCityInput(c.name);
+                          setRegion(c.name);
+                          setShowCityDropdown(false);
+                          useAppStore.setState({ viewerCity: c.name });
+                        }}
+                        className="w-full text-left px-3.5 py-2.5 hover:bg-line-soft text-sm text-ink transition-colors"
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  {CITIES.filter(c => c.name.toLowerCase().includes(cityInput.toLowerCase())).length === 0 && (
+                    <div className="px-3.5 py-2.5 text-sm text-ink-mute">Город не найден</div>
+                  )}
+                </div>
+              )}
+            </div>
             <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Сортировка"
               className="h-[44px] px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium cursor-pointer outline-none focus:border-ai">
               {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
