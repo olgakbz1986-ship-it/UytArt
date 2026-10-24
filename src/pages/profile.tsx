@@ -1,4 +1,4 @@
-import { useState, useRef, type ReactNode } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot} from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
@@ -17,7 +17,7 @@ import { ReviewModal, TicketModal } from "../components/review";
 import { BuyerPremiumSection } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
 
-type Tab = "orders" | "agent" | "favorites" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
+type Tab = "orders" | "agent" | "favorites" | "subscriptions" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
 
 const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
 
@@ -77,6 +77,39 @@ export default function ProfilePage() {
 
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
   const concepts = useSubStore((s) => s.concepts);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [subsLoading, setSubsLoading] = useState(true);
+
+  useEffect(() => {
+    const userId = useAppStore.getState().session?.userId || localStorage.getItem("userId") || "demo-user-1";
+    fetch("/api/subscriptions", { headers: { "x-user-id": userId } })
+      .then(r => r.json())
+      .then(data => { if (data.ok) setSubscriptions(data.subscriptions); })
+      .catch(console.error)
+      .finally(() => setSubsLoading(false));
+  }, []);
+
+  const unsubscribe = async (targetType: string, targetId: string) => {
+    if (!confirm("Отписаться от этой подписки?")) return;
+    const userId = useAppStore.getState().session?.userId || localStorage.getItem("userId") || "demo-user-1";
+    try {
+      const res = await fetch(`/api/subscriptions/${targetType}/${targetId}`, {
+        method: "DELETE", headers: { "x-user-id": userId }
+      });
+      if (res.ok) setSubscriptions(prev => prev.filter(s => !(s.targetType === targetType && s.targetId === targetId)));
+    } catch (e) { console.error(e); }
+  };
+
+  const getSubIcon = (type: string) => {
+    const map: Record<string, any> = { shop: Store, master: Wrench, author: BookOpen, category: Bell, product: Palette };
+    return map[type] || Bell;
+  };
+
+  const getSubLabel = (type: string) => {
+    const map: Record<string, string> = { shop: "Магазин", master: "Мастер", author: "Автор", category: "Категория", product: "Товар" };
+    return map[type] || type;
+  };
+
   const removeConcept = useSubStore((s) => s.removeConcept);
   const priceWatches = useSubStore((s) => s.priceWatches);
   const removePriceWatch = useSubStore((s) => s.removePriceWatch);
@@ -262,6 +295,7 @@ export default function ProfilePage() {
     { id: "orders", label: "Заказы", icon: Package },
     { id: "agent", label: "Агент", icon: Bot },
     { id: "favorites", label: "Избранное", icon: Heart },
+    { id: "subscriptions", label: "Мои подписки", icon: Bell },
     { id: "concepts", label: "Мои концепты", icon: Sparkles, locked: !isPaid },
     { id: "prices", label: "Отслеживание цен", icon: BellRing, locked: !isPaid },
     { id: "custom", label: "Индивидуальные заказы", icon: ClipboardList, locked: !isPaid },
@@ -598,6 +632,51 @@ export default function ProfilePage() {
       )}
 
       {/* ОТСЛЕЖИВАНИЕ ЦЕН */}
+      
+      {tab === "subscriptions" && (
+        <div className="space-y-4">
+          <h2 className="font-display font-bold text-xl text-ink">Мои подписки</h2>
+          <p className="text-sm text-ink-soft">Управляйте подписками на авторов, магазины, мастеров и категории</p>
+          {subsLoading ? (
+            <div className="py-8 text-center text-ink-soft">Загрузка подписок...</div>
+          ) : subscriptions.length === 0 ? (
+            <div className="text-center py-12 rounded-2xl border border-dashed border-line bg-surface/50">
+              <Bell size={48} className="mx-auto text-ink-mute mb-4" />
+              <h3 className="font-display font-bold text-lg text-ink mb-2">У вас пока нет подписок</h3>
+              <p className="text-ink-soft mb-6 max-w-md mx-auto">Подпишитесь на интересные магазины, мастеров или категории, чтобы видеть их новинки в ленте</p>
+              <Link to="/catalog" className="inline-flex items-center gap-2 px-6 py-3 bg-accent-deep text-white rounded-xl font-semibold hover:bg-accent-deep/90 transition-colors">
+                Перейти в каталог
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-ink-soft">Всего подписок: <b className="text-ink">{subscriptions.length}</b></p>
+              {subscriptions.map((sub: any) => {
+                const Icon = getSubIcon(sub.targetType);
+                return (
+                  <div key={sub.id} className="bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
+                    <div className="w-12 h-12 rounded-lg bg-line-soft flex items-center justify-center text-ink-mute">
+                      <Icon size={24} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-ink truncate">{sub.targetId}</div>
+                      <p className="text-sm text-ink-soft">{getSubLabel(sub.targetType)} • Подписан {new Date(sub.createdAt).toLocaleDateString("ru-RU")}</p>
+                    </div>
+                    <button
+                      onClick={() => unsubscribe(sub.targetType, sub.targetId)}
+                      className="w-10 h-10 rounded-lg grid place-items-center text-ink-mute hover:text-error hover:bg-error/10 transition-colors"
+                      title="Отписаться"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === "prices" && (
         <div className="fade-up space-y-3">
           {priceWatches.length === 0 ? (
