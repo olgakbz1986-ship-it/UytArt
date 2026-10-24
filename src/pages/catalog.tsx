@@ -117,6 +117,10 @@ export function CatalogPage() {
   const sub = sp.get("sub") || "all";
   const q = (sp.get("q") || "").trim().toLowerCase();
   const [sort, setSort] = useState<SortId>("popular");
+  /* Сброс скролла при изменении категории/группы */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [group, cat, sub]);
   const [inStock, setInStock] = useState(false);
   const [region, setRegion] = useState<string>("all"); /* город покупателя (или "all") */
   const [showOther, setShowOther] = useState(true);
