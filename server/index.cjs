@@ -106,6 +106,8 @@ app.use(cors({
     /* без Origin (curl, сервер-сервер, webhook-провайдеры) — пропускаем;
        браузерные запросы — только из whitelist */
     if (!origin || ALLOWED_ORIGINS.has(origin)) return cb(null, true);
+    /* В dev-режиме разрешаем любую локальную сеть 192.168.0.* */
+    if (!cfg.IS_PROD && /^https?:\/\/192\.168\.0\.\d+(:\d+)?$/.test(origin)) return cb(null, true);
     cb(new Error("cors_forbidden_origin"));
   },
   credentials: true,                                   /* кука qf_refresh */
@@ -2002,6 +2004,7 @@ require("./ai-designer.cjs").mount(app, { guard, db });
 /* Цифровые продукты: /api/digital/* (загрузка, presigned-скачивание, покупки, подписки) */
 const digital = require("./digital.cjs");
 digital.setNotifySink(createNotification); // переиспользуем существующую систему уведомлений + email
+require("./subscriptions.cjs")(app);
 digital.mount(app, { guard, softGuard, db });
 
 /* Кабинет администратора (закрытая приватная зона): /api/admin/* — OTP-вход, RBAC,
