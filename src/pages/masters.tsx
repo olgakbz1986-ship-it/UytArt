@@ -10,6 +10,7 @@ import { useReviewStore } from "../lib/review";
 import { ProductGrid } from "../components/product";
 import { Badge, Rating, Btn } from "../components/ui";
 import { ComplaintModal } from "../components/review";
+import { SubscribeButton } from "../components/SubscribeButton";
 
 const LEGAL_META: Record<string, { label: string; emoji: string; color: string }> = {
   self_employed: { label: "Самозанятый", emoji: "🧑‍🌾", color: "#7cb342" },
@@ -445,7 +446,16 @@ export function ShopPage() {
             {master.verified && <Badge tone="success"><ShieldCheck size={12} /> Документы проверены</Badge>}
             {master.acceptsCustom && <Badge tone="honey">✦ Индивидуальные заказы</Badge>}
           </div>
-          <h1 className="font-display font-bold text-[clamp(26px,3vw,36px)] text-ink">{master.name}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-display font-bold text-[clamp(26px,3vw,36px)] text-ink">{master.name}</h1>
+            {ownerId !== session?.userId && (
+              <SubscribeButton 
+                targetType="shop" 
+                targetId={ownerId} 
+                variant="small"
+              />
+            )}
+          </div>
           <p className="text-[13px] text-ink-mute mt-1 flex items-center gap-1.5"><MapPin size={13} /> {master.city || "Россия"} · на платформе с {master.sinceYear} года</p>
           {reg.isMaster && reg.yearsExperience && <p className="text-[13px] text-ink-soft mt-2">Опыт мастерской: {reg.yearsExperience}</p>}
           {(master.ratingCount > 0 || master.sales > 0) && (
