@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { Bell, Package } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Star, Wrench, ArrowRight } from "lucide-react";
 import { fmt } from "../data/seed";
@@ -9,6 +11,30 @@ export default function HomePage() {
   const market = useMarketProducts();
   const sellerHits = market.filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8);
   const featured = sellerHits.slice(0, 8);
+  const [subscriptionsFeed, setSubscriptionsFeed] = useState<any[]>([]);
+  const [subsLoading, setSubsLoading] = useState(true);
+
+  useEffect(() => {
+    const userId = localStorage.getItem("userId") || "demo-user-1";
+    // Загружаем подписки
+    fetch("/api/subscriptions", { headers: { "x-user-id": userId } })
+      .then(r => r.json())
+      .then(async (data) => {
+        if (data.ok && data.subscriptions.length > 0) {
+          // Для каждой подписки загружаем последние товары
+          const allProducts = [];
+          for (const sub of data.subscriptions) {
+            // Заглушка: в реальности нужно запрашивать товары по shop/master/author
+            // Пока просто берём случайные товары из market
+            allProducts.push(...sellerHits.slice(0, 2));
+          }
+          setSubscriptionsFeed(allProducts.slice(0, 8));
+        }
+      })
+      .catch(console.error)
+      .finally(() => setSubsLoading(false));
+  }, []);
+
 
   return (
     <div>
@@ -72,6 +98,45 @@ export default function HomePage() {
             <ProductGrid items={featured} />
           )}
       </section>
+
+    
+      {/* ---------- лента подписок ---------- */}
+      {!subsLoading && subscriptionsFeed.length > 0 && (
+        <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-14 border-t border-line-soft">
+          <Reveal>
+            <div className="flex items-end justify-between mb-7 flex-wrap gap-3">
+              <div>
+                <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-accent-deep mb-2">Персональная лента</p>
+                <h2 className="font-display font-bold text-[clamp(26px,3.4vw,38px)] text-ink">Новинки от ваших подписок</h2>
+                <p className="text-[13px] text-ink-soft mt-1">Последние публикации от магазинов, мастеров и авторов, на которых вы подписаны</p>
+              </div>
+              <Link to="/cabinet/subscriptions" className="text-sm font-bold text-accent-deep hover:text-accent flex items-center gap-1.5 transition-colors">
+                Управление подписками <ArrowRight size={16} />
+              </Link>
+            </div>
+          </Reveal>
+          <ProductGrid items={subscriptionsFeed} />
+        </section>
+      )}
+
+      {/* Пустое состояние ленты подписок */}
+      {!subsLoading && subscriptionsFeed.length === 0 && (
+        <section className="max-w-[720px] mx-auto px-4 sm:px-6 py-16 border-t border-line-soft">
+          <div className="bg-surface rounded-2xl shadow-card p-12 text-center">
+            <Bell size={48} className="mx-auto text-ink-mute mb-4" />
+            <h3 className="font-display font-bold text-[18px] text-ink mb-2">Нет новинок от подписок</h3>
+            <p className="text-[13.5px] text-ink-soft max-w-md mx-auto mb-6">Подпишитесь на интересные магазины и мастеров, чтобы видеть их новинки здесь.</p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              <Link to="/masters" className="inline-flex items-center gap-2 h-11 px-6 rounded-[10px] bg-dark text-cream text-[13.5px] font-bold hover:bg-dark-deep transition-colors">
+                Смотреть мастеров <ArrowRight size={15} />
+              </Link>
+              <Link to="/cabinet/subscriptions" className="inline-flex items-center gap-2 h-11 px-6 rounded-[10px] bg-accent text-cream text-[13.5px] font-bold hover:bg-accent-deep transition-colors">
+                Мои подписки
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
     </div>
   );
