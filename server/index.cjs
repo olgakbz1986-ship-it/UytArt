@@ -306,7 +306,13 @@ app.post("/api/auth/register", async (req, res) => {
     if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: "bad_email" });
     if (password.length < 8) return res.status(400).json({ error: "short_password" });
     if (name.length < 2) return res.status(400).json({ error: "bad_name" });
-    if (await db.byEmail(email)) return res.status(409).json({ error: "exists" });
+    /* ИСПРАВЛЕНИЕ РЕГИСТРАЦИИ: если запись о email уже существует, но это
+       «незавершённая» регистрация (нет password_hash — например, продавец
+       создал кабинет локально до серверной регистрации), НЕ отказываем с 409,
+       а добираем запись паролем и ролью. Это чинит поток «вышел → зашёл по
+       email+паролю → не пускает». */
+    const existingU = await db.byEmail(email);
+    if (existingU && existingU.password_hash) return res.status(409).json({ error: "exists" });
     const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
     /* Итерация два, Пункт А: реестр согласий с фиксацией версий. Клиент передаёт
@@ -314,7 +320,22 @@ app.post("/api/auth/register", async (req, res) => {
        пользователя (dev-db — поле consents; postgres-колонка не определена —
        записываем только если update поддержит произвольные поля). */
     const consents = normalizeConsents(req.body.consents);
-    const newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
+    /* ИСПРАВЛЕНИЕ: если запись без пароля уже есть (незавершённая регистрация),
+       обновляем её паролем/ролью вместо создания дубликата — иначе byEmail
+       находил старую запись без password_hash и вход падал с bad_credentials. */
+    let newUser;
+    if (existingU) {
+      newUser = await db.update(existingU.id, {
+        password_hash: await bcrypt.hash(password, 10),
+        name: existingU.name || name,
+        role: String(req.body.role || existingU.role || "buyer"),
+        legal_type: String(req.body.legalType || existingU.legal_type || ""),
+        confirm_token: token,
+        confirm_expires: exp,
+      }) || existingU;
+    } else {
+      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
+    }
     const dev = await sendConfirm(email, name, token);
     res.json({ 
       ok: true, 

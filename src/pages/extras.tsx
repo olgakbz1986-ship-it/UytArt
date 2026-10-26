@@ -884,13 +884,19 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
     } else if (!regRes.ok && regRes.error !== "exists") {
       useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт входа не создан на сервере", text: "Локальный кабинет работает, но вход с другого устройства будет недоступен: " + (regRes.error || "сеть") });
     }
+    /* ИСПРАВЛЕНИЕ ВХОДА ПРОДАВЦА: id аккаунта приводится к СЕРВЕРНОМУ id
+       (regRes.userId из /auth/register). Ранее продавец жил под локальным
+       id "seller-<timestamp>", а после повторного входа authLogin подставлял
+       серверный UUID — подписки/товары/заказы «переезжали» и терялись,
+       а в «Моих подписках» продавца появлялся чужой список demo-user-1. */
+    const serverId = regRes.ok && regRes.userId ? String(regRes.userId) : "";
     const existingSeller = Object.values(useAppStore.getState().accounts)
       .flat()
-      .find((acc) => acc.email === s.email && acc.role === "seller");
+      .find((acc) => acc.email.toLowerCase() === s.email.trim().toLowerCase() && acc.role === "seller");
     if (existingSeller) {
-      login(existingSeller);
+      login(serverId ? { ...existingSeller, id: serverId } : existingSeller);
     } else {
-      login({ id: "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: (s.legalType ?? undefined) });
+      login({ id: serverId || "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: (s.legalType ?? undefined) });
     }
     const uid = useAppStore.getState().session?.userId;
     const sac = useSellerAccount.getState();
