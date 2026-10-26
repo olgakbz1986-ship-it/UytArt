@@ -7,7 +7,8 @@ import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
-import { useMarketStore, orderOwnerId } from "./extras";
+import { orderOwnerIdLike as orderOwnerId } from "../lib/ownership";
+import { useMarketStore } from "../lib/marketStore";
 import AgentPanel from "../components/agent-panel";
 import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } from "../components/ui";
 import { usePrefsStore } from "../lib/prefs";
@@ -17,6 +18,9 @@ import MarketOrderDetail from "../components/MarketOrderDetail";
 import { ReviewModal, TicketModal } from "../components/review";
 import { BuyerPremiumSection } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
+import { BuyerSubscriptionsPanel } from "../components/BuyerSubscriptionsPanel";
+import { BuyerOrdersPanel } from "../components/BuyerOrdersPanel";
+import { BuyerFavoritesPanel, BuyerAddressesPanel, BuyerBonusPanel, BuyerComplaintsPanel } from "../components/BuyerPanels";
 import {
   useUserSubscriptions,
   resolveTargetName,
@@ -41,190 +45,6 @@ export type Tab = "orders" | "agent" | "favorites" | "subscriptions" | "concepts
    /api/subscriptions), поэтому подписка, оформленная из любого
    кабинета, видна в обоих.
    ============================================================ */
-export function BuyerSubscriptionsPanel() {
-  /* Единый серверный источник подписок — общий с кнопкой «Подписаться» */
-  const { subscriptions, loading: subsLoading, refresh: refreshSubs } = useUserSubscriptions();
-  const marketForSubs = useMarketProducts();
-
-  /* Магазин/мастерская/автор → число новых позиций с момента подписки */
-  const newCounts = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const s of subscriptions) {
-      if (s.targetType !== "shop" && s.targetType !== "master" && s.targetType !== "author") continue;
-      const key = `${s.targetType}:${s.targetId}`;
-      if (out[key] !== undefined) continue;
-      const since = Date.parse(s.createdAt || "") || 0;
-      out[key] = (marketForSubs as any[]).filter(
-        (x) => canonicalSellerId(x) === String(s.targetId) && Date.parse(String(x.createdAt || "")) > since
-      ).length;
-    }
-    return out;
-  }, [subscriptions, marketForSubs]);
-
-  const unsubscribe = async (targetType: string, targetId: string) => {
-    if (!confirm("Отписаться от этой подписки?")) return;
-    const ok = await unsubscribeOnServer(targetType, String(targetId));
-    if (ok) refreshSubs();
-  };
-
-  const getSubIcon = (type: string) => {
-    const map: Record<string, any> = { shop: Store, master: Wrench, author: BookOpen, category: Bell, product: Palette };
-    return map[type] || Bell;
-  };
-  const getSubLabel = (type: string) => {
-    const map: Record<string, string> = { shop: "Магазин", master: "Мастер", author: "Автор", category: "Категория", product: "Товар" };
-    return map[type] || type;
-  };
-
-  return (
-    <div className="space-y-4 fade-up">
-      <h2 className="font-display font-bold text-xl text-ink">Мои подписки</h2>
-      <p className="text-sm text-ink-soft">Управляйте подписками на авторов, магазины, мастеров и категории. Цифра на карточке — количество новых позиций витрины с момента подписки; клик открывает ленту товаров.</p>
-      {subsLoading ? (
-        <div className="py-8 text-center text-ink-soft">Загрузка подписок...</div>
-      ) : subscriptions.length === 0 ? (
-        <div className="text-center py-12 rounded-2xl border border-dashed border-line bg-surface/50">
-          <Bell size={48} className="mx-auto text-ink-mute mb-4" />
-          <h3 className="font-display font-bold text-lg text-ink mb-2">У вас пока нет подписок</h3>
-          <p className="text-ink-soft mb-6 max-w-md mx-auto">Подпишитесь на интересные магазины, мастеров или категории, чтобы видеть их новинки в ленте</p>
-          <Link to="/catalog" className="inline-flex items-center gap-2 px-6 py-3 bg-accent-deep text-white rounded-xl font-semibold hover:bg-accent-deep/90 transition-colors">
-            Перейти в каталог
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-ink-soft">Всего подписок: <b className="text-ink">{subscriptions.length}</b></p>
-          {subscriptions.map((sub: ServerSubscription) => {
-            const Icon = getSubIcon(sub.targetType);
-            const newCount = newCounts[`${sub.targetType}:${sub.targetId}`] || 0;
-            const inner = (
-              <>
-                <div className="w-12 h-12 rounded-lg bg-line-soft flex items-center justify-center text-ink-mute shrink-0">
-                  <Icon size={24} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-ink truncate">{resolveTargetName(sub.targetType, sub.targetId)}</div>
-                  <p className="text-sm text-ink-soft">{getSubLabel(sub.targetType)} • Подписан {new Date(sub.createdAt).toLocaleDateString("ru-RU")}</p>
-                </div>
-                {newCount > 0 && (
-                  <span className="shrink-0 inline-flex items-center justify-center min-w-[26px] h-[26px] px-2 rounded-full bg-accent-deep text-white text-[12.5px] font-bold" title="Новых позиций с момента подписки">
-                    {newCount}
-                  </span>
-                )}
-                <span className="text-ink-mute text-[18px] group-hover:translate-x-1 transition-transform shrink-0">›</span>
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); unsubscribe(sub.targetType, String(sub.targetId)); }}
-                  className="w-10 h-10 rounded-lg grid place-items-center text-ink-mute hover:text-error hover:bg-error/10 transition-colors shrink-0"
-                  title="Отписаться"
-                  aria-label="Отписаться"
-                >
-                  <X size={18} />
-                </button>
-              </>
-            );
-            /* Клик по подписке открывает ленту товаров магазина/мастерской/автора */
-            if (sub.targetType === "shop" || sub.targetType === "master" || sub.targetType === "author") {
-              return (
-                <Link key={sub.id} to={`/shop/${encodeURIComponent(sub.targetId)}`}
-                  className="group bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
-                  {inner}
-                </Link>
-              );
-            }
-            if (sub.targetType === "product") {
-              return (
-                <Link key={sub.id} to={`/product/${encodeURIComponent(sub.targetId)}`}
-                  className="group bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
-                  {inner}
-                </Link>
-              );
-            }
-            return (
-              <div key={sub.id} className="group bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
-                {inner}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* Покупательские заказы пользователя независимо от его роли (buyer/seller).
-   seller-заказы («sp-…») исключены — они живут в разделе «Заказы» продавца. */
-export function BuyerOrdersPanel({ orders }: { orders: Order[] }) {
-  const market = useMarketProducts();
-  const advanceStatus = useAppStore((s) => s.advanceStatus);
-  const confirmReceipt = useAppStore((s) => s.confirmReceipt);
-  const [chatOrder, setChatOrder] = useState<Order | null>(null);
-  const [reviewFor, setReviewFor] = useState<Order | null>(null);
-
-  const buyerOrders = orders.filter((o) => !o.items.every((i) => i.productId.startsWith("sp-")));
-
-  return (
-    <div className="space-y-4 fade-up">
-      <h2 className="font-display font-bold text-xl text-ink">Мои заказы</h2>
-      <p className="text-sm text-ink-soft">Покупки этого аккаунта в других магазинах и мастерских. Продавец — тоже покупатель: здесь видны те же заказы, что и в кабинете покупателя.</p>
-      {buyerOrders.length === 0 && (
-        <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
-          <p className="text-[44px] mb-3">📦</p>
-          <p className="font-display font-bold text-[19px] text-ink mb-2">Покупок пока нет</p>
-          <p className="text-[13px] text-ink-soft mb-4">Здесь появятся ваши заказы в других магазинах — с отслеживанием, чатом с мастером и отзывами.</p>
-          <Link to="/catalog" className="inline-flex h-[44px] px-6 items-center rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">В каталог</Link>
-        </div>
-      )}
-      {buyerOrders.map((o) => (
-        <div key={o.id} className="bg-surface rounded-2xl shadow-card p-5">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-            <div>
-              <p className="font-bold text-[15px] text-ink">Заказ {o.number}</p>
-              <p className="text-[12px] text-ink-mute mt-0.5">{fmtDate(o.date)} · {o.deliveryMethod}</p>
-            </div>
-            <Badge tone={ORDER_LABEL[o.status]?.tone || "honey"}>{ORDER_LABEL[o.status]?.label || o.status}</Badge>
-          </div>
-          <div className="flex gap-2.5 mb-3 overflow-x-auto no-scrollbar">
-            {o.items.map((it) => {
-              const p = (market as any[]).find((x) => x.id === it.productId) || productById(it.productId);
-              return p ? (
-                <Link key={it.productId} to={`/product/${(p as any).slug || it.productId}`} className="w-[64px] h-[64px] rounded-[10px] overflow-hidden shrink-0 group"><ProductImg p={p as any} /></Link>
-              ) : (
-                <span key={it.productId} className="w-[64px] h-[64px] rounded-[10px] bg-line-soft shrink-0 grid place-items-center text-[10px] text-ink-mute px-1 text-center">{String(it.productId).slice(0, 10)}</span>
-              );
-            })}
-          </div>
-          <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4">
-            <span className="font-display font-bold text-[19px] text-ink">{fmt(o.total)}</span>
-            <div className="flex gap-2 sm:gap-3 flex-wrap">
-              <Btn size="sm" variant="outline" onClick={() => setChatOrder(o)}><MessageSquare size={14} /> Чат</Btn>
-              {o.status !== "received" && (
-                <Btn size="sm" variant="ghost" onClick={() => advanceStatus(o.id)} title="Демо-продвижение статуса">
-                  → {ORDER_LABEL[NEXT_STATUS[o.status]]?.label}
-                </Btn>
-              )}
-              {o.status === "delivered" && (
-                <Btn size="sm" onClick={() => { confirmReceipt(o.id); }}>
-                  <CheckCircle2 size={14} /> Подтвердить получение
-                </Btn>
-              )}
-              {o.status === "received" && (
-                <Btn size="sm" onClick={() => setReviewFor(o)}>
-                  <Sparkles size={14} /> Оставить отзыв
-                </Btn>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-      {chatOrder && <ChatModal open onClose={() => setChatOrder(null)} kind="order" order={chatOrder} />}
-      {reviewFor && reviewFor.items[0] && (() => {
-        const p = (market as any[]).find((x) => x.id === reviewFor.items[0].productId) || productById(reviewFor.items[0].productId);
-        return p ? <ReviewModal open onClose={() => setReviewFor(null)} product={p as any} orderId={reviewFor.id} orderNumber={reviewFor.number} /> : null;
-      })()}
-    </div>
-  );
-}
-
 const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
 
 /* Визуальные токены и возможности каждого уровня покупателя */
@@ -694,34 +514,7 @@ export default function ProfilePage() {
       )}
 
       {/* ИЗБРАННОЕ */}
-      {tab === "favorites" && (
-        <div className="fade-up">
-          {favProducts.length === 0 ? (
-            <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
-              <p className="text-[44px] mb-3">💛</p>
-              <p className="font-display font-bold text-[19px] text-ink mb-2">В избранном пусто</p>
-              <p className="text-[14px] text-ink-soft">Нажимайте на сердечко в карточке товара.</p>
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {favProducts.map((p) => (
-                <div key={p.id} className="bg-surface rounded-2xl shadow-card overflow-hidden">
-                  <Link to={`/product/${p.slug}`} className="block aspect-[4/3] group"><ProductImg p={p} /></Link>
-                  <div className="p-4">
-                    <p className="text-[13.5px] font-semibold text-ink line-clamp-1">{p.name}</p>
-                    <div className="flex items-center justify-between mt-2.5">
-                      <span className="font-display font-bold text-[16px] text-ink">{fmt(p.price)}</span>
-                      <button onClick={() => toggleFav(p.id)} aria-label="Убрать из избранного" className="w-9 h-9 rounded-[10px] bg-error-soft text-error flex items-center justify-center cursor-pointer hover:bg-error hover:text-white transition-colors">
-                        <Heart size={15} fill="currentColor" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {tab === "favorites" && <BuyerFavoritesPanel />}
 
       {/* КОНЦЕПТЫ */}
       {tab === "concepts" && (
@@ -757,7 +550,7 @@ export default function ProfilePage() {
 
       {/* ОТСЛЕЖИВАНИЕ ЦЕН */}
       
-      {/* МОИ ПОДПИСКИ — переиспользуемая панель (та же, что в кабинете продавца) */}
+      {/* МОИ ПОДПИСКИ — общая панель src/components/BuyerSubscriptionsPanel (идентична кабинету продавца) */}
       {tab === "subscriptions" && <BuyerSubscriptionsPanel />}
 
       {tab === "prices" && (
@@ -816,91 +609,13 @@ export default function ProfilePage() {
       )}
 
       {/* АДРЕСА */}
-      {tab === "addresses" && (
-        <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start fade-up">
-          <div className="space-y-3">
-            {addresses.map((a) => (
-              <div key={a.id} className="bg-surface rounded-2xl shadow-card p-5 flex items-start gap-4">
-                <span className="w-11 h-11 rounded-[10px] bg-ai-soft text-ai flex items-center justify-center shrink-0"><MapPin size={19} /></span>
-                <div className="flex-1">
-                  <p className="font-bold text-[14.5px] text-ink flex items-center gap-2">{a.label} {a.isDefault && <Badge tone="ai">по умолчанию</Badge>}</p>
-                  <p className="text-[13px] text-ink-soft mt-1">{a.city}, {a.street}</p>
-                  <p className="text-[12px] text-ink-mute mt-0.5">индекс {a.zip}</p>
-                </div>
-                <button onClick={() => removeAddress(a.id)} className="text-[12.5px] font-semibold text-ink-mute hover:text-error cursor-pointer transition-colors">Удалить</button>
-              </div>
-            ))}
-          </div>
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <h2 className="font-display font-bold text-[18px] text-ink mb-4">Новый адрес</h2>
-            <div className="space-y-3.5">
-              <Field label="Название"><input className="field" value={addr.label} onChange={(e) => setAddr({ ...addr, label: e.target.value })} placeholder="Дом / Работа / Дача" autoComplete="off" /></Field>
-              <Field label="Город"><input className="field" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} placeholder="Москва" autoComplete="address-level2" /></Field>
-              <Field label="Улица, дом"><input className="field" value={addr.street} onChange={(e) => setAddr({ ...addr, street: e.target.value })} placeholder="ул. Пятницкая, 18" autoComplete="street-address" /></Field>
-              <Field label="Индекс" hint="6 цифр"><input className="field" inputMode="numeric" autoComplete="postal-code" value={addr.zip} onChange={(e) => setAddr({ ...addr, zip: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="115035" /></Field>
-              <Btn className="w-full" disabled={!addr.city.trim() || !addr.street.trim() || addr.zip.length !== 6} onClick={() => { addAddress(addr); setAddr({ label: "Дом", city: "", street: "", zip: "" }); }}>Сохранить адрес</Btn>
-            </div>
-          </div>
-        </div>
-      )}
+      {tab === "addresses" && <BuyerAddressesPanel />}
 
       {/* БОНУСЫ */}
-      {tab === "bonus" && (
-        <div className="space-y-6 fade-up">
-        <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <h2 className="font-display font-bold text-[18px] text-ink mb-4">История начислений</h2>
-            <div className="space-y-2.5">
-              {bonusHistory.map((b) => (
-                <div key={b.id} className="flex items-center justify-between border-b border-line-soft pb-2.5 last:border-0">
-                  <div>
-                    <p className="text-[13.5px] font-semibold text-ink">{b.reason}{b.sellerName ? ` · ${b.sellerName}` : ""}</p>
-                    <p className="text-[11.5px] text-ink-mute mt-0.5">{fmtDate(b.date)}</p>
-                  </div>
-                  <span className={`font-display font-bold text-[15px] ${b.amount < 0 ? "text-error" : "text-[#4d7327]"}`}>{b.amount < 0 ? `−${-b.amount}` : `+${b.amount}`}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="bg-dark text-cream rounded-2xl p-6">
-            <p className="text-[12px] font-bold uppercase tracking-wide text-cream/50">Бонусный счёт</p>
-            <p className="font-display font-extrabold text-[40px] mt-2">{bonusBalance}</p>
-            <p className="text-[13px] text-cream/60 mt-1">1 бонус = 1 ₽ при оплате заказа</p>
-            <div className="mt-5 pt-5 border-t border-white/15 text-[13px] text-cream/70 space-y-1.5">
-              <p className="flex justify-between"><span>Отзыв с фото</span><span className="font-bold text-cream">+300</span></p>
-              <p className="flex justify-between"><span>Отзыв о заказе</span><span className="font-bold text-cream">+100</span></p>
-              <p className="flex justify-between"><span>Кэшбэк за заказ</span><span className="font-bold text-cream">+50</span></p>
-            </div>
-          </div>
-        </div>
-        {/* §5.1: премиум-функции покупателя — закрытые распродажи, цифровой куратор */}
-        <BuyerPremiumSection />
-        </div>
-      )}
+      {tab === "bonus" && <BuyerBonusPanel />}
 
       {/* ЖАЛОБЫ */}
-      {tab === "complaints" && (
-        <div className="fade-up space-y-3">
-          {complaints.length === 0 ? (
-            <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
-              <p className="text-[44px] mb-3">🛡️</p>
-              <p className="font-display font-bold text-[19px] text-ink mb-2">Жалоб нет</p>
-              <p className="text-[13.5px] text-ink-soft">Если продавец нарушит правила — пожаловаться можно на странице его магазина.</p>
-            </div>
-          ) : (
-            complaints.map((c) => (
-              <div key={c.id} className="bg-surface rounded-2xl shadow-card p-5">
-                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                  <p className="font-bold text-[14.5px] text-ink">Жалоба на «{c.vendorName}»</p>
-                  <Badge tone={c.status === "resolved" ? "success" : "honey"}>{c.status === "resolved" ? "Решено" : "На рассмотрении"}</Badge>
-                </div>
-                <p className="text-[12.5px] text-ink-mute">{c.category} · {fmtDate(c.createdAt)}</p>
-                <p className="text-[13.5px] text-ink-soft mt-2">{c.description}</p>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      {tab === "complaints" && <BuyerComplaintsPanel />}
 
       {/* НАСТРОЙКИ */}
       {tab === "settings" && (

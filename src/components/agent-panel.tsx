@@ -4,7 +4,7 @@ import { ProductImg } from "./ui";
 import { PRODUCTS } from "../data/seed";
 import { Link } from "react-router-dom";
 import { useNotifyStore, notifyActions } from "../lib/notify";
-import { useMarketStore } from "../pages/extras";
+import { useMarketStore } from "../lib/marketStore";
 import { useAgentStore } from "../lib/agent";
 import { AGENT_TEMPLATES } from "../lib/agent-kb";
 import { useAppStore } from "../lib/store";
