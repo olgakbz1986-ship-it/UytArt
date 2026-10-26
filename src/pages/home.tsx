@@ -9,7 +9,7 @@ import { Reveal } from "../components/ui";
 
 export default function HomePage() {
   const market = useMarketProducts();
-  const sellerHits = market.filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8);
+  const sellerHits = market.filter((p) => p.id.startsWith("sp-")).filter((p) => p.isHit || p.rating >= 4.8 || !p.rating || p.rating === 0);
   const featured = sellerHits.slice(0, 8);
   const [subscriptionsFeed, setSubscriptionsFeed] = useState<any[]>([]);
   const [subsLoading, setSubsLoading] = useState(true);
@@ -21,14 +21,14 @@ export default function HomePage() {
       .then(r => r.json())
       .then(async (data) => {
         if (data.ok && data.subscriptions.length > 0) {
-          // Для каждой подписки загружаем последние товары
-          const allProducts = [];
-          for (const sub of data.subscriptions) {
-            // Заглушка: в реальности нужно запрашивать товары по shop/master/author
-            // Пока просто берём случайные товары из market
-            allProducts.push(...sellerHits.slice(0, 2));
-          }
-          setSubscriptionsFeed(allProducts.slice(0, 8));
+          // Собираем уникальные товары от подписанных сущностей
+          const subscribedIds = new Set(data.subscriptions.map((sub: any) => sub.targetId));
+          const uniqueProducts = market.filter((p: any) => {
+            const ownerId = p.ownerId || p.owner_id;
+            return subscribedIds.has(ownerId);
+          });
+          // Берём последние 8 товаров
+          setSubscriptionsFeed(uniqueProducts.slice(0, 8));
         }
       })
       .catch(console.error)

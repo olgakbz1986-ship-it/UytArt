@@ -13,6 +13,7 @@ import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { ProductGrid } from "../components/product";
 import { Badge, Btn, GroupImg, ProductImg, Rating } from "../components/ui";
+import { SubscribeButton } from "../components/SubscribeButton";
 import { useTopSlots } from "../lib/premium";
 import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
@@ -554,7 +555,7 @@ export function ProductPage() {
             <Btn size="lg" className="flex-1 min-w-[200px]" onClick={() => addToCart(p.id, qty)}>
               <ShoppingBag size={18} /> В корзину
             </Btn>
-            <button onClick={() => toggleFav(p.id)} aria-label="В избранное"
+            <button onClick={() => { console.log("[FAV] Toggling:", p.id); toggleFav(p.id); }} aria-label="В избранное"
               className={`w-[52px] h-[52px] rounded-[10px] flex items-center justify-center transition-colors cursor-pointer ${onFav ? "bg-error text-white" : "border border-line bg-surface text-ink-soft hover:text-error"}`}>
               <Heart size={20} fill={onFav ? "currentColor" : "none"} />
             </button>
@@ -618,8 +619,15 @@ export function ProductPage() {
                 ? <Badge tone="success"><ShieldCheck size={12} /> Проверенный продавец</Badge>
                 : (vendor?.verified ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge> : <Badge tone="honey">На проверке</Badge>)}
             </div>
+            <div className="mt-4 pt-4 border-t border-line-soft">
+              <SubscribeButton 
+                targetType="shop" 
+                targetId={(p as any).sellerId || vendor?.id || ""} 
+                variant="small"
+              />
+            </div>
             <button type="button" onClick={() => setSellerAboutOpen(true)}
-              className="mt-4 pt-4 border-t border-line-soft w-full group">
+              className="pt-4 border-t border-line-soft w-full group">
               <div className="flex items-center justify-between gap-2 text-left">
                 <div className="flex items-center gap-2">
                   <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent-deep flex items-center justify-center">

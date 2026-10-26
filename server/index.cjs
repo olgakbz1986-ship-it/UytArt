@@ -1750,6 +1750,31 @@ app.post("/api/products", guard, async (req, res) => {
       d.products.push(Object.assign({}, p, { ownerId: req.userId, created_at: new Date().toISOString() }));
     }
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+
+    /* ЭТАП 4: Уведомления подписчиков о новом товаре */
+    if (isNew && d.subscriptions) {
+      // Ищем всех, кто подписан на этого продавца (ownerId = req.userId)
+      const subscribers = d.subscriptions.filter(sub => String(sub.targetId) === String(req.userId));
+      if (subscribers.length > 0) {
+        if (!d.notifications) d.notifications = [];
+        const nowIso = new Date().toISOString();
+        subscribers.forEach(sub => {
+          d.notifications.push({
+            id: "n-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            user_id: sub.userId,
+            kind: "alert",
+            title: "Новая публикация",
+            text: "Магазин опубликовал новый товар: " + (p.name || "Без названия"),
+            created_at: nowIso,
+            read: false,
+            deepLink: "/catalog?q=" + encodeURIComponent(p.name || "")
+          });
+        });
+        // Сохраняем уведомления в базу
+        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      }
+    }
+
     res.json({ ok: true });
   } catch (e) { console.error("[PRODUCTS ERROR]", e); res.status(500).json({ error: "server" }); }
 });

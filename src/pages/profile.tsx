@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot} from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
+import { useMarketProducts } from "../lib/market";
 import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
@@ -65,6 +66,7 @@ export default function ProfilePage() {
   const updateUser = useAppStore((s) => s.updateUser);
   const orders = useAppStore((s) => s.orders);
   const favorites = useAppStore((s) => s.favorites);
+  const market = useMarketProducts();
   const toggleFav = useAppStore((s) => s.toggleFav);
   const addresses = useAppStore((s) => s.addresses);
   const addAddress = useAppStore((s) => s.addAddress);
@@ -289,7 +291,13 @@ export default function ProfilePage() {
     );
   }
 
-  const favProducts = favorites.map((id) => productById(id)).filter(Boolean) as NonNullable<ReturnType<typeof productById>>[];
+  const favProducts = favorites.map((id) => {
+    // Сначала ищем в динамических товарах (созданных пользователями)
+    const dynamicProduct = market.find((p: any) => p.id === id);
+    if (dynamicProduct) return dynamicProduct;
+    // Если нет, ищем в статических (из seed.ts)
+    return productById(id);
+  }).filter(Boolean) as any[];
 
   const TABS: { id: Tab; label: string; icon: typeof Package; locked?: boolean }[] = [
     { id: "orders", label: "Заказы", icon: Package },
