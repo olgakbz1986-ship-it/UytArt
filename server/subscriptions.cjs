@@ -42,20 +42,15 @@ module.exports = function subscriptionsRouter(app) {
     const userId = req.headers['x-user-id'] || 'demo-user-1';
     let { targetType, targetId } = req.body || {};
 
-    /* Канонизация цели: демо-вендор (витрина seed-товаров) приводится к
-       id реального владельца витрины — иначе подписка с карточки товара
-       не резолвилась бы в кабинете «Мои подписки». */
+    /* Канонизация цели: подписка НЕ должна молча «привязываться» к первому
+       попавшемуся продавцу (ранее sellers.find(x => x.id) брал случайного
+       продавца из БД — подписка улетала не на тот магазин). Если цель не
+       резолвится в реального владельца витрины — отклоняем запрос. */
     if (targetType === 'shop' && typeof targetId === 'string' && /^vendor-/.test(targetId)) {
-      try {
-        const d0 = readDb();
-        const sellers = (d0.shops || []).concat(d0.masters || []);
-        const s = sellers.find((x) => x.id);
-        if (s) targetId = String(s.id);
-        else return res.status(400).json({ ok: false, error: 'не удалось определить продавца' });
-      } catch (e) {
-        console.error('[subscriptions] канонизация цели:', e);
-        return res.status(500).json({ ok: false, error: 'server' });
-      }
+      return res.status(400).json({
+        ok: false,
+        error: 'не удалось определить продавца: подпишитесь через карточку магазина или страницу товара реального продавца',
+      });
     }
 
     if (!targetType || !targetId) {
