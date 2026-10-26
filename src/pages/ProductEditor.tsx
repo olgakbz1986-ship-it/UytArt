@@ -8,6 +8,7 @@ import { CategoryPicker } from "../components/CategoryPicker";
 import { getGroupsForCategory, type SpecGroupDef, type SpecFieldDef } from "../lib/specSystem";
 import { QualityScore, calculateQualityScore } from "../components/QualityScore";
 import { ProductViewCore } from "../components/ProductViewCore";
+import { publicProductsUpsert } from "../lib/market";
 import { CATEGORIES } from "../data/seed";
 import { Btn, Field } from "../components/ui";
 
@@ -173,7 +174,13 @@ export function ProductEditorPage() {
     if (editItem) {
       const loaded = {
         ...empty,
-        media: editItem.media || [],
+        /* ИСПРАВЛЕНИЕ «сброса фото при редактировании»: серверный снимок
+           товара не содержит media[] (приватные данные владельца), поэтому
+           при пустом editItem.media берём медиа из приватного persist-стора
+           того же id — иначе повторная публикака записывала товар без фото
+           и витрина вырезала его как «товар без изображения». */
+        media: (editItem.media && editItem.media.length ? editItem.media : undefined) ||
+          useSellerAccount.getState().products.find((x) => String(x.id) === String(editItem.id))?.media || [],
         name: editItem.name,
         category: editItem.category,
         subcategory: (editItem as any).subcategory || "",
@@ -532,7 +539,12 @@ export function ProductEditorPage() {
         manufacturer: draft.manufacturer || undefined,
         sku: draft.sku || undefined,
         tags: draft.tags || [],
-        sellerCity: draft.sellerCity || reg.city || "Россия",
+        /* ИСПРАВЛЕНИЕ видимости товара: раньше при пустом поле города в
+           форму подставлялась строка "Россия" — не-город, который ломал
+           серверный geo-фильтр и калькулятор логистики. Теперь fallback:
+           город профиля продавца; если и он пуст — sellerCity остаётся
+           пустым, а зона = nationwide (товар виден всем). */
+        sellerCity: draft.sellerCity || reg.city || "",
         ...geoPayload({ ...draft, sellerCity: draft.sellerCity || reg.city || "" }),
         shopName: reg.shopName || "Мастерская",
         legalType: reg.legalType || "self_employed",

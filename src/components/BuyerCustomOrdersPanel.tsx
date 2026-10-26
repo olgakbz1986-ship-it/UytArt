@@ -37,16 +37,12 @@ export function BuyerCustomOrdersPanel() {
      (принят отклик → in_progress и т.п.) — детали должны отражать это. */
   const liveSelected = selected ? (useMarketStore.getState().orders.find((o) => o.id === selected.id) || selected) : null;
 
-  /* Владелец ли текущий аккаунт у открытого заказа (роль для модалки). */
-  const [ownerRole, setOwnerRole] = useState<"owner" | "other">("other");
-  useEffect(() => {
-    let alive = true;
-    if (!liveSelected || !session) { setOwnerRole("other"); return; }
-    orderOwnerIdLike(liveSelected.id)
-      .then((mine) => { if (alive) setOwnerRole(mine ? "owner" : "other"); })
-      .catch(() => { if (alive) setOwnerRole("other"); });
-    return () => { alive = false; };
-  }, [liveSelected?.id, session]);
+  /* Владелец ли текущий аккаунт у открытого заказа (роль для модалки).
+     Синхронное правило владения (orderOwnerIdLike сравнивает ownerId/user_id
+     заказа с userId сессии) — изоморфно серверной проверке. */
+  const ownerRole: "owner" | "other" = liveSelected && session
+    ? (orderOwnerIdLike(liveSelected) === session.userId ? "owner" : "other")
+    : "other";
 
   return (
     <div className="fade-up space-y-3">
@@ -102,7 +98,7 @@ export function BuyerCustomOrdersPanel() {
           onClose={() => setSelected(null)}
           onStatusChange={(id, status) =>
             useMarketStore.setState((s) => ({
-              orders: s.orders.map((o) => (o.id === id ? { ...o, status } : o)),
+              orders: s.orders.map((o) => (o.id === id ? { ...o, status: status as MarketOrder["status"] } : o)),
             }))
           }
         />
