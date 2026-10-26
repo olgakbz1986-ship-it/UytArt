@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot, Store, Wrench, BookOpen} from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
@@ -20,7 +20,7 @@ import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/Limi
 import {
   useUserSubscriptions,
   resolveTargetName,
-  computeNewCounts,
+  canonicalSellerId,
   unsubscribeOnServer,
   type ServerSubscription,
 } from "../lib/userFeed";
@@ -91,17 +91,19 @@ export default function ProfilePage() {
   const { subscriptions, loading: subsLoading, refresh: refreshSubs } = useUserSubscriptions();
 
   /* Магазин → число новых товаров с момента подписки (единый расчёт для
-     кабинета и витрины). Пустая карта до публикации реального каталога. */
+     кабинета и витрины — функция computeNewCounts из src/lib/userFeed.ts).
+     Пустая карта до публикации сервиса. */
   const marketForSubs = useMarketProducts();
   const newCounts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const s of subscriptions) {
       if (s.targetType !== "shop" && s.targetType !== "master" && s.targetType !== "author") continue;
+      const key = `${s.targetType}:${s.targetId}`;
+      if (out[key] !== undefined) continue;
       const since = Date.parse(s.createdAt || "") || 0;
-      const n = (marketForSubs as any[]).filter(
-        (x) => String(x.ownerId || x.sellerId || x.vendorId || "") === String(s.targetId) && Date.parse(String(x.createdAt || "")) > since
+      out[key] = (marketForSubs as any[]).filter(
+        (x) => canonicalSellerId(x) === String(s.targetId) && Date.parse(String(x.createdAt || "")) > since
       ).length;
-      out[`${s.targetType}:${s.targetId}`] = n;
     }
     return out;
   }, [subscriptions, marketForSubs]);
