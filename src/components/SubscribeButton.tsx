@@ -66,7 +66,7 @@ export function SubscribeButton({ targetType, targetId, variant = 'default' }: S
     <button
       onClick={handleToggle}
       disabled={loading}
-      className={`inline-flex items-center gap-2 rounded-lg font-medium transition-all ${sizeClass} ${
+      className={`inline-flex items-center rounded-lg font-medium transition-all ${sizeClass} ${
         isSubscribed 
           ? 'bg-accent-deep text-white hover:bg-accent-deep/90' 
           : 'bg-surface border border-line text-ink hover:border-accent-deep hover:text-accent-deep'
@@ -74,12 +74,10 @@ export function SubscribeButton({ targetType, targetId, variant = 'default' }: S
     >
       {isSubscribed ? (
         <>
-          <BellOff size={variant === 'small' ? 14 : 16} />
           <span>Вы подписаны</span>
         </>
       ) : (
         <>
-          <Bell size={variant === 'small' ? 14 : 16} />
           <span>Подписаться</span>
         </>
       )}

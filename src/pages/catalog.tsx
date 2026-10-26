@@ -593,7 +593,7 @@ export function ProductPage() {
 
           {/* продавец — обязателен по ст. 12 ЗоЗПП */}
           <div className="mt-7 bg-surface rounded-2xl shadow-card p-5">
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 pb-4">
               {(p as any).avatar ? (
                 <img src={(p as any).avatar} className="w-12 h-12 rounded-[14px] object-cover" />
               ) : sellerItem ? (
@@ -619,7 +619,7 @@ export function ProductPage() {
                 ? <Badge tone="success"><ShieldCheck size={12} /> Проверенный продавец</Badge>
                 : (vendor?.verified ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge> : <Badge tone="honey">На проверке</Badge>)}
             </div>
-            <div className="mt-4 pt-4 border-t border-line-soft">
+            <div className="py-3 border-t border-line-soft">
               <SubscribeButton 
                 targetType="shop" 
                 targetId={(p as any).sellerId || vendor?.id || ""} 
