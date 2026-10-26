@@ -1700,7 +1700,18 @@ app.get("/api/products", softGuard, async (_q, r) => {
     /* Нормализация geography → deliveryZone/installCities (единый контракт
        для товаров и мастеров; структура БД не меняется — только проекция). */
     const enriched = (d.products || []).map(normalizeGeo);
-    r.json({ ok: true, products: geo.geoFilter(enriched, city), filteredByCity: city || null });
+    /* ИСПРАВЛЕНИЕ «невидимого товара» (публичный контракт): GET /api/products
+       отдаёт витринную проекцию без медиа — карточка покупателя получала пустое
+       превью и каталог вырезал товар как «без фото». Добавляем публичное поле
+       previewUrl (первое изображение/видео из media[]), не раскрывая приватные
+       поля владельца. */
+    const withPreview = enriched.map((x) => {
+      const media = Array.isArray(x.media) ? x.media : [];
+      const firstImg = (media.find((m) => m && m.type === "image") || {}).url;
+      const firstVid = (media.find((m) => m && m.type === "video") || {}).url;
+      return Object.assign({}, x, { previewUrl: x.previewUrl || x.preview || firstImg || firstVid || "" });
+    });
+    r.json({ ok: true, products: geo.geoFilter(withPreview, city), filteredByCity: city || null });
   }
   catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
@@ -1769,6 +1780,18 @@ app.post("/api/products", guard, async (req, res) => {
       d.products[idx] = Object.assign({}, d.products[idx], p, { ownerId: req.userId, updated_at: new Date().toISOString() });
     } else {
       d.products.push(Object.assign({}, p, { ownerId: req.userId, created_at: new Date().toISOString() }));
+    }
+    /* Нормализация географии на записи (ЭТАП 2): «Россия» — это НЕ город.
+       Иначе калькулятор логистики и geo-фильтр получают sellerCity="Россия",
+       не находят такой город в справочнике и товар выпадает из выдачи для
+       авторизованных покупателей с указанным городом. Пустой/негородской
+       sellerCity при deliveryRussia=true остаётся nationwide — товар виден всем. */
+    {
+      const rec = d.products.find((x) => String(x.id) === String(p.id));
+      if (rec) {
+        const sc = String(rec.sellerCity || "").trim();
+        if (!sc || /^(россия|рф|russia)$/i.test(sc)) rec.sellerCity = "";
+      }
     }
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
 

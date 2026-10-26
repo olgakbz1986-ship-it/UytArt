@@ -1,5 +1,5 @@
 import { PRODUCTS, CATEGORIES, type Product } from "../data/seed";
-import { useSellerAccount, useSellerReg, sellerProfileOf, type SellerProductItem, type SellerProfile } from "./seller";
+import { useSellerAccount, useSellerReg, sellerProfileOf, type SellerProductItem, type SellerProfile, type DeliveryZone, type ProductMedia } from "./seller";
 import { isZoneMatch } from "./geo";
 import { useAppStore } from "./store";
 import { useMemo, useEffect, useState } from "react";
@@ -191,21 +191,65 @@ function mergedSellerItems(): SellerProductItem[] {
   return [...byId.values()];
 }
 
+/* ИСПРАВЛЕНИЕ «невидимого товара» (сквозной аудит публикации):
+   1) ГЕО-КОНТРАКТ. Товары, сохранённые в persist-стор до появления
+      формы географии, могут не иметь поля deliveryZone. Раньше такой
+      товар считался «без ограничений», но если у продавца при этом
+      указан город (sellerCity/город профиля), покупатель из другого
+      города на клиентском geo-дубле фильтрации получал false и товар
+      исчезал из ленты — при том что сервер его отдавал. Теперь запись
+      без явной зоны нормализуется в контракт формы:
+      доставка по всей РФ включена → nationwide; иначе → город продавца.
+   2) ДЕМОН-ФИЛЬТР. Каталог скрывает черновики и товары без медиа
+      (публикация требует фото). Но legacy/серверные записи исторически
+      используют поле preview (dataURL) вместо media[] — их надо
+      учитывать, иначе легальный опубликованный товар вырезается как
+      «без фото». */
+function effectiveDeliveryZone(item: any): DeliveryZone | undefined {
+  if (item?.deliveryZone) return item.deliveryZone as DeliveryZone;
+  const city = String(item?.sellerCity || "").trim();
+  if (!city || city === "Россия") return { mode: "nationwide" };
+  return { mode: "cities", cities: [city] };
+}
+
+function isPubliclyVisibleItem(item: any): boolean {
+  if (!item || item.archived) return false;
+  if ((item as any).isDraft) return false;
+  const hasMedia =
+    (Array.isArray(item.media) && item.media.length > 0) ||
+    !!item.preview ||
+    !!item.image;
+  return hasMedia;
+}
+
 export function sellerMarketProducts(): Product[] {
-  const items = mergedSellerItems().filter((p) => !p.archived && !(p as any).isDraft);
+  const items = mergedSellerItems().filter(isPubliclyVisibleItem);
   return items.map((p) => {
     const cat = CATEGORIES.find((c) => c.name === p.category);
     const firstImg = p.media?.find((m) => m.type === "image")?.url;
     const firstVid = p.media?.find((m) => m.type === "video")?.url;
     const prof = profileForItem(p);
+    /* ИСПРАВЛЕНИЕ «битого превью»: persist-стор продавца приватен для
+       браузера владельца (dataURL фото не уезжает в чужие браузеры), а
+       серверный GET /api/products отдаёт запись без медиа. Поэтому при
+       сборке витринной карточки подтягиваем превью из любого доступного
+       источника: media[] → preview → image → локальный persist-кэш того
+       же id. Иначе покупатель получал товар с пустой картинкой, и
+       демон-фильтр каталога вырезал его как «товар без фото». */
+    const localMirror = useSellerAccount.getState().products.find((x) => String(x.id) === String(p.id)) as any;
+    const firstImgAny =
+      firstImg || firstVid ||
+      (p as any).preview || (p as any).image ||
+      localMirror?.media?.find((m: ProductMedia) => m.type === "image")?.url ||
+      localMirror?.preview || "";
     return {
       id: "sp-" + p.id,
       slug: "sp-" + p.id,
       name: p.name,
       emoji: "🛍️",
       art: ["#eae4d4", "#2d5f4c"],
-      image: firstImg || firstVid || "",
-      media: p.media,
+      image: firstImgAny,
+      media: (Array.isArray(p.media) && p.media.length ? p.media : localMirror?.media) || undefined,
       sub: p.manufacturer || prof?.shopName || "Ручная работа",
       sku: "SP-" + (p.id.replace(/\D/g, "").slice(-6) || "0001"),
       price: p.price,
@@ -238,7 +282,7 @@ export function sellerMarketProducts(): Product[] {
       acceptsCustomOrders: prof?.acceptsCustomOrders,
       ai_assets: p.ai_assets,
       ai_status: p.ai_status,
-      deliveryZone: p.deliveryZone,
+      deliveryZone: effectiveDeliveryZone(p),
     } as unknown as Product;
   });
 }
@@ -260,9 +304,12 @@ export function marketProducts(buyerCity?: string): Product[] {
     if (p.id.startsWith("dp-")) return true;
     if (!p.id.startsWith("sp-")) return true;
     const item = zoneById.get(p.id.slice(3));
+    // Единый нормализованный гео-контракт: явная зона товара, иначе —
+    // производная от города продавца (см. effectiveDeliveryZone).
+    const zone = effectiveDeliveryZone(item ?? p);
     // Если зоны доставки нет или она "по всей России", показываем всем
-    if (!item?.deliveryZone || item.deliveryZone.mode === "nationwide") return true;
-    return isZoneMatch(item.deliveryZone, item.sellerCity || (p as any).sellerCity || "", city);
+    if (!zone || zone.mode === "nationwide") return true;
+    return isZoneMatch(zone, item?.sellerCity || (p as any).sellerCity || "", city);
   });
 }
 
