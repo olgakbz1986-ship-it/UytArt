@@ -622,7 +622,7 @@ export function ProductPage() {
             <div className="py-3 border-t border-line-soft">
               <SubscribeButton 
                 targetType="shop" 
-                targetId={(p as any).sellerId || vendor?.id || ""} 
+                targetId={sellerItem?.ownerId || (p as any).ownerId || vendor?.id || ""} 
                 variant="small"
               />
             </div>

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot} from "lucide-react";
+import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot, Store, Wrench, BookOpen} from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
@@ -17,6 +17,13 @@ import MarketOrderDetail from "../components/MarketOrderDetail";
 import { ReviewModal, TicketModal } from "../components/review";
 import { BuyerPremiumSection } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
+import {
+  useUserSubscriptions,
+  resolveTargetName,
+  computeNewCounts,
+  unsubscribeOnServer,
+  type ServerSubscription,
+} from "../lib/userFeed";
 
 type Tab = "orders" | "agent" | "favorites" | "subscriptions" | "concepts" | "prices" | "custom" | "addresses" | "bonus" | "complaints" | "settings";
 
@@ -79,27 +86,30 @@ export default function ProfilePage() {
 
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
   const concepts = useSubStore((s) => s.concepts);
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [subsLoading, setSubsLoading] = useState(true);
+  /* ИСПРАВЛЕНИЕ: единый серверный источник истины подписок — общий с
+     кнопкой «Подписаться» на карточках магазинов/мастерских/авторов. */
+  const { subscriptions, loading: subsLoading, refresh: refreshSubs } = useUserSubscriptions();
 
-  useEffect(() => {
-    const userId = useAppStore.getState().session?.userId || localStorage.getItem("userId") || "demo-user-1";
-    fetch("/api/subscriptions", { headers: { "x-user-id": userId } })
-      .then(r => r.json())
-      .then(data => { if (data.ok) setSubscriptions(data.subscriptions); })
-      .catch(console.error)
-      .finally(() => setSubsLoading(false));
-  }, []);
+  /* Магазин → число новых товаров с момента подписки (единый расчёт для
+     кабинета и витрины). Пустая карта до публикации реального каталога. */
+  const marketForSubs = useMarketProducts();
+  const newCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const s of subscriptions) {
+      if (s.targetType !== "shop" && s.targetType !== "master" && s.targetType !== "author") continue;
+      const since = Date.parse(s.createdAt || "") || 0;
+      const n = (marketForSubs as any[]).filter(
+        (x) => String(x.ownerId || x.sellerId || x.vendorId || "") === String(s.targetId) && Date.parse(String(x.createdAt || "")) > since
+      ).length;
+      out[`${s.targetType}:${s.targetId}`] = n;
+    }
+    return out;
+  }, [subscriptions, marketForSubs]);
 
   const unsubscribe = async (targetType: string, targetId: string) => {
     if (!confirm("Отписаться от этой подписки?")) return;
-    const userId = useAppStore.getState().session?.userId || localStorage.getItem("userId") || "demo-user-1";
-    try {
-      const res = await fetch(`/api/subscriptions/${targetType}/${targetId}`, {
-        method: "DELETE", headers: { "x-user-id": userId }
-      });
-      if (res.ok) setSubscriptions(prev => prev.filter(s => !(s.targetType === targetType && s.targetId === targetId)));
-    } catch (e) { console.error(e); }
+    const ok = await unsubscribeOnServer(targetType, String(targetId));
+    if (ok) refreshSubs();
   };
 
   const getSubIcon = (type: string) => {
@@ -659,24 +669,56 @@ export default function ProfilePage() {
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-ink-soft">Всего подписок: <b className="text-ink">{subscriptions.length}</b></p>
-              {subscriptions.map((sub: any) => {
+              {subscriptions.map((sub: ServerSubscription) => {
                 const Icon = getSubIcon(sub.targetType);
-                return (
-                  <div key={sub.id} className="bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
-                    <div className="w-12 h-12 rounded-lg bg-line-soft flex items-center justify-center text-ink-mute">
+                /* Счётчик «новых позиций» магазина/мастерской/автора с момента
+                   подписки; до публикации сервиса равен 0. */
+                const newCount = newCounts[`${sub.targetType}:${sub.targetId}`] || 0;
+                const inner = (
+                  <>
+                    <div className="w-12 h-12 rounded-lg bg-line-soft flex items-center justify-center text-ink-mute shrink-0">
                       <Icon size={24} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-ink truncate">{sub.targetId}</div>
+                      <div className="font-semibold text-ink truncate">{resolveTargetName(sub.targetType, sub.targetId)}</div>
                       <p className="text-sm text-ink-soft">{getSubLabel(sub.targetType)} • Подписан {new Date(sub.createdAt).toLocaleDateString("ru-RU")}</p>
                     </div>
+                    {newCount > 0 && (
+                      <span className="shrink-0 inline-flex items-center justify-center min-w-[26px] h-[26px] px-2 rounded-full bg-accent-deep text-white text-[12.5px] font-bold" title="Новых позиций с момента подписки">
+                        {newCount}
+                      </span>
+                    )}
+                    <span className="text-ink-mute text-[18px] group-hover:translate-x-1 transition-transform shrink-0">›</span>
                     <button
-                      onClick={() => unsubscribe(sub.targetType, sub.targetId)}
-                      className="w-10 h-10 rounded-lg grid place-items-center text-ink-mute hover:text-error hover:bg-error/10 transition-colors"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); unsubscribe(sub.targetType, String(sub.targetId)); }}
+                      className="w-10 h-10 rounded-lg grid place-items-center text-ink-mute hover:text-error hover:bg-error/10 transition-colors shrink-0"
                       title="Отписаться"
+                      aria-label="Отписаться"
                     >
                       <X size={18} />
                     </button>
+                  </>
+                );
+                /* Клик по подписке открывает ленту товаров магазина/мастерской/автора */
+                if (sub.targetType === "shop" || sub.targetType === "master" || sub.targetType === "author") {
+                  return (
+                    <Link key={sub.id} to={`/shop/${encodeURIComponent(sub.targetId)}`}
+                      className="group bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
+                      {inner}
+                    </Link>
+                  );
+                }
+                if (sub.targetType === "product") {
+                  return (
+                    <Link key={sub.id} to={`/product/${encodeURIComponent(sub.targetId)}`}
+                      className="group bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
+                      {inner}
+                    </Link>
+                  );
+                }
+                return (
+                  <div key={sub.id} className="group bg-surface rounded-xl border border-line p-4 flex items-center gap-4 hover:border-accent-deep/50 transition-colors">
+                    {inner}
                   </div>
                 );
               })}
