@@ -1,2 +1,5 @@
 tsc.out
 node_modules/
+node_modules/
+server/dev-db.json
+server/dev-admin.json
