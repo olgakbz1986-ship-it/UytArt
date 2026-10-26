@@ -571,14 +571,24 @@ export function ProductEditorPage() {
          обновления кэша новый товар продавца был бы виден только ему
          (из локального persist-стора), а покупатель увидел бы его лишь
          после перезагрузки страницы. */
+      /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ «невидимого товара»: POST /api/products
+         защищён guard (401 без сессии). Ранее запрос шёл БЕЗ cookies, то
+         есть сервер не получал httpOnly-куку qf_session/qf_refresh и
+         отклонял публикацию (401 no_session). Товар сохранялся только в
+         приватном persist-сторе браузера продавца — покупатель его не
+         видел никогда. credentials:"include" обязателен для всех
+         авторизованных запросов витрины. */
       fetch('/api/products', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       })
-        .then((r) => r.json().catch(() => null))
-        .then((d) => {
-          if (d && d.ok) {
+        .then(async (r) => {
+          const d = await r.json().catch(() => null);
+          if (r.status === 401) {
+            console.warn('[Product Sync] публикация НЕ синхронизирована: нет активной сессии (401). Товар виден только в этом браузере.');
+          } else if (d && d.ok) {
             publicProductsUpsert(data);
           } else if (d && d.error) {
             console.warn('[Product Sync] сервер отклонил публикацию:', d.error);

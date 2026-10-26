@@ -218,7 +218,11 @@ function isPubliclyVisibleItem(item: any): boolean {
   const hasMedia =
     (Array.isArray(item.media) && item.media.length > 0) ||
     !!item.preview ||
-    !!item.image;
+    !!item.image ||
+    /* ИСПРАВЛЕНИЕ «невидимого товара»: серверный GET /api/products отдаёт
+       витринную проекцию с полем previewUrl — без его учёта легальный
+       опубликованный товар вырезался здесь как «без фото». */
+    !!(item as any).previewUrl;
   return hasMedia;
 }
 
@@ -239,6 +243,7 @@ export function sellerMarketProducts(): Product[] {
     const localMirror = useSellerAccount.getState().products.find((x) => String(x.id) === String(p.id)) as any;
     const firstImgAny =
       firstImg || firstVid ||
+      (p as any).previewUrl ||
       (p as any).preview || (p as any).image ||
       localMirror?.media?.find((m: ProductMedia) => m.type === "image")?.url ||
       localMirror?.preview || "";

@@ -1,0 +1,128 @@
+{
+  "digital": {
+    "products": [
+      {
+        "id": "demo-prompt-1",
+        "ownerId": "demo-seller-1",
+        "type": "prompt",
+        "title": "Набор промтов «Интерьер-стилист»",
+        "description": "25 протестированных системных промтов для генерации дизайн-концепций интерьеров. Работают с GPT-4 и YandexGPT.",
+        "price": 990,
+        "licenseType": "personal",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.8,
+          "salesCount": 12
+        },
+        "testDriveLimit": 2,
+        "status": "published",
+        "systemPrompt": "Ты — интерьерный стилист. Отвечай лаконично, предлагай палитру и материалы.",
+        "exampleInputs": [
+          "Гостиная 18 м², северная сторона"
+        ],
+        "exampleOutputs": [
+          "Тёплый минимализм: дуб, лён, латунь…"
+        ],
+        "targetAI": "gpt4",
+        "createdAt": "2026-10-26T22:25:29.972Z",
+        "updatedAt": "2026-10-26T22:25:29.972Z"
+      },
+      {
+        "id": "demo-agent-1",
+        "ownerId": "demo-seller-1",
+        "type": "agent",
+        "title": "ИИ-агент «Менеджер маркетплейса»",
+        "description": "Готовый агент для мониторинга цен и автоответов покупателям. Конфигурация + инструкция запуска.",
+        "price": 4900,
+        "licenseType": "commercial",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.6,
+          "salesCount": 5
+        },
+        "testDriveLimit": 2,
+        "status": "published",
+        "agentConfig": {
+          "tools": [
+            "price_monitor",
+            "reply_agent"
+          ],
+          "loop": "react"
+        },
+        "modelProvider": "local",
+        "requiresHosting": false,
+        "monthlyTokenLimit": 1000000,
+        "createdAt": "2026-10-26T22:25:29.972Z",
+        "updatedAt": "2026-10-26T22:25:29.972Z"
+      },
+      {
+        "id": "demo-site-1",
+        "ownerId": "demo-seller-1",
+        "type": "site",
+        "title": "Шаблон «Магазин мастера»",
+        "description": "Лендинг-шаблон портфолио мастера на React + Tailwind. Исходный код включён.",
+        "price": 3500,
+        "licenseType": "resell",
+        "version": "1.0",
+        "fileUrl": "",
+        "previewUrl": "",
+        "stats": {
+          "downloads": 0,
+          "revenue": 0,
+          "rating": 4.9,
+          "salesCount": 30
+        },
+        "testDriveLimit": 0,
+        "status": "published",
+        "techStack": [
+          "React",
+          "Tailwind"
+        ],
+        "includesSourceCode": true,
+        "demoUrl": "https://example.com/demo",
+        "createdAt": "2026-10-26T22:25:29.972Z",
+        "updatedAt": "2026-10-26T22:25:29.972Z"
+      }
+    ],
+    "purchases": [],
+    "versions": [],
+    "subscriptions": [],
+    "testDrives": {},
+    "securityLogs": [],
+    "blockedIps": {}
+  },
+  "users": [
+    {
+      "id": "e4720533-eefc-41b0-be40-4fbb5c11cba1",
+      "email": "t@t.ru",
+      "password_hash": "$2b$10$xo/c0wKyUlYFIGt61wXL.uBlC7e6yk64qqdsmgl3zJoaOea2BPCz.",
+      "name": "Продавец",
+      "phone": "",
+      "role": "buyer",
+      "legal_type": "",
+      "tier": "free",
+      "avatar_url": null,
+      "email_confirmed": true,
+      "confirm_token": null,
+      "confirm_expires": 1793139938330
+    }
+  ],
+  "tariffs": {
+    "e4720533-eefc-41b0-be40-4fbb5c11cba1": {
+      "user_id": "e4720533-eefc-41b0-be40-4fbb5c11cba1",
+      "legal_type": "self_employed",
+      "seller_plan_id": "free",
+      "buyer_plan_id": "free",
+      "commission_rate": 10,
+      "updated_at": "2026-10-26T22:26:05.299Z"
+    }
+  }
+}

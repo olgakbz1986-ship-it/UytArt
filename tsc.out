@@ -1,0 +1,5 @@
+src/pages/auth.tsx(174,11): error TS2339: Property 'userId' does not exist on type '{ ok: boolean; needConfirm?: boolean | undefined; devConfirmUrl?: string | undefined; error?: string | undefined; }'.
+src/pages/auth.tsx(175,21): error TS2339: Property 'userId' does not exist on type '{ ok: boolean; needConfirm?: boolean | undefined; devConfirmUrl?: string | undefined; error?: string | undefined; }'.
+src/pages/auth.tsx(175,37): error TS2339: Property 'name' does not exist on type '{ ok: boolean; needConfirm?: boolean | undefined; devConfirmUrl?: string | undefined; error?: string | undefined; }'.
+src/pages/auth.tsx(175,52): error TS2339: Property 'email' does not exist on type '{ ok: boolean; needConfirm?: boolean | undefined; devConfirmUrl?: string | undefined; error?: string | undefined; }'.
+src/pages/auth.tsx(175,67): error TS2339: Property 'role' does not exist on type '{ ok: boolean; needConfirm?: boolean | undefined; devConfirmUrl?: string | undefined; error?: string | undefined; }'.
