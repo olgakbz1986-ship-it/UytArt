@@ -17,7 +17,7 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, Home, Shirt, Clock,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag} from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag, BellRing} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { CITIES, safeDistrictLabel } from "../lib/geo";
 import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from "../lib/inn";
@@ -43,6 +43,7 @@ import LimitWarning, { LimitCounters, SELLER_WATCHED } from "../components/Limit
 import { BuyerSubscriptionsPanel } from "../components/BuyerSubscriptionsPanel";
 import { BuyerOrdersPanel } from "../components/BuyerOrdersPanel";
 import { BuyerFavoritesPanel, BuyerAddressesPanel, BuyerBonusPanel, BuyerComplaintsPanel } from "../components/BuyerPanels";
+import { BuyerConceptsPanel, BuyerPriceWatchesPanel } from "../components/BuyerConceptPanels";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -1186,7 +1187,13 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "buyer-favorites" | "my-orders" | "subscriptions" | "buyer-addresses" | "buyer-bonus" | "buyer-complaints">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "buyer-favorites" | "my-orders" | "subscriptions" | "concepts" | "prices" | "buyer-addresses" | "buyer-bonus" | "buyer-complaints">("products");
+  /* Покупательский тариф продавца (продавец — тоже покупатель): определяет,
+     какие покупательские разделы закрыты замком. Правило тарификации то же,
+     что в кабинете покупателя (profile.tsx): concepts/prices/custom — с paid-тарифа. */
+  const sellerBuyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
+  const sellerBuyerLim = buyerLimits(sellerBuyerPlan);
+  const sellerIsPaidBuyer = sellerBuyerPlan !== "free";
   const nav = useNavigate();
   /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
   const [myResponses, setMyResponses] = useState<any[] | null>(null);
@@ -1374,6 +1381,10 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag },
     { id: "subscriptions" as const, label: "Мои подписки", icon: Bell },
     { id: "buyer-favorites" as const, label: "Избранное", icon: Heart },
+    /* Покупательские разделы с тарифными замками — те же правила, что в кабинете
+       покупателя: «Мои концепты» и «Отслеживание цен» закрыты на free-тарифе. */
+    { id: "concepts" as const, label: "Мои концепты", icon: Sparkles, locked: !sellerIsPaidBuyer },
+    { id: "prices" as const, label: "Отслеживание цен", icon: BellRing, locked: !sellerIsPaidBuyer },
     { id: "buyer-addresses" as const, label: "Адреса", icon: MapPin },
     { id: "buyer-bonus" as const, label: "Бонусы", icon: Gift },
     { id: "buyer-complaints" as const, label: "Жалобы", icon: Flag },
@@ -1472,9 +1483,17 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         {/* Вертикальная навигация кабинета продавца */}
         <nav className="flex flex-col lg:grid gap-2 fade-up">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => {
+                /* Тарифный замок: закрытый раздел не открывается, а подсказывает апгрейд
+                   (то же поведение, что в кабинете покупателя profile.tsx). */
+                if (t.locked) {
+                  useNotifyStore.getState().push({ kind: "alert", title: "Раздел закрыт тарифом", text: `«${t.label}» доступно с платного покупательского тарифа. Переключитесь в разделе «Тарифы».` });
+                  return;
+                }
+                setTab(t.id);
+              }}
               aria-current={tab === t.id ? "page" : undefined}
-              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
+              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all ${t.locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
               <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
             </button>
           ))}
@@ -1631,6 +1650,11 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {/* МОИ ПОДПИСКИ — тот же контент, что в кабинете покупателя */}
       {tab === "subscriptions" && <BuyerSubscriptionsPanel />}
+
+      {/* МОИ КОНЦЕПТЫ и ОТСЛЕЖИВАНИЕ ЦЕН — та же архитектура, что в кабинете покупателя:
+          общие панели src/components/BuyerConceptPanels (единый источник useSubStore). */}
+      {tab === "concepts" && <BuyerConceptsPanel />}
+      {tab === "prices" && <BuyerPriceWatchesPanel limitLabel={fmtLimit(sellerBuyerLim.priceWatches)} />}
 
       {/* ИЗБРАННОЕ — та же панель, что в кабинете покупателя */}
       {tab === "buyer-favorites" && <BuyerFavoritesPanel />}
