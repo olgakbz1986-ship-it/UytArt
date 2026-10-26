@@ -2,7 +2,7 @@ import { PRODUCTS, CATEGORIES, type Product } from "../data/seed";
 import { useSellerAccount, useSellerReg, sellerProfileOf, type SellerProductItem, type SellerProfile } from "./seller";
 import { isZoneMatch } from "./geo";
 import { useAppStore } from "./store";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useDigitalStore } from "./digital";
 import type { DigitalProduct, DigitalProductType } from "../types/digital";
 
@@ -122,10 +122,77 @@ function profileForItem(item: SellerProductItem): SellerProfile | null {
   return null;
 }
 
-/* Преобразует активные товары продавцов в формат витрины.
-   Реквизиты магазина резолвятся из профиля «на лету». */
+/* Публичная лента продавца (витрина + кабинет + подписки).
+   ИСПРАВЛЕНИЕ: раньше витрина читала товары ТОЛЬКО из локального
+   persist-стора текущего браузера ("uyutart-seller-account-v3"),
+   который по природе своей приватен и синхронизируется с сервером
+   лишь частично. Из-за этого покупатель, зашедший со своего аккаунта
+   (другой браузер/профиль), физически не видел товар, опубликованный
+   продавцом: GET /api/products возвращал его с сервера, но в ленту
+   он не попадал — список строился из чужого локального кэша.
+
+   Новый контракт: единый публичный источник — серверный GET /api/products
+   (все published-товары всех продавцов, уже прошедшие гео-фильтр),
+   плюс локальные товары текущего аккаунта (мгновенная реакция на
+   публикацию без ожидания ответа сервера и работа офлайн). Дубликаты
+   по id разрешаются в пользу ЛОКАЛЬНОЙ записи: она всегда свежее
+   (только что отредактированная карточка владельца важнее снимка). */
+
+let publicProductsCache: any[] | null = null;   /* null = ещё ни разу не загружали */
+let publicProductsLoading = false;
+const publicProductsListeners = new Set<() => void>();
+
+/** Загружает публичные товары с сервера в витринный кэш. Идемпотентна,
+    повторяющиеся вызовы во время загрузки игнорируются. */
+export function ensurePublicProducts(): void {
+  if (publicProductsLoading) return;
+  publicProductsLoading = true;
+  const st = useAppStore.getState();
+  const city = st.viewerCity || (st.addresses.find((a) => a.isDefault)?.city || "");
+  fetch("/api/products" + (city ? "?city=" + encodeURIComponent(city) : ""), { credentials: "include" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (d && d.ok && Array.isArray(d.products)) {
+        publicProductsCache = d.products;
+        publicProductsListeners.forEach((f) => f());
+      }
+    })
+    .catch(() => { /* офлайн-режим: витрина живёт на локальном сторе */ })
+    .finally(() => { publicProductsLoading = false; });
+}
+
+/** Подписка витрины на обновление публичного кэша (для реактивных хуков). */
+function subscribePublicProducts(cb: () => void): () => void {
+  publicProductsListeners.add(cb);
+  return () => { publicProductsListeners.delete(cb); };
+}
+
+/** Мгновенное обновление публичного кэша после успешной публикации/
+    правки товара (POST /api/products → ok). Вызывается из ProductEditor,
+    чтобы товар появился у всех покупателей без перезагрузки страницы. */
+export function publicProductsUpsert(item: any): void {
+  if (!item || !item.id) return;
+  const list = (publicProductsCache || []).filter((x) => String(x.id) !== String(item.id));
+  publicProductsCache = [{ ...item }, ...list];
+  publicProductsListeners.forEach((f) => f());
+}
+
+/** Единый мерженный список товаров продавцов для витрины. */
+function mergedSellerItems(): SellerProductItem[] {
+  const local = useSellerAccount.getState().products;
+  const byId = new Map<string, SellerProductItem>();
+  for (const p of publicProductsCache || []) {
+    if (!p || !p.id) continue;
+    byId.set(String(p.id), p as SellerProductItem);
+  }
+  /* локальные записи поверх серверных: владелец видит свою правку сразу,
+     а серверный снимок не «откатывает» её до следующей перезагрузки */
+  for (const p of local) byId.set(String(p.id), p);
+  return [...byId.values()];
+}
+
 export function sellerMarketProducts(): Product[] {
-  const items = useSellerAccount.getState().products.filter((p) => !p.archived && !p.isDraft);
+  const items = mergedSellerItems().filter((p) => !p.archived && !(p as any).isDraft);
   return items.map((p) => {
     const cat = CATEGORIES.find((c) => c.name === p.category);
     const firstImg = p.media?.find((m) => m.type === "image")?.url;
@@ -182,14 +249,20 @@ export function marketProducts(buyerCity?: string): Product[] {
   const city = buyerCity ?? st.viewerCity ?? (st.addresses.find((a) => a.isDefault)?.city || "");
   const all = [...PRODUCTS, ...sellerMarketProducts(), ...digitalMarketProducts()];
   if (!city) return all;
+  /* ИСПРАВЛЕНИЕ: источник данных для клиентского geo-дубля фильтра —
+     тот же мерженный список (сервер + локальные правки), а не только
+     приватный persist-стор. Иначе товар чужого продавца, приехавший с
+     сервера, не находил свою зону доставки и отсекался на клиенте. */
+  const zoneById = new Map<string, SellerProductItem>();
+  for (const it of mergedSellerItems()) zoneById.set(String(it.id), it);
   return all.filter((p) => {
     /* цифровые товары не имеют географических ограничений — выдача мгновенная */
     if (p.id.startsWith("dp-")) return true;
     if (!p.id.startsWith("sp-")) return true;
-    const item = useSellerAccount.getState().products.find((x) => x.id === p.id.slice(3));
+    const item = zoneById.get(p.id.slice(3));
     // Если зоны доставки нет или она "по всей России", показываем всем
     if (!item?.deliveryZone || item.deliveryZone.mode === "nationwide") return true;
-    return isZoneMatch(item.deliveryZone, item.sellerCity || "", city);
+    return isZoneMatch(item.deliveryZone, item.sellerCity || (p as any).sellerCity || "", city);
   });
 }
 
@@ -209,14 +282,32 @@ export function useMarketProducts(buyerCity?: string): Product[] {
   /* витрина — единый источник данных: подтягиваем публичные цифровые
      товары с сервера (только published, без секретных полей) */
   useEffect(() => { ensureDigitalCatalog(); }, []);
-  return useMemo(() => marketProducts(buyerCity), [products, profiles, digital, viewerCity, addresses, buyerCity]);
+  /* ИСПРАВЛЕНИЕ «невидимого товара»: витрина обязана читать ПУБЛИЧНЫЕ
+     товары всех продавцов с сервера, а не только persist-кэш текущего
+     браузера. Кэш обновляется при монтировании ленты и при каждом
+     изменении города просмотра (серверный гео-фильтр зависит от city). */
+  const [publicRev, setPublicRev] = useState(0);
+  useEffect(() => {
+    const bump = () => setPublicRev((n) => n + 1);
+    const unsub = subscribePublicProducts(bump);
+    ensurePublicProducts();
+    return unsub;
+  }, [viewerCity]);
+  return useMemo(() => marketProducts(buyerCity), [products, profiles, digital, viewerCity, addresses, buyerCity, publicRev]);
 }
 
 export function useSellerMarketProducts(): Product[] {
   const products = useSellerAccount((s) => s.products);
   const profiles = useSellerReg((s) => s.profilesByAccount);
   void products; void profiles;
-  return useMemo(() => sellerMarketProducts(), [products, profiles]);
+  const [publicRev, setPublicRev] = useState(0);
+  useEffect(() => {
+    const bump = () => setPublicRev((n) => n + 1);
+    const unsub = subscribePublicProducts(bump);
+    ensurePublicProducts();
+    return unsub;
+  }, []);
+  return useMemo(() => sellerMarketProducts(), [products, profiles, publicRev]);
 }
 
 /* Товар витрины по id ("sp-..." или demo-slug) — реактивно */

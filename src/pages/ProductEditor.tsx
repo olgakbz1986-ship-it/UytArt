@@ -553,12 +553,26 @@ export function ProductEditorPage() {
         acc.addProduct(data);
       }
       
-      // Синхронизация с сервером
+      /* Синхронизация с сервером. ИСПРАВЛЕНИЕ: витрина (useMarketProducts)
+         теперь читает публичный кэш, который наполняется ответом ЭТОГО же
+         POST /api/products — сразу после подтверждения публикации. Без
+         обновления кэша новый товар продавца был бы виден только ему
+         (из локального persist-стора), а покупатель увидел бы его лишь
+         после перезагрузки страницы. */
       fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      }).catch(e => console.error('[Product Sync] error', e));
+      })
+        .then((r) => r.json().catch(() => null))
+        .then((d) => {
+          if (d && d.ok) {
+            publicProductsUpsert(data);
+          } else if (d && d.error) {
+            console.warn('[Product Sync] сервер отклонил публикацию:', d.error);
+          }
+        })
+        .catch(e => console.error('[Product Sync] error', e));
       
       // Обновляем URL чтобы не создавать дубликаты при следующем автосохранении
       if (!id) {
