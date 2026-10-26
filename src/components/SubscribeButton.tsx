@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { subscribeOnServer, unsubscribeOnServer, isSubscribedCached } from '../lib/userFeed';
+import { useState } from 'react';
+import { subscribeOnServer, unsubscribeOnServer, useUserSubscriptions } from '../lib/userFeed';
 
 interface SubscribeButtonProps {
   targetType: string;
@@ -8,37 +8,32 @@ interface SubscribeButtonProps {
 }
 
 export function SubscribeButton({ targetType, targetId, variant = 'default' }: SubscribeButtonProps) {
-  const [isSubscribed, setIsSubscribed] = useState(() => isSubscribedCached(targetType, targetId));
+  /* ИСПРАВЛЕНИЕ: состояние кнопки читается из того же единого серверного
+     источника истины (/api/subscriptions), что и раздел «Мои подписки» в
+     кабинете — через общий хук useUserSubscriptions (с кэшем и корректным
+     id покупателя). Ранее кнопка ходила на сервер сама, читая несуществующий
+     ключ localStorage "userId", — из-за этого «Вы подписаны» и реальный
+     список подписок могли расходиться. */
+  const { subscriptions } = useUserSubscriptions();
+  const isSubscribed =
+    !!targetId &&
+    subscriptions.some(
+      (s) => s.targetType === targetType && String(s.targetId) === String(targetId)
+    );
   const [loading, setLoading] = useState(false);
-
-  /* ИСПРАВЛЕНИЕ: состояние кнопки и реальная запись подписки теперь
-     живут на одном серверном источнике истины (/api/subscriptions).
-     Подписка, оформленная кнопкой, гарантированно появляется в кабинете
-     покупателя в разделе «Мои подписки». */
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/subscriptions', { headers: { 'x-user-id': localStorage.getItem('userId') || 'demo-user-1' } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!alive || !data || !Array.isArray(data.subscriptions)) return;
-        setIsSubscribed(
-          data.subscriptions.some((s: any) => s.targetType === targetType && String(s.targetId) === String(targetId))
-        );
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [targetType, targetId]);
 
   const handleToggle = async () => {
     if (!targetId) return; /* цель ещё не резолвлена — не пишем пустую подписку */
     setLoading(true);
     try {
+      /* Подписка/отписка на сервере; после успешного ответа общий кэш
+         подписок инвалидируется и перечитывается — состояние кнопки
+         («Вы подписаны») и раздел «Мои подписки» обновляются из одного
+         источника истины одновременно. */
       if (isSubscribed) {
-        const ok = await unsubscribeOnServer(targetType, targetId);
-        if (ok) setIsSubscribed(false);
+        await unsubscribeOnServer(targetType, targetId);
       } else {
-        const ok = await subscribeOnServer(targetType, targetId);
-        if (ok) setIsSubscribed(true);
+        await subscribeOnServer(targetType, targetId);
       }
     } catch (err) {
       console.error('Ошибка подписки:', err);

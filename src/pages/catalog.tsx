@@ -19,6 +19,7 @@ import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
 import { productRating } from "../lib/review";
 import { SpecSections } from "../components/SpecSections";
+import { canonicalSellerId } from "../lib/userFeed";
 import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
 
 /* ЭТАП 2 (§2.3): динамический калькулятор логистики в карточке товара.
@@ -439,6 +440,20 @@ export function ProductPage() {
     if (!p || !p.id.startsWith("sp-")) return undefined;
     return sellerProducts.find((x) => x.id === p.id.slice(3));
   }, [sellerProducts, p]);
+  /* ЛЕНТА ПРОДАВЦА: все товары того же магазина/мастерской/автора, что и
+     текущий товар (канонический id владельца — ownerId/sellerId/vendorId).
+     Требование задачи: заходя на товар, пользователь видит не только
+     карточку продавца, но и ленту его продукции. */
+  const sellerFeed = useMemo(() => {
+    if (!p) return [] as typeof market;
+    const sid =
+      sellerItem?.ownerId ||
+      (p as any).ownerId ||
+      (p as any).sellerId ||
+      (String(p.vendorId || "").startsWith("vendor-") ? p.vendorId : "");
+    if (!sid) return [];
+    return market.filter((x) => x.id !== p.id && canonicalSellerId(x as any) === String(sid)).slice(0, 8);
+  }, [market, p, sellerItem]);
   const sellerMedia = sellerItem?.media || [];
   useEffect(() => {
     if (sellerItem && !viewedOnce.has(sellerItem.id)) {
@@ -679,6 +694,28 @@ export function ProductPage() {
           {tab === "reviews" && <ReviewsSection product={p} />}
         </div>
       </div>
+
+      {/* ЛЕНТА ПРОДАВЦА: продукция того же магазина/мастерской/автора —
+          по требованию задачи карточка товара показывает не только витрину
+          продавца, но и ленту его товаров (как в каталоге, так и из «Мои
+          подписки» по клику на подписку открывается та же лента /shop/:id). */}
+      {sellerFeed.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <h2 className="font-display font-bold text-[22px] text-ink">
+              Товары этого продавца
+              {(p as any).shopName ? <span className="text-ink-soft font-semibold"> · {(p as any).shopName}</span> : null}
+            </h2>
+            {(sellerItem?.ownerId || (p as any).ownerId) && (
+              <Link to={`/shop/${encodeURIComponent(String(sellerItem?.ownerId || (p as any).ownerId))}`}
+                className="text-[13px] font-semibold text-accent-deep hover:underline shrink-0">
+                Вся лента ›
+              </Link>
+            )}
+          </div>
+          <ProductGrid items={sellerFeed as any} />
+        </div>
+      )}
 
       {/* похожие */}
       {similar.length > 0 && (

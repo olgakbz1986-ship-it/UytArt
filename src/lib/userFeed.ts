@@ -156,6 +156,20 @@ export function isSubscribedCached(targetType: string, targetId: string): boolea
 /** Подписка на сервере (используется кнопкой «Подписаться»). */
 export async function subscribeOnServer(targetType: string, targetId: string): Promise<boolean> {
   const userId = currentUserId();
+  /* ИСПРАВЛЕНИЕ: канонизация цели на клиенте. Если цель — демо-вендор
+     seed-каталога (id вида "vendor-*"), находим реального владельца
+     витрины по товару этого вендора на витрине; иначе кабинет «Мои
+     подписки» не смог бы резолвить магазин и показать его ленту.
+     Если резолв невозможен — не пишем подписку на фантомную цель. */
+  if (targetType === "shop" && /^vendor-/.test(String(targetId))) {
+    const own = marketProducts().find((x: any) => String(x.vendorId || "") === String(targetId));
+    const real = own ? canonicalSellerId(own as any) : "";
+    if (!real) {
+      console.warn("[subscriptions] цель-вендор не резолвится в продавца:", targetId);
+      return false;
+    }
+    targetId = real;
+  }
   const res = await fetch("/api/subscriptions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-user-id": userId },
