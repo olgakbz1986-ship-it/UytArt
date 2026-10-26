@@ -17,11 +17,12 @@ import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
   ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
   Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, Home, Shirt, Clock,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown} from "lucide-react";
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
 import { CITIES, safeDistrictLabel } from "../lib/geo";
 import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from "../lib/inn";
 import { useAppStore } from "../lib/store";
+import { orderOwnerIdLike } from "../lib/ownership";
 import { useMarketProducts, sellerProfileOf } from "../lib/market";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById, yearPriceOf,
@@ -39,7 +40,9 @@ import { SellerAvatar } from "../components/SellerAvatar";
 import { SellerPremiumBlocksLite } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, SELLER_WATCHED } from "../components/LimitWarning";
 /* Панели покупателя — переиспользуются в кабинете продавца: продавец тоже покупатель */
-import { BuyerSubscriptionsPanel, BuyerOrdersPanel } from "./profile";
+import { BuyerSubscriptionsPanel } from "../components/BuyerSubscriptionsPanel";
+import { BuyerOrdersPanel } from "../components/BuyerOrdersPanel";
+import { BuyerFavoritesPanel, BuyerAddressesPanel, BuyerBonusPanel, BuyerComplaintsPanel } from "../components/BuyerPanels";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -59,112 +62,11 @@ export const ORDER_STATUS_RU: Record<string, { ru: string; tone: "success" | "ho
   cancelled: { ru: "Отменён", tone: "honey" },
 };
 
-export interface MarketOrder {
-  id: string; title: string; type: string; desc: string; material: string;
-  budget: number; term: string; region: string; refName?: string; refType?: "image" | "video"; coverImage?: string; images?: string[]; moderationIssues?: string[]; moderationWarnings?: string[];
-  /* ЭТАП 3 (п.1): единый жёсткий конвейер статусов заказа, синхронизированный
-     с серверным ORDER_PIPELINE (server/index.cjs):
-     published → in_progress → shipped → delivered → confirmed → completed,
-     плюс отмена (cancelled) и служебные pre-publish состояния (draft/moderation). */
-  date: string; status: "draft" | "moderation" | "published" | "in_progress" | "shipped" | "delivered" | "confirmed" | "completed" | "cancelled";
-  responses: number; myOwn?: boolean;
-  /* Владелец заказа (userId автора). Правило владения: только владелец
-     может редактировать/удалять заказ и видеть список откликов. */
-  ownerId?: string;
-  agentPhoto?: string | null; agentItems?: string[]; agentDraft?: boolean;
-  // Поля из API
-  user_id?: string;
-  category?: string;
-  budget_min?: number;
-  budget_max?: number;
-  budget_type?: 'fixed' | 'range' | 'negotiable';
-  deadline?: string;
-  attachments?: string[];
-  created_at?: string;
-  updated_at?: string;
-}
-interface MarketState {
-  orders: MarketOrder[];
-  responded: string[];
-  addOrder: (o: Omit<MarketOrder, "id" | "date" | "status" | "responses" | "myOwn" | "ownerId"> & { master_requested?: string }) => void;
-  respond: (id: string) => void;
-}
-/* Единый признак владельца заказа: ownerId (новый формат) или user_id (серверный формат).
-   Реализация делегируется в src/lib/ownership.ts — единый модуль владения,
-   изоморфный серверной проверке (ЭТАП 1): клиент и сервер считают владельца по одному правилу. */
-export { orderOwnerIdLike as orderOwnerId } from "../lib/ownership";
-import { orderOwnerIdLike } from "../lib/ownership";
-
-export const useMarketStore = create<MarketState>()(
-  persist(
-    (set) => ({
-      orders: [],
-      responded: [],
-      addOrder: async (o) => {
-        /* Правило владения: владелец записывается в момент создания —
-           активный авторизованный пользователь. Гость создать заказ не может. */
-        const uid = useAppStore.getState().session?.userId || "";
-        /* §1.5/§2.2: СЕРВЕРНАЯ проверка лимита активных индивидуальных заказов
-           (1 / 3 / 10 / ∞ по тарифу покупателя) до создания заказа. */
-        try {
-          const { useTariffStore, LimitReachedError } = await import("../lib/tariff");
-          await useTariffStore.getState().assertLimit("market_order");
-        } catch (e: any) {
-          if (e && e.name === "LimitReachedError") {
-            useNotifyStore.getState().push({ kind: "alert", title: "Лимит активных заказов исчерпан", text: `Активных заказов: ${e.used} из ${Number.isFinite(e.limit) ? e.limit : "∞"}. Улучшите тариф покупателя, чтобы создавать больше заказов (/plans).`, actionLabel: "Улучшить тариф", deepLink: "/plans" });
-          } else {
-            useNotifyStore.getState().push({ kind: "alert", title: "Сервер недоступен", text: "Не удалось проверить лимит заказов. Попробуйте позже." });
-          }
-          return;
-        }
-        const verdict = moderateOrder(o);
-        const newOrder: MarketOrder = { ...o, id: "mo-" + Date.now(), date: new Date().toISOString(), status: (verdict.issues.length ? "moderation" : "published") as any, responses: 0, myOwn: !!uid, ownerId: uid || undefined, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings };
-        /* ЭТАП 4 (§4.1): адресный заказ — master_requested уже внутри o;
-           сервер перезафиксирует его и invited_by из сессии, подмена невозможна. */
-        set((s) => ({ orders: [newOrder, ...s.orders] }));
-        useNotifyStore.getState().push(verdict.issues.length ? { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + verdict.issues.length + ". " + verdict.issues.join(" ") + " Исправьте и отправьте снова." } : { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (verdict.warnings.length ? " Рекомендации: " + verdict.warnings.join(" ") : "") });
-        
-        // Отправляем на сервер
-        try {
-          const response = await fetch('/api/orders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newOrder)
-          });
-          const data = await response.json();
-          if (data.ok) {
-            // Обновляем ID заказа на серверный
-            set((s) => ({ orders: s.orders.map(ord => ord.id === newOrder.id ? { ...ord, id: data.order.id } : ord) }));
-          }
-        } catch (e) {
-          console.error('[MarketStore] Ошибка отправки заказа на сервер:', e);
-        }
-      },
-      respond: (id) =>
-        set((s) => ({
-          responded: [...s.responded, id],
-          orders: s.orders.map((o) => (o.id === id ? { ...o, responses: o.responses + 1 } : o)),
-        })),
-    }),
-    { name: "uyutart-market-v2" }
-  )
-);
-
-// ===== Агент модерации карточек заказов =====
-const MODERATION_RULES: Array<{ id: string; check: (o: any) => boolean; hint: string }> = [
-  { id: "title", check: (o) => String(o.title || "").trim().length >= 3, hint: "Название короче 3 символов — сформулируйте, что нужно изготовить." },
-  { id: "desc", check: (o) => String(o.desc || "").trim().length >= 10, hint: "Описание короче 10 символов — добавьте деталей: размеры, назначение, пожелания." },
-  { id: "budget", check: (o) => Number(o.budget) > 0, hint: "Бюджет не указан или равен 0 — мастерам важно понимать вилку цены." },
-  { id: "term", check: (o) => String(o.term || "").trim().length > 0, hint: "Не указан желаемый срок изготовления." },
-  { id: "region", check: (o) => String(o.region || "").trim().length > 0, hint: "Не указан регион — мастерам важно понимать географию заказа." },
-];
-function moderateOrder(o: any): { issues: string[]; warnings: string[] } {
-  const issues = MODERATION_RULES.filter((r) => !r.check(o)).map((r) => r.hint);
-  const warnings: string[] = [];
-  const hasPhoto = !!(o.coverImage || (Array.isArray(o.images) && o.images.length > 0) || o.agentPhoto);
-  if (!hasPhoto) warnings.push("Нет ни одного фото: добавьте обложку — карточки с фото получают больше откликов.");
-  return { issues, warnings };
-}
+/* MarketOrder, useMarketStore и агент модерации вынесены в src/lib/marketStore.ts
+   (разрыв циклического импорта profile<->extras). Реэкспорт — для совместимости. */
+export type { MarketOrder } from "../lib/marketStore";
+export { useMarketStore, orderOwnerId, moderateOrder } from "../lib/marketStore";
+import { useMarketStore, moderateOrder, type MarketOrder } from "../lib/marketStore";
 
 export function MarketPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1278,7 +1180,7 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "my-orders" | "subscriptions">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "buyer-favorites" | "my-orders" | "subscriptions" | "buyer-addresses" | "buyer-bonus" | "buyer-complaints">("products");
   const nav = useNavigate();
   /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
   const [myResponses, setMyResponses] = useState<any[] | null>(null);
@@ -1460,8 +1362,15 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "agent" as const, label: "Агент", icon: Bot },
     { id: "orders" as const, label: "Заказы", icon: FileText },
     { id: "responses" as const, label: "Мои отклики", icon: Send },
+    /* Покупательские разделы: продавец — тоже покупатель, поэтому в его кабинете
+       доступны ВСЕ разделы кабинета покупателя (подписки, избранное, адреса,
+       бонусы, жалобы) на тех же общих панелях src/components/Buyer*Panel. */
     { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag },
     { id: "subscriptions" as const, label: "Мои подписки", icon: Bell },
+    { id: "buyer-favorites" as const, label: "Избранное", icon: Heart },
+    { id: "buyer-addresses" as const, label: "Адреса", icon: MapPin },
+    { id: "buyer-bonus" as const, label: "Бонусы", icon: Gift },
+    { id: "buyer-complaints" as const, label: "Жалобы", icon: Flag },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
     { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
@@ -1716,6 +1625,18 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
       {/* МОИ ПОДПИСКИ — тот же контент, что в кабинете покупателя */}
       {tab === "subscriptions" && <BuyerSubscriptionsPanel />}
+
+      {/* ИЗБРАННОЕ — та же панель, что в кабинете покупателя */}
+      {tab === "buyer-favorites" && <BuyerFavoritesPanel />}
+
+      {/* АДРЕСА — та же панель, что в кабинете покупателя */}
+      {tab === "buyer-addresses" && <BuyerAddressesPanel />}
+
+      {/* БОНУСЫ — та же панель, что в кабинете покупателя (+ премиум-блок) */}
+      {tab === "buyer-bonus" && <BuyerBonusPanel />}
+
+      {/* ЖАЛОБЫ — та же панель, что в кабинете покупателя */}
+      {tab === "buyer-complaints" && <BuyerComplaintsPanel />}
 
       {/* ЗАКАЗЫ */}
       {tab === "orders" && (

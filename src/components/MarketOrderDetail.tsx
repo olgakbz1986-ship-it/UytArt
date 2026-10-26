@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, CheckCircle2, Clock, MessageSquare, Send, Paperclip, Star, Users, ShieldCheck } from "lucide-react";
-import { MarketOrder } from "../pages/extras";
+import { type MarketOrder } from "../lib/marketStore";
 import { useCurrentUserId } from "../lib/ownership";
 
 interface MarketOrderDetailProps {

@@ -1,14 +1,1 @@
-*.tmp
-*.bak
-
-# === Исключения для Quantiform ===
-node_modules/
-dist/
-.env
-.env.local
-.env.*.local
-server/dev-db.json
-server/dev-admin.json
-*.log
-.DS_Store
-Thumbs.db
+tsc.out
