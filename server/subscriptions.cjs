@@ -2,8 +2,24 @@ const fs = require('fs');
 const path = require('path');
 const DB_PATH = path.join(__dirname, 'dev-db.json');
 
+/* ИСПРАВЛЕНИЕ: ранее readDb() падал с исключением (HTTP 500), если файл
+   dev-db.json отсутствовал или сегмент subscriptions не был создан, —
+   из-за этого кнопка «Подписаться» меняла вид, но подписка НЕ сохранялась
+   и в кабинете «Мои подписки» магазин не появлялся. Теперь хранилище
+   инициализируется лениво и безопасно. */
 function readDb() {
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  let d = {};
+  if (fs.existsSync(DB_PATH)) {
+    try {
+      d = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) || {};
+    } catch (e) {
+      console.error('[subscriptions] повреждённый dev-db.json, начинаю с пустого:', e.message);
+      d = {};
+    }
+  }
+  if (!d || typeof d !== 'object') d = {};
+  if (!Array.isArray(d.subscriptions)) d.subscriptions = [];
+  return d;
 }
 
 function writeDb(db) {
@@ -24,11 +40,29 @@ module.exports = function subscriptionsRouter(app) {
   // 2. Добавить новую подписку
   app.post('/api/subscriptions', (req, res) => {
     const userId = req.headers['x-user-id'] || 'demo-user-1';
-    const { targetType, targetId } = req.body;
-    
+    let { targetType, targetId } = req.body || {};
+
+    /* Канонизация цели: демо-вендор (витрина seed-товаров) приводится к
+       id реального владельца витрины — иначе подписка с карточки товара
+       не резолвилась бы в кабинете «Мои подписки». */
+    if (targetType === 'shop' && typeof targetId === 'string' && /^vendor-/.test(targetId)) {
+      try {
+        const d0 = readDb();
+        const sellers = (d0.shops || []).concat(d0.masters || []);
+        const s = sellers.find((x) => x.id);
+        if (s) targetId = String(s.id);
+        else return res.status(400).json({ ok: false, error: 'не удалось определить продавца' });
+      } catch (e) {
+        console.error('[subscriptions] канонизация цели:', e);
+        return res.status(500).json({ ok: false, error: 'server' });
+      }
+    }
+
     if (!targetType || !targetId) {
       return res.status(400).json({ ok: false, error: 'targetType и targetId обязательны' });
     }
+    targetType = String(targetType);
+    targetId = String(targetId);
 
     const db = readDb();
     
