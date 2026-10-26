@@ -38,6 +38,8 @@ import { Markdown } from "../components/markdown";
 import { SellerAvatar } from "../components/SellerAvatar";
 import { SellerPremiumBlocksLite } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, SELLER_WATCHED } from "../components/LimitWarning";
+/* Панели покупателя — переиспользуются в кабинете продавца: продавец тоже покупатель */
+import { BuyerSubscriptionsPanel, BuyerOrdersPanel } from "./profile";
 import { usePrefsStore } from "../lib/prefs";
 
 /* ============================================================
@@ -1276,7 +1278,7 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
-  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "my-orders">("products");
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "my-orders" | "subscriptions">("products");
   const nav = useNavigate();
   /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
   const [myResponses, setMyResponses] = useState<any[] | null>(null);
@@ -1458,7 +1460,8 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "agent" as const, label: "Агент", icon: Bot },
     { id: "orders" as const, label: "Заказы", icon: FileText },
     { id: "responses" as const, label: "Мои отклики", icon: Send },
-    { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag, external: true },
+    { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag },
+    { id: "subscriptions" as const, label: "Мои подписки", icon: Bell },
     { id: "finance" as const, label: "Финансы", icon: Wallet },
     { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
     { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
@@ -1554,7 +1557,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         {/* Вертикальная навигация кабинета продавца */}
         <nav className="flex flex-col lg:grid gap-2 fade-up">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => (t as any).external ? nav("/market") : setTab(t.id)}
+            <button key={t.id} onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? "page" : undefined}
               className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all cursor-pointer ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
               <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
@@ -1705,6 +1708,14 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           ))}
         </div>
       )}
+
+      {/* МОИ ЗАКАЗЫ (покупателя) — тот же контент, что в кабинете покупателя */}
+      {tab === "my-orders" && (
+        <BuyerOrdersPanel orders={allOrders} />
+      )}
+
+      {/* МОИ ПОДПИСКИ — тот же контент, что в кабинете покупателя */}
+      {tab === "subscriptions" && <BuyerSubscriptionsPanel />}
 
       {/* ЗАКАЗЫ */}
       {tab === "orders" && (
