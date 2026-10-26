@@ -94,8 +94,8 @@ interface AppState {
 
   login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
-  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string }>;
-  authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string; userId?: string; name?: string; email?: string; role?: string }>;
+  authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string; role?: string }>;
   restoreSession: () => Promise<void>;
   setActiveAccount: (email: string, role: UserRole, sellerType?: SellerType) => void;
   updateUser: (patch: Partial<User>) => void;
@@ -189,13 +189,21 @@ export const useAppStore = create<AppState>()(
         const pr = r.profile;
         applyServerTariff(r.tariff);
         useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
-        try {
-          const m = await fetch("/api/admin/me", { credentials: "include" }).then((x) => x.json());
-          if (m && m.ok && m.profile) {
-            (window as any).__QF_ADMIN__ = m.profile;
-          }
-        } catch { /* сервер недоступен */ }
-        return { ok: true } as { ok: true };
+        /* ИСПРАВЛЕНИЕ «Мои подписки продавца показывают чужие подписки»:
+           authLogin всегда создавал запись с ролью из серверного профиля ("buyer"),
+           перетирая локальную роль seller. Сессия после входа становилась
+           покупательской, а id — новым серверным UUID, под которым в
+           /api/subscriptions числились подписки покупателя (или демо-fallback).
+           Теперь при существовании seller-аккаунта с тем же email активный
+           аккаунт переключается на него (роль и id сохраняются). */
+        const loginEmailKey = String(pr.email || "").toLowerCase();
+        const sellerList = (useAppStore.getState().accounts[loginEmailKey] || []).filter((a) => a.role === "seller");
+        if (sellerList.length) {
+          const sameId = sellerList.find((a) => a.id === pr.id) || sellerList[0];
+          useAppStore.getState().setActiveAccount(loginEmailKey, "seller", sameId.sellerType);
+          return { ok: true, role: "seller" } as { ok: true; role: string };
+        }
+        return { ok: true, role: (pr.role as UserRole) || "buyer" } as { ok: true; role: string };
       },
       restoreSession: async () => {
         try {
@@ -204,6 +212,15 @@ export const useAppStore = create<AppState>()(
             const pr = r.profile;
             applyServerTariff(r.tariff);
             useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
+            /* ИСПРАВЛЕНИЕ РОЛИ ПРИ RESTORE: серверный профиль всегда "buyer" —
+               без этого шага продавец после перезагрузки страницы терял роль и
+               его «Мои подписки» читались как покупательские. */
+            const rsEmailKey = String(pr.email || "").toLowerCase();
+            const rsSellerList = (useAppStore.getState().accounts[rsEmailKey] || []).filter((a) => a.role === "seller");
+            if (rsSellerList.length) {
+              const rsSameId = rsSellerList.find((a) => a.id === pr.id) || rsSellerList[0];
+              useAppStore.getState().setActiveAccount(rsEmailKey, "seller", rsSameId.sellerType);
+            }
           }
         } catch { /* сервер недоступен */ }
         try {
