@@ -23,8 +23,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
    подписчик получает ОДНО сводное уведомление вместо десятка. */
 const NOTIFY_GROUP_WINDOW_MS = Number(process.env.NOTIFY_GROUP_WINDOW_MS || 5 * 60 * 1000);
 
-/** Типы целей подписки, которые резолвятся в таблице sellers (п.5). */
-const SHOP_TARGET_TYPES = ["shop", "master", "author"];
+/** Типы целей подписки, которые резолвятся в таблице sellers (п.5).
+ *  ЗАДАЧА ЗАВЕРШЕНИЯ, п.3: добавлен 'seller' — клиент и seed используют
+ *  именно это значение для витрины продавца; без него подписка не
+ *  проходила бы валидацию и не обогащалась target_name. */
+const SHOP_TARGET_TYPES = ["shop", "seller", "master", "author"];
 
 function isUuid(s) { return UUID_RE.test(String(s || "")); }
 
@@ -309,6 +312,13 @@ module.exports = function createRepo(options) {
       .filter((x) => String(x.targetId || x.target_id) === String(sellerId))
       .map((x) => String(x.userId || x.user_id));
   }
+
+  /* ЗАДАЧА ЗАВЕРШЕНИЯ, п.3: унификация допустимых типов цели подписки.
+     Клиент (SubscribeButton, каталог) и скрипт сидирования используют
+     type seller в качестве значения по умолчанию для витрины продавца,
+     поэтому 'seller' добавлен в SHOP_TARGET_TYPES — иначе подписка,
+     созданная с target_type='seller', не проходила бы валидацию POST
+     /api/subscriptions и не резолвилась в target_name в списке. */
 
   /* =====================================================================
      ТОВАРЫ + УВЕДОМЛЕНИЯ (п.12–п.14)
@@ -704,9 +714,14 @@ module.exports = function createRepo(options) {
     return address ? { userId: String(uid), address } : null;
   }
 
+  /* Типы уведомлений, рассылаемые фоновыми обработчиками:
+     'alert' (ЗАДАЧА 3, п.4) и 'product_published' (публикация товара —
+     именно их создаёт publishProductNotifications / createProductWithNotifications). */
+  const NOTIFY_CHANNEL_TYPES = ["alert", "product_published"];
+
   /**
    * Единый механизм фоновой отправки (п.4 email / п.5 push):
-   * читает notifications WHERE read = false AND type = 'alert'
+   * читает notifications WHERE read = false AND type IN ('alert','product_published')
    * (не более batchLimit за запуск), группирует по продавцу/времени (п.6:
    * один подписчик получает ОДНО сводное сообщение вместо десяти),
    * учитывает настройки пользователя (п.7), при успешной отправке помечает
@@ -721,12 +736,12 @@ module.exports = function createRepo(options) {
       const res = await pg().query(
         `SELECT id, user_id, type, title, text, link, created_at
            FROM notifications
-          WHERE read = false AND type = 'alert'
-          ORDER BY created_at ASC LIMIT $1`, [batchLimit]);
+          WHERE read = false AND type = ANY($1::text[])
+          ORDER BY created_at ASC LIMIT $2`, [NOTIFY_CHANNEL_TYPES, batchLimit]);
       rows = res.rows;
     } else {
       rows = load().notifications
-        .filter((n) => !n.read && n.type === "alert")
+        .filter((n) => !n.read && NOTIFY_CHANNEL_TYPES.includes(n.type))
         .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
         .slice(0, batchLimit);
     }
@@ -765,13 +780,13 @@ module.exports = function createRepo(options) {
       /* успешная отправка — помечаем уведомления группы прочитанными (п.4) */
       const ids = grp.map((n) => n.id);
       if (mode === "postgres") {
-        await pg().query("UPDATE notifications SET read = true WHERE type = 'alert' AND read = false AND id::text = ANY($1::text[])", [ids]).catch(() => {});
+        await pg().query("UPDATE notifications SET read = true WHERE type = ANY($1::text[]) AND read = false AND id::text = ANY($2::text[])", [NOTIFY_CHANNEL_TYPES, ids]).catch(() => {});
       } else {
         const d = load();
-        /* помечаем прочитанными ТОЛЬКО type='alert' из группы (п.4):
+        /* помечаем прочитанными ТОЛЬКО рассЫлаемые типы из группы (п.4):
            уведомления других типов worker не трогает */
         for (const n of d.notifications) {
-          if (n.type === "alert" && !n.read && ids.some((x) => String(x) === String(n.id))) n.read = true;
+          if (NOTIFY_CHANNEL_TYPES.includes(n.type) && !n.read && ids.some((x) => String(x) === String(n.id))) n.read = true;
         }
         save(d);
       }

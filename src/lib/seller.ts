@@ -5,9 +5,9 @@ import { api } from "./api";
 /* БЛОК 3 §3.1: токен платёжного метода ЮKassa (виджет-iframe на клиенте) */
 import { getPaymentMethodToken, clearPaymentMethodToken } from "./yookassa";
 import { useTariffStore, applyServerTariff } from "./tariff";
-/* Единое тарифное ядро (shared/tariffs/core.js) — единственный источник
+/* Единое тарифное ядро (shared/tariffs/core.cjs) — единственный источник
    истинных числовых таблиц комиссий/цен/взносов для клиента и сервера. */
-import * as core from "../../shared/tariffs/core.js";
+import * as core from "../../shared/tariffs/core.cjs";
 
 /* ============================================================
    Раздельные регистрации продавцов: самозанятый / ИП / ООО
@@ -181,7 +181,7 @@ export function overlimitOfferFor(action: string): { packId: string; title: stri
 export const sellerPlanById = (t: SellerLegalType, id: string) => (SELLER_PLANS[t] || []).find((p) => p.id === id);
 
 /* ---------- матрица комиссий по типу юрлица и тарифу ----------
-   Единый источник истины — shared/tariffs/core.js (та же таблица,
+   Единый источник истины — shared/tariffs/core.cjs (та же таблица,
    что использует сервер server/tariffs.cjs; рассинхрон устранён). */
 export const COMMISSION_MATRIX: Record<SellerLegalType, Record<string, number>> = core.COMMISSION_MATRIX;
 

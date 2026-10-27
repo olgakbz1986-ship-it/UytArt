@@ -21,10 +21,10 @@ const vld = require("./validators.cjs");
 /* БЛОК 5, Пункт 5.1: структурированное логирование security-событий */
 const log = require("./logger.cjs");
 
-/* ---------- матрицы: единое тарифное ядро shared/tariffs/core.js ----------
+/* ---------- матрицы: единое тарифное ядро shared/tariffs/core.cjs ----------
    Единственный источник истины для клиента (subscriptions.ts / seller.ts)
    и сервера. Локальные дубли таблиц удалены — рассинхрон невозможен. */
-const CORE = require("../shared/tariffs/core.js");
+const CORE = require("../shared/tariffs/core.cjs");
 
 const COMMISSION_MATRIX = CORE.COMMISSION_MATRIX;
 
@@ -103,7 +103,7 @@ const REGISTRATION_FEES = CORE.REGISTRATION_FEES;
      дедушкиной оговорки (ИП — 3 мес., ООО — 6 мес., §4.3).
    · Самозанятые (0/300/600/1200) и покупатели (0/500/1000/1500)
      не изменяются (§4.6).
-   Все числовые таблицы — из единого тарифного ядра shared/tariffs/core.js.
+   Все числовые таблицы — из единого тарифного ядра shared/tariffs/core.cjs.
    ============================================================ */
 const YEAR_DISCOUNT = CORE.YEAR_DISCOUNT; /* единая формула годовой цены: −20% (§3.2/§4.2) */
 const yearPriceOf = CORE.yearPriceOf;
