@@ -4,6 +4,7 @@ import { useEffect, Suspense } from "react";
 import { usePrefsStore, applyTheme } from "./lib/prefs";
 import { useAppStore } from "./lib/store";
 import { Header, Footer, Toasts } from "./components/layout";
+import { ToastProvider } from "./components/a11y";
 import { CenteredLoader } from "./components/CenteredLoader";
 import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
@@ -96,9 +97,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
 
 export default function App() {
   return (
-    <HashRouter>
-      <AppInner />
-    </HashRouter>
+    /* п.19: ToastProvider — доступные тосты для ConfirmModal/Toast-сценариев */
+    <ToastProvider>
+      <HashRouter>
+        <AppInner />
+      </HashRouter>
+    </ToastProvider>
   );
 }
 
