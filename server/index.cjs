@@ -1561,95 +1561,73 @@ function normalizeGeo(x) {
 
 app.get("/api/masters", softGuard, async (_q, r) => {
   try {
-    const { d } = devDbRead();
+    /* ЗАДАЧА ДОВОДКИ п.4: чтение через репозиторный слой — в postgres-режиме
+       из таблицы sellers (type='master'), в файловом — из dev-db.json. */
+    const masters = await repo.listSellers("master");
     const city = await buyerCityFromQueryOrSession(_q);
-    /* мастер доступен покупателю, если geography.delivery покрывает город
-       (nationwide / список городов / базовый город) */
-    /* FIX E2E-аудита: ранее отсутствующая география трактовалась как nationwide
-       по умолчанию — жёсткий фильтр был непроходим для записей без geography.
-       Теперь запись без явной географии остаётся без зоны и geoAllowed
-       трактует её как «гео не задан» (не исключаем), но НЕ как «везде»;
-       явно заданная география фильтруется строго. */
-    const enriched = (d.masters || []).map(normalizeGeo);
+    const enriched = masters.map(normalizeGeo);
     r.json({ ok: true, masters: geo.geoFilter(enriched, city), filteredByCity: city || null });
   }
   catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
 /* Лента магазинов: зеркальный эндпоинт к /api/masters. Карточки магазинов
-   создаются лениво при первом POST /api/shops (массив d.shops). */
+   создаются лениво при первом POST /api/shops (repo.upsertSeller). */
 app.get("/api/shops", softGuard, async (_q, r) => {
   try {
-    const { d } = devDbRead();
+    const shops = await repo.listSellers("shop");
     const city = await buyerCityFromQueryOrSession(_q);
-    const enriched = (d.shops || []).map(normalizeGeo);
+    const enriched = shops.map(normalizeGeo);
     r.json({ ok: true, shops: geo.geoFilter(enriched, city), filteredByCity: city || null });
   }
   catch (e) { console.error("[SHOPS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-app.post("/api/masters", guard, (req, r) => {
+app.post("/api/masters", guard, async (req, r) => {
   try {
     const m = req.body || {};
     if (!m.id) return r.status(400).json({ error: "no_id" });
-    /* Правило владения: карточку мастера можно создавать/обновлять только от своего имени. */
+    /* П.9: правило владения — карточку мастера можно создавать/обновлять только от своего имени. */
     if (String(m.id) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
-    const { FILE, fs, d } = devDbRead();
-    if (!d.masters) d.masters = [];
-    const idx = d.masters.findIndex((x) => x.id === m.id);
-    if (idx >= 0) {
-      d.masters[idx] = Object.assign({}, d.masters[idx], m, { updated_at: new Date().toISOString() });
-    } else {
-      d.masters.push(Object.assign({}, m, { owner_id: req.userId, created_at: new Date().toISOString() }));
-    }
-    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    r.json({ ok: true });
+    /* П.1–п.2: запись через репозиторный слой (postgres: sellers; файл: dev-db.json). */
+    const seller = await repo.upsertSeller(Object.assign({}, m, { type: "master" }), req.userId, m.id);
+    r.json({ ok: true, id: seller && seller.id });
   } catch (e) { console.error("[MASTERS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
 /* Upsert карточки магазина: правило владения идентично мастерам —
    id карточки совпадает с id аккаунта продавца-владельца. */
-app.post("/api/shops", guard, (req, r) => {
+app.post("/api/shops", guard, async (req, r) => {
   try {
     const m = req.body || {};
     if (!m.id) return r.status(400).json({ error: "no_id" });
     if (String(m.id) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
-    const { FILE, fs, d } = devDbRead();
-    if (!d.shops) d.shops = [];
-    const idx = d.shops.findIndex((x) => x.id === m.id);
-    if (idx >= 0) {
-      d.shops[idx] = Object.assign({}, d.shops[idx], m, { updated_at: new Date().toISOString() });
-    } else {
-      d.shops.push(Object.assign({}, m, { owner_id: req.userId, created_at: new Date().toISOString() }));
-    }
-    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-    r.json({ ok: true });
+    const seller = await repo.upsertSeller(Object.assign({}, m, { type: "shop" }), req.userId, m.id);
+    r.json({ ok: true, id: seller && seller.id });
   } catch (e) { console.error("[SHOPS ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
-/* Удаление карточки мастера — только владельцем. */
-app.delete("/api/masters/:id", guard, (req, r) => {
+/* Удаление карточки мастера — только владельцем (проверка в репозитории, п.9). */
+app.delete("/api/masters/:id", guard, async (req, r) => {
   try {
     if (String(req.params.id) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
-    const { FILE, fs, d } = devDbRead();
-    const arr = d.masters || [];
-    const idx = arr.findIndex((x) => x.id === req.params.id);
-    if (idx === -1) return r.status(404).json({ error: "not_found" });
-    arr.splice(idx, 1); d.masters = arr;
-    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    const res = await repo.deleteSeller(req.params.id, req.userId, "master");
+    if (res === "not_found") return r.status(404).json({ error: "not_found" });
+    if (res === "forbidden") return r.status(403).json({ error: "not_owner" });
     r.json({ ok: true });
   } catch (e) { console.error("[MASTERS DELETE ERROR]", e); r.status(500).json({ error: "server" }); }
 });
 
 app.get("/api/products", softGuard, async (_q, r) => {
   try {
-    const { d } = devDbRead();
+    /* П.4: выборка через репозиторный слой (postgres: products JOIN sellers). */
+    const all = await repo.listProducts();
     /* ЭТАП 2: жёсткий гео-фильтр выборки — в ответ попадают только товары,
        чья доставка/монтаж покрывает город покупателя (или nationwide). */
     const city = await buyerCityFromQueryOrSession(_q);
     /* Нормализация geography → deliveryZone/installCities (единый контракт
        для товаров и мастеров; структура БД не меняется — только проекция). */
-    const enriched = (d.products || []).map(normalizeGeo);
+    const enriched = all.map(normalizeGeo);
     /* ИСПРАВЛЕНИЕ «невидимого товара» (публичный контракт): GET /api/products
        отдаёт витринную проекцию без медиа — карточка покупателя получала пустое
        превью и каталог вырезал товар как «без фото». Добавляем публичное поле
@@ -1673,8 +1651,8 @@ app.get("/api/products", softGuard, async (_q, r) => {
    подтверждение монтажа в городе покупателя для крупногабарита. */
 app.get("/api/products/:id/logistics", softGuard, async (req, res) => {
   try {
-    const { d } = devDbRead();
-    const p = (d.products || []).find((x) => x.id === req.params.id);
+    /* П.4: чтение товара через репозиторный слой (работает в обоих режимах). */
+    const p = await repo.getProductById(req.params.id);
     if (!p) return res.status(404).json({ error: "not_found" });
     const buyerCity = await buyerCityFromQueryOrSession(req);
     const np = normalizeGeo(p);
@@ -1711,76 +1689,44 @@ app.post("/api/products", guard, async (req, res) => {
         message: "Размещение данного товара запрещено правилами платформы. Подробнее: /legal/goods_rules",
       });
     }
+    /* ЗАДАЧА ДОВОДКИ п.1–п.3: запись через репозиторный слой. В postgres-режиме
+       товар сохраняется в таблицу products (продавец создаётся автоматически,
+       п.10), уведомления подписчикам создаются транзакционно в той же операции;
+       в файловом режиме — прежняя логика dev-db.json. */
+    const existingRec = await repo.getProductById(p.id);
     /* Правило владения товара: ownerId всегда берётся из токена сессии.
-       Клиент не может присвоить товар другому пользователю или создать анонимный товар. */
-    const { FILE, fs, d } = devDbRead();
-    if (!d.products) d.products = [];
+       Обновлять чужой товар запрещено (п.9). */
+    if (existingRec) {
+      const curOwner = String(existingRec.ownerId || existingRec.owner_id || existingRec.seller_id || "");
+      if (curOwner && curOwner !== String(req.userId)) return res.status(403).json({ error: "not_owner" });
+    }
     /* ЭТАП 1 (§1.5): лимит товаров тарифа проверяется на сервере по базе,
        а не по клиентскому состоянию (обход через localStorage невозможен). */
-    const isNew = !d.products.find((x) => x.id === p.id);
-    if (isNew) {
+    if (!existingRec) {
       const lim = await tariffsCtx.serverCheckLimit(req.userId, "product_create", {});
       if (!lim.allowed) return res.status(402).json({ ok: false, error: "limit_reached", reason: lim.reason || ("Лимит товаров тарифа исчерпан (" + lim.limit + ")") });
     }
-    const idx = d.products.findIndex((x) => x.id === p.id);
-    if (idx >= 0) {
-      /* Обновлять товар может только его владелец (существующий ownerId) либо создатель. */
-      const curOwner = d.products[idx].ownerId || d.products[idx].owner_id;
-      if (curOwner && String(curOwner) !== String(req.userId)) return res.status(403).json({ error: "not_owner" });
-      d.products[idx] = Object.assign({}, d.products[idx], p, { ownerId: req.userId, updated_at: new Date().toISOString() });
-    } else {
-      d.products.push(Object.assign({}, p, { ownerId: req.userId, created_at: new Date().toISOString() }));
-    }
-    /* Нормализация географии на записи (ЭТАП 2): «Россия» — это НЕ город.
-       Иначе калькулятор логистики и geo-фильтр получают sellerCity="Россия",
-       не находят такой город в справочнике и товар выпадает из выдачи для
-       авторизованных покупателей с указанным городом. Пустой/негородской
-       sellerCity при deliveryRussia=true остаётся nationwide — товар виден всем. */
-    {
-      const rec = d.products.find((x) => String(x.id) === String(p.id));
-      if (rec) {
-        const sc = String(rec.sellerCity || "").trim();
-        if (!sc || /^(россия|рф|russia)$/i.test(sc)) rec.sellerCity = "";
-      }
-    }
-    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-
-    /* ЗАДАЧА 2, п.12–п.14: создание уведомлений подписчикам вынесено из
-       маршрута в метод репозитория createProductWithNotifications
-       (группировка по продавцу/времени + пользовательские настройки email/push).
-       В файловом режиме товар уже сохранён выше — уведомления генерирует
-       репозиторий; в postgres-режиме маршрут работает через dev-db, схема
-       уведомлений единая. */
-    let notifyInfo = null;
-    if (isNew) {
-      try {
-        notifyInfo = await repo.notifySubscribersOfProduct(null, String(req.userId), p.id || "", p.name || "Без названия",
-          "/catalog?q=" + encodeURIComponent(p.name || ""), {
-            sendChannel: ({ userId, email, push, title, text }) => {
-              if (email && mail) {
-                mail.sendMail({ from: MAIL_FROM, to: userId, subject: "[Quantiform] " + title, text }).catch(() => {});
-              }
-              if (push) log.info("push:notify", { userId, title });
-            },
-          });
-      } catch (eNotify) { console.error("[NOTIFY SUBSCRIBERS ERROR]", eNotify); }
-    }
-
-    res.json({ ok: true, notifications: notifyInfo || undefined });
+    const result = await repo.upsertProduct(p, req.userId, {
+      notify: !existingRec,
+      ctx: {
+        sendChannel: ({ userId, email, push, title, text }) => {
+          if (email && mail) {
+            mail.sendMail({ from: MAIL_FROM, to: userId, subject: "[Quantiform] " + title, text }).catch(() => {});
+          }
+          if (push) log.info("push:notify", { userId, title });
+        },
+      },
+    });
+    res.json({ ok: true, id: result.product && result.product.id, notifications: result.notifications || undefined });
   } catch (e) { console.error("[PRODUCTS ERROR]", e); res.status(500).json({ error: "server" }); }
 });
 
-app.delete("/api/products/:id", guard, (req, r) => {
+app.delete("/api/products/:id", guard, async (req, r) => {
   try {
-    const { FILE, fs, d } = devDbRead();
-    const arr = d.products || [];
-    const idx = arr.findIndex((x) => x.id === req.params.id);
-    if (idx === -1) return r.status(404).json({ error: "not_found" });
-    /* Удалять товар может только его владелец. */
-    const owner = arr[idx].ownerId || arr[idx].owner_id;
-    if (owner && String(owner) !== String(req.userId)) return r.status(403).json({ error: "not_owner" });
-    arr.splice(idx, 1); d.products = arr;
-    fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+    /* П.5, п.9: удаление через репозиторный слой с проверкой прав владельца. */
+    const res = await repo.deleteProduct(req.params.id, req.userId);
+    if (res === "not_found") return r.status(404).json({ error: "not_found" });
+    if (res === "forbidden") return r.status(403).json({ error: "not_owner" });
     r.json({ ok: true });
   } catch (e) { console.error("[PRODUCTS ERROR]", e); r.status(500).json({ error: "server" }); }
 });

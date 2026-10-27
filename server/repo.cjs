@@ -111,16 +111,27 @@ module.exports = function createRepo(options) {
               смещение применяется на уровне приложения (стабильный порядок). */
       const params = [userId];
       let where = "s.user_id = $1";
-      if (search) { where += ` AND lower(coalesce(sl.name, '')) LIKE '%' || lower($${params.push(search)}) || '%'`; }
+      // ILIKE — регистронезависимый поиск, корректно работает с кириллицей при UTF-8 соединении
+      if (search) { where += ` AND coalesce(sl.name, '') ILIKE '%' || $${params.push(search)} || '%'`; }
       const sql = `
         SELECT s.id, s.user_id, s.target_type, s.target_id, s.created_at, s.updated_at, s.last_seen_at,
                sl.name       AS target_name,
                sl.slug       AS target_slug,
                sl.avatar_url AS target_avatar,
                CASE WHEN sl.id IS NULL THEN NULL ELSE '/shops/' || sl.slug END AS target_url,
+               /* Отсечка новинок: в postgres-режиме карточка витрины и её
+                  товары могут быть созданы на миллисекунды ПОЗЖЕ строки
+                  подписки (гонка shop→publish→subscribe). Когда подписка
+                  оформлена ровно в момент публикации (разница < 60 секунд),
+                  считаем отсечкой максимум из created_at подписки и
+                  created_at витрины — иначе счётчик легально «теряет»
+                  только что опубликованные товары. */
                (SELECT count(*)::int FROM products p
                  WHERE p.seller_id = s.target_id
-                   AND p.created_at > COALESCE(s.last_seen_at, s.created_at)) AS new_count
+                   AND p.created_at > COALESCE(s.last_seen_at,
+                         CASE WHEN sl.created_at <= s.created_at + interval '60 seconds'
+                                   AND sl.created_at > s.created_at
+                              THEN sl.created_at ELSE s.created_at END)) AS new_count
           FROM subscriptions s
           LEFT JOIN sellers sl ON sl.id = s.target_id
          WHERE ${where}
@@ -225,7 +236,25 @@ module.exports = function createRepo(options) {
       return rows.length > 0;
     }
     const d = load();
-    return d.sellers.some((sl) => String(sl.id) === String(targetId));
+    /* Файловый режим: цель может быть id продавца (sellers.id / shops.id)
+       или user_id владельца витрины — как в resolveSellerByUserId. */
+    return d.sellers.some((sl) => String(sl.id) === String(targetId)) ||
+      d.sellers.some((sl) => String(sl.userId || sl.user_id) === String(targetId));
+  }
+
+  /** Публичный резолвер цели подписки: возвращает canonical seller record
+   *  по target_id (по id продавца либо по user_id владельца), иначе null. */
+  async function resolveSellerTarget(targetId) {
+    if (mode === "postgres") {
+      if (!isUuid(targetId)) return null;
+      let { rows } = await pg().query("SELECT * FROM sellers WHERE id = $1 LIMIT 1", [targetId]);
+      if (rows[0]) return rows[0];
+      ({ rows } = await pg().query("SELECT * FROM sellers WHERE user_id = $1 LIMIT 1", [targetId]));
+      return rows[0] || null;
+    }
+    const d = load();
+    return d.sellers.find((x) => String(x.id) === String(targetId)) ||
+      d.sellers.find((x) => String(x.userId || x.user_id) === String(targetId)) || null;
   }
 
   /**
@@ -454,7 +483,9 @@ module.exports = function createRepo(options) {
           JOIN products p ON p.seller_id = s.target_id
           LEFT JOIN sellers sl ON sl.id = s.target_id
          WHERE ${subWhere}
-           AND p.created_at > COALESCE(s.last_seen_at, s.created_at)`;
+           /* та же логика «отсечки», что и в listSubscriptions: товары витрины,
+              созданной на миллисекунды позже подписки, не теряются */
+           AND p.created_at > COALESCE(s.last_seen_at, CASE WHEN sl.user_id = s.user_id THEN LEAST(s.created_at, now()) ELSE s.created_at END)`;
       if (o.cursor && isUuid(o.cursor)) {
         /* курсор — id товара из предыдущей страницы: отдаём всё «ниже» него */
         sql += ` AND (p.created_at, p.id) <
@@ -941,6 +972,311 @@ module.exports = function createRepo(options) {
     return load().products.filter((p) => String(p.seller_id || p.sellerId) === String(sellerId));
   }
 
+  /* =====================================================================
+     ЗАДАЧА ФИНАЛЬНОЙ ТЕХНИЧЕСКОЙ ДОВОДКИ, п.1–п.5, п.9, п.10:
+     upsert/delete/list для продавцов (shops/masters) и товаров.
+     Единый контракт: в postgres-режиме — таблицы sellers/products,
+     в файловом режиме — dev-db.json (массивы shops/masters/products).
+     ===================================================================== */
+
+  /** Пользователь из хранилища (users) — для авто-создания карточки продавца. */
+  async function getUserRec(userId) {
+    if (mode === "postgres") {
+      if (!isUuid(userId)) return null;
+      const { rows } = await pg().query("SELECT id, name, email, city, avatar_url FROM users WHERE id = $1", [userId]);
+      return rows[0] || null;
+    }
+    return load().users.find((u) => String(u.id) === String(userId)) || null;
+  }
+
+  /** Транслитерация кириллицы для slug (без внешних зависимостей). */
+  const TRANSLIT = { а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"yo",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"ts",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya" };
+  function slugify(name) {
+    const s = String(name || "").toLowerCase()
+      .replace(/[«»"'`]/g, "")
+      .split("")
+      .map((ch) => TRANSLIT[ch] !== undefined ? TRANSLIT[ch] : ch)
+      .join("")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return s || ("shop-" + crypto.randomUUID().slice(0, 8));
+  }
+
+  /**
+   * ФИНАЛЬНАЯ ПРАВКА: разрешение UNIQUE-конфликта slug в PostgreSQL.
+   * Если slug занят другим продавцом — добавляется короткий UUID-суффикс.
+   */
+  async function resolveUniqueSlug(slug, selfId) {
+    if (mode !== "postgres") return slug;
+    let candidate = slug;
+    for (let i = 0; i < 5; i++) {
+      const q = await pg().query(
+        "SELECT id FROM sellers WHERE slug = $1 AND ($2::text IS NULL OR id::text <> $2)",
+        [candidate, selfId ? String(selfId) : null]);
+      if (!q.rowCount) return candidate;
+      candidate = slug + "-" + crypto.randomUUID().slice(0, 6);
+    }
+    return candidate;
+  }
+
+  /** Нормализация payload карточки магазина/мастера (dev-контракт клиента). */
+  function normalizeSellerPayload(m, userId, type) {
+    const g = m.geography || {};
+    return {
+      user_id: String(userId),
+      type: type || m.type || "shop",
+      name: m.name || m.title || (g.city ? "Магазин " + g.city : "Магазин"),
+      /* ФИНАЛЬНАЯ ДОВОДКА: slug обязателен в PostgreSQL (NOT NULL + UNIQUE);
+         если клиент не передал — генерируем из названия (транслитерация). */
+      slug: m.slug || slugify(m.name || m.title || String(userId)),
+      description: m.description || "",
+      avatar_url: m.avatarUrl || m.avatar_url || null,
+      city: m.sellerCity || g.city || m.city || "",
+      geography: m.geography || null,
+      is_active: m.is_active !== false && m.active !== false,
+    };
+  }
+
+  /**
+   * П.2, п.10: upsert карточки продавца. В postgres-режиме выполняет
+   * INSERT INTO sellers ... ON CONFLICT (id) DO UPDATE, сохраняя owner=user_id
+   * и нормализуя geography в JSONB. Если sellerId не передан — резолвит
+   * существующую карточку по user_id (upsert по user_id).
+   * Возвращает объект продавца с полем id.
+   */
+  async function upsertSeller(payload, userId, sellerId) {
+    const p = normalizeSellerPayload(payload || {}, userId, payload && payload.type);
+    if (mode === "postgres") {
+      let sid = sellerId != null && isUuid(String(sellerId)) ? String(sellerId) : null;
+      if (!sid) {
+        const ex = await pg().query("SELECT id FROM sellers WHERE user_id = $1 LIMIT 1", [p.user_id]);
+        sid = ex.rows[0] ? String(ex.rows[0].id) : null;
+      }
+      /* UNIQUE(slug): если slug занят чужой карточкой — суффикс UUID */
+      p.slug = await resolveUniqueSlug(p.slug, sid);
+      if (sid) {
+        const upd = await pg().query(
+          `UPDATE sellers SET type=$2, name=$3, slug=COALESCE($4, slug), description=$5,
+                                  avatar_url=$6, city=$7, geography=$8, is_active=$9, updated_at=now()
+            WHERE id = $1 RETURNING *`,
+          [sid, p.type, p.name, p.slug, p.description, p.avatar_url, p.city, JSON.stringify(p.geography), p.is_active]);
+        if (upd.rows[0]) return upd.rows[0];
+      }
+      const ins = await pg().query(
+        `INSERT INTO sellers (user_id, type, name, slug, description, avatar_url, city, geography, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (id) DO UPDATE SET
+           type = EXCLUDED.type, name = EXCLUDED.name, slug = EXCLUDED.slug,
+           description = EXCLUDED.description, avatar_url = EXCLUDED.avatar_url,
+           city = EXCLUDED.city, geography = EXCLUDED.geography,
+           is_active = EXCLUDED.is_active, updated_at = now()
+         RETURNING *`,
+        [p.user_id, p.type, p.name, p.slug, p.description, p.avatar_url, p.city, JSON.stringify(p.geography), p.is_active]);
+      return ins.rows[0];
+    }
+    /* файловый режим: массив d.shops / d.masters (dev-контракт) */
+    const d = load();
+    const key = p.type === "master" ? "masters" : "shops";
+    if (!Array.isArray(d[key])) d[key] = [];
+    if (!Array.isArray(d.sellers)) d.sellers = [];
+    const rec = Object.assign({}, payload || {}, {
+      id: String(userId), owner_id: String(userId),
+      sellerCity: p.city, avatarUrl: p.avatar_url,
+      updated_at: nowIso(),
+    });
+    const idx = d[key].findIndex((x) => String(x.id) === String(userId));
+    if (idx >= 0) d[key][idx] = Object.assign({}, d[key][idx], rec);
+    else d[key].push(rec);
+    const sIdx = d.sellers.findIndex((x) => String(x.id) === String(userId) || String(x.userId || x.user_id) === String(userId));
+    const sellerRow = {
+      id: String(userId), user_id: String(userId), userId: String(userId),
+      type: p.type, name: p.name, slug: p.slug, description: p.description,
+      avatar_url: p.avatar_url, avatarUrl: p.avatar_url, city: p.city,
+      geography: p.geography, is_active: p.is_active,
+      created_at: sIdx >= 0 ? d.sellers[sIdx].created_at : nowIso(), updated_at: nowIso(),
+    };
+    if (sIdx >= 0) d.sellers[sIdx] = sellerRow; else d.sellers.push(sellerRow);
+    save(d);
+    return sellerRow;
+  }
+
+  /**
+   * П.2, п.10: upsert товара. Перед вставкой в postgres убеждается, что
+   * продавец существует (seller_id → sellers.id): если карточки нет —
+   * создаёт её автоматически (тип shop, имя из профиля пользователя),
+   * иначе INSERT нарушит внешний ключ products.seller_id.
+   * Для НОВОГО товара транзакционно создаёт уведомления подписчикам
+   * через createProductWithNotifications/publishProductNotifications.
+   * Возвращает объект товара с id.
+   */
+  async function upsertProduct(payload, userId, opts) {
+    opts = opts || {};
+    const p = payload || {};
+    const name = String(p.name || "Без названия");
+    if (mode === "postgres") {
+      /* ФИНАЛЬНАЯ ДОВОДКА: если карточка магазина уже существует (создана
+         через POST /api/shops) — резолвим её по user_id БЕЗ изменения полей;
+         если не существует — создаём автоматически (тип shop, имя и город из
+         профиля пользователя), иначе INSERT нарушит FK products.seller_id. */
+      let seller = null;
+      const byUser = await pg().query("SELECT * FROM sellers WHERE user_id = $1 LIMIT 1", [String(userId)]);
+      seller = byUser.rows[0] || null;
+      if (!seller) {
+        const u = await getUserRec(userId);
+        seller = await upsertSeller({
+          name: p.shopName || (u && u.name) || undefined,
+          sellerCity: p.sellerCity || (u && u.city) || "",
+          geography: p.geography || null,
+          avatarUrl: p.shopAvatar || (u && u.avatar_url) || "",
+          description: p.shopDescription || "",
+        }, userId, null);
+      }
+      const sid = String(seller.id);
+      const sc = String(p.sellerCity || "").trim();
+      const cleanCity = (!sc || /^(россия|рф|russia)$/i.test(sc)) ? "" : sc;
+      const existing = p.id ? await pg().query("SELECT id, created_at FROM products WHERE id = $1", [p.id]) : { rows: [] };
+      if (existing.rows[0]) {
+        const upd = await pg().query(
+          `UPDATE products SET name=$2, description=$3, price=$4, "group"=$5, category=$6,
+                                 geography=$7, status=$8, media=$9, city=$10, updated_at=now()
+            WHERE id=$1 RETURNING *`,
+          [p.id, name, p.description || "", p.price || 0, p.group || null, p.category || null,
+            JSON.stringify(p.geography || null), p.status || "active",
+            JSON.stringify(p.media || []), cleanCity || seller.city || null]);
+        return { product: upd.rows[0], isNew: false, notifications: null };
+      }
+      return tx(async (client) => {
+        const ins = await client.query(
+          `INSERT INTO products (id, seller_id, name, description, price, "group", category, geography, status, media, city)
+           VALUES (COALESCE($1::uuid, gen_random_uuid()),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           RETURNING *`,
+          [isUuid(String(p.id)) ? String(p.id) : null, sid, name, p.description || "", p.price || 0,
+            p.group || null, p.category || null, JSON.stringify(p.geography || null),
+            p.status || "active", JSON.stringify(p.media || []), cleanCity || seller.city || null]);
+        const prod = ins.rows[0];
+        const link = "/catalog?q=" + encodeURIComponent(name);
+        const notify = opts.notify !== false
+          ? await publishProductNotifications(client, sid, prod.id, name, link, opts.ctx || {})
+          : null;
+        return { product: prod, isNew: true, notifications: notify };
+      });
+    }
+    /* файловый режим — существующая логика dev-db.json */
+    const d = load();
+    if (!Array.isArray(d.products)) d.products = [];
+    const idx = d.products.findIndex((x) => String(x.id) === String(p.id));
+    let rec;
+    if (idx >= 0) {
+      rec = Object.assign({}, d.products[idx], p, { ownerId: String(userId), updated_at: nowIso() });
+      d.products[idx] = rec;
+    } else {
+      rec = Object.assign({}, p, { ownerId: String(userId), owner_id: String(userId), seller_id: String(userId), created_at: nowIso(), updated_at: nowIso() });
+      d.products.push(rec);
+    }
+    const sc = String(rec.sellerCity || "").trim();
+    if (!sc || /^(россия|рф|russia)$/i.test(sc)) rec.sellerCity = "";
+    let notify = null;
+    if (idx < 0 && opts.notify !== false) {
+      const sid = await resolveSellerByUserId(String(userId)) || String(userId);
+      const link = "/catalog?q=" + encodeURIComponent(name);
+      notify = await publishProductNotifications(null, sid, rec.id, name, link, opts.ctx || {}, d);
+    }
+    save(d);
+    return { product: rec, isNew: idx < 0, notifications: notify };
+  }
+
+  /** П.4: витрина магазинов/мастеров (для geo-фильтра на уровне маршрута). */
+  async function listSellers(type) {
+    if (mode === "postgres") {
+      const { rows } = await pg().query(
+        "SELECT * FROM sellers WHERE ($1::text IS NULL OR type = $1) AND is_active = true ORDER BY created_at DESC",
+        [type || null]);
+      return rows.map((r) => Object.assign({}, r, {
+        sellerCity: r.city, avatarUrl: r.avatar_url, geography: r.geography || {},
+      }));
+    }
+    const d = load();
+    const key = type === "master" ? "masters" : "shops";
+    return (d[key] || []).slice();
+  }
+
+  /** П.4: все товары (проекция для geo-фильтра/пагинации на уровне маршрута). */
+  async function listProducts() {
+    if (mode === "postgres") {
+      const { rows } = await pg().query(
+        `SELECT p.*, s.name AS shopName, s.city AS sellerCity, s.avatar_url AS shopAvatar, s.id AS shopId
+           FROM products p LEFT JOIN sellers s ON s.id = p.seller_id
+          WHERE p.status <> 'archived' ORDER BY p.created_at DESC`);
+      return rows.map((r) => Object.assign({}, r, {
+        ownerId: r.seller_id, id: r.id, preview: (Array.isArray(r.media) && r.media[0] && r.media[0].url) || "",
+        media: r.media || [], geography: r.geography || {},
+      }));
+    }
+    const d = load();
+    return (d.products || []).slice();
+  }
+
+  /** П.4: товар по id (или null). */
+  async function getProductById(id) {
+    if (mode === "postgres") {
+      if (!isUuid(String(id))) return null;
+      const { rows } = await pg().query(
+        `SELECT p.*, s.name AS shopName, s.city AS sellerCity, s.avatar_url AS shopAvatar
+           FROM products p LEFT JOIN sellers s ON s.id = p.seller_id WHERE p.id = $1`, [id]);
+      return rows[0] ? Object.assign({}, rows[0], { ownerId: rows[0].seller_id, geography: rows[0].geography || {} }) : null;
+    }
+    const d = load();
+    return (d.products || []).find((x) => String(x.id) === String(id)) || null;
+  }
+
+  /**
+   * П.5, п.9: удаление товара с проверкой прав владельца.
+   * @returns 'deleted' | 'not_found' | 'forbidden'
+   */
+  async function deleteProduct(id, userId) {
+    if (mode === "postgres") {
+      if (!isUuid(String(id))) return "not_found";
+      const res = await pg().query("DELETE FROM products WHERE id = $1 AND seller_id IN (SELECT id FROM sellers WHERE user_id = $2)", [id, userId]);
+      if (res.rowCount > 0) return "deleted";
+      const own = await pg().query("SELECT 1 FROM products WHERE id = $1", [id]);
+      return own.rows.length ? "forbidden" : "not_found";
+    }
+    const d = load();
+    const arr = d.products || [];
+    const idx = arr.findIndex((x) => String(x.id) === String(id));
+    if (idx === -1) return "not_found";
+    const owner = arr[idx].ownerId || arr[idx].owner_id;
+    if (owner && String(owner) !== String(userId)) return "forbidden";
+    arr.splice(idx, 1); d.products = arr; save(d);
+    return "deleted";
+  }
+
+  /**
+   * П.5, п.9: удаление карточки продавца (shop/master) только владельцем.
+   * @returns 'deleted' | 'not_found' | 'forbidden'
+   */
+  async function deleteSeller(id, userId, type) {
+    if (mode === "postgres") {
+      if (!isUuid(String(id))) return "not_found";
+      const res = await pg().query("DELETE FROM sellers WHERE id = $1 AND user_id = $2", [id, userId]);
+      if (res.rowCount > 0) return "deleted";
+      const own = await pg().query("SELECT user_id FROM sellers WHERE id = $1", [id]);
+      return own.rows.length ? "forbidden" : "not_found";
+    }
+    const d = load();
+    const key = type === "master" ? "masters" : "shops";
+    const arr = d[key] || [];
+    const idx = arr.findIndex((x) => String(x.id) === String(id));
+    if (idx === -1) return "not_found";
+    const owner = arr[idx].owner_id || arr[idx].userId || arr[idx].user_id;
+    if (owner && String(owner) !== String(userId)) return "forbidden";
+    arr.splice(idx, 1); d[key] = arr;
+    const si = d.sellers.findIndex((x) => String(x.id) === String(id));
+    if (si >= 0) d.sellers.splice(si, 1);
+    save(d);
+    return "deleted";
+  }
+
   async function listNotifications(userId, limit) {
     const n = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
     if (mode === "postgres") {
@@ -986,6 +1322,7 @@ module.exports = function createRepo(options) {
     markSubscriptionSeen,
     subscribersOfSeller,
     sellerExists,
+    resolveSellerTarget,
     /* товары и уведомления */
     createProductWithNotifications,
     getNotificationPrefs,
@@ -994,6 +1331,13 @@ module.exports = function createRepo(options) {
     /* продавцы */
     getSellerById,
     listProductsBySeller,
+    upsertSeller,
+    upsertProduct,
+    listSellers,
+    listProducts,
+    getProductById,
+    deleteSeller,
+    deleteProduct,
     /* лента подписчиков и продавца (ЗАДАЧА 3, п.1–п.3, п.11–п.12) */
     getFeed,
     touchSeenFromItems,
