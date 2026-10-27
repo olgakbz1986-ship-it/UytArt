@@ -96,3 +96,39 @@ export async function unsubscribeOnServer(targetType: string, targetId: string):
   }
   return false;
 }
+
+/* ============================================================
+   Совместимость с прежним API (ЗАДАЧА 4, п.7–п.8): ручные кэш
+   (subsCache/subsInflight), резолвер resolveTargetName и клиентские
+   счётчики (newItemsCountFor/computeNewCounts) удалены — сервер
+   возвращает готовые target_name / new_count. Хук useUserSubscriptions
+   сохранён как тонкая адаптация над TanStack Query, чтобы старые
+   импорты (SubscribeButton) продолжали работать от единого источника
+   истины /api/subscriptions.
+   ============================================================ */
+import { useSubscriptions as useTQSubscriptions } from "../hooks/useSubscriptions";
+import type { SubscriptionItem } from "../hooks/useSubscriptions";
+
+/** Прежний хук подписок — теперь поверх TanStack Query (кэш автоматический). */
+export function useUserSubscriptions(): {
+  subscriptions: Array<{ id: string; targetType: string; targetId: string; name: string | null }>;
+  loading: boolean;
+  error: unknown;
+  refresh: () => void;
+} {
+  const q = useTQSubscriptions({ limit: 100 });
+  const subscriptions = (q.data ?? []).map((s: SubscriptionItem) => ({
+    id: s.id,
+    targetType: s.target_type,
+    targetId: s.target_id,
+    name: s.target_name,
+  }));
+  return {
+    subscriptions,
+    loading: q.isLoading,
+    error: q.error,
+    refresh: () => {
+      void q.refetch();
+    },
+  };
+}

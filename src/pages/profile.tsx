@@ -24,7 +24,6 @@ import { BuyerCustomOrdersPanel } from "../components/BuyerCustomOrdersPanel";
 import { BuyerFavoritesPanel, BuyerAddressesPanel, BuyerBonusPanel, BuyerComplaintsPanel } from "../components/BuyerPanels";
 import {
   useUserSubscriptions,
-  resolveTargetName,
   canonicalSellerId,
   unsubscribeOnServer,
   type ServerSubscription,
