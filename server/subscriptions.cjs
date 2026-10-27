@@ -65,18 +65,59 @@ function writeDb(db) {
 
 const genId = () => 'sub_' + Math.random().toString(36).substr(2, 9);
 
-module.exports = function subscriptionsRouter(app, ctx) {
-  // 1. Получить все подписки текущего пользователя
-  app.get('/api/subscriptions', (req, res) => {
-    const userId = resolveUserId(req, ctx);
-    if (!userId) return res.status(401).json({ ok: false, error: 'no_session' });
-    const db = readDb();
-    const userSubs = db.subscriptions.filter(s => s.userId === userId);
-    res.json({ ok: true, subscriptions: userSubs });
+module.exports = function subscriptionsRouter(app, ctx, repo) {
+  /* ЗАДАЧА 2: репозиторный слой (server/repo.cjs) — два режима:
+     postgres (DATABASE_URL задан) и file (dev-db.json). */
+  const R = repo || require('./repo.cjs')({});
+
+  // 1. Получить все подписки текущего пользователя (п.2–п.4, п.9–п.11)
+  app.get('/api/subscriptions', async (req, res) => {
+    try {
+      const userId = resolveUserId(req, ctx);
+      if (!userId) return res.status(401).json({ ok: false, error: 'no_session' });
+      /* п.4: репозиторий + обогащение + счётчик новинок;
+         п.9: limit/cursor; п.10: sort_by; п.11: search */
+      const { items, next_cursor } = await R.listSubscriptions(userId, {
+        limit: req.query.limit,
+        cursor: req.query.cursor,
+        sortBy: String(req.query.sort_by || 'date'),
+        search: req.query.search,
+      });
+      /* п.3/п.4: подсчёт новых товаров отдельным методом репозитория и объединение */
+      const counts = await R.countNewProductsForSubscriptions(items);
+      const subscriptions = items.map((s) => ({
+        id: s.id, user_id: s.user_id, target_type: s.target_type, target_id: s.target_id,
+        target_name: s.target_name ?? null, target_slug: s.target_slug ?? null,
+        target_avatar: s.target_avatar ?? null, target_url: s.target_url ?? null,
+        created_at: s.created_at, updated_at: s.updated_at, last_seen_at: s.last_seen_at ?? null,
+        new_count: counts[s.id] != null ? counts[s.id] : (s.new_count || 0),
+      }));
+      res.json({ ok: true, subscriptions, next_cursor });
+    } catch (e) {
+      console.error('[SUBSCRIPTIONS LIST ERROR]', e);
+      res.status(500).json({ ok: false, error: 'server' });
+    }
+  });
+
+  /* п.8: отметить ленту продавца прочитанной — обновляет last_seen_at.
+     Вызывается при открытии ленты продавца или раздела подписок. */
+  app.post('/api/subscriptions/:targetType/:targetId/read', async (req, res) => {
+    try {
+      const userId = resolveUserId(req, ctx);
+      if (!userId) return res.status(401).json({ ok: false, error: 'no_session' });
+      const { targetType, targetId } = req.params;
+      const updated = await R.markSubscriptionSeen(userId, String(targetType), String(targetId));
+      if (!updated) return res.status(404).json({ ok: false, error: 'Подписка не найдена' });
+      res.json({ ok: true, subscription_id: updated.id, last_seen_at: updated.last_seen_at });
+    } catch (e) {
+      console.error('[SUBSCRIPTION READ ERROR]', e);
+      res.status(500).json({ ok: false, error: 'server' });
+    }
   });
 
   // 2. Добавить новую подписку
-  app.post('/api/subscriptions', (req, res) => {
+  app.post('/api/subscriptions', async (req, res) => {
+    try {
     const userId = resolveUserId(req, ctx);
     if (!userId) return res.status(401).json({ ok: false, error: 'no_session' });
     let { targetType, targetId } = req.body || {};
@@ -98,45 +139,41 @@ module.exports = function subscriptionsRouter(app, ctx) {
     targetType = String(targetType);
     targetId = String(targetId);
 
-    const db = readDb();
-    
-    // Проверка на дубликат
-    const exists = db.subscriptions.some(s => s.userId === userId && s.targetType === targetType && s.targetId === targetId);
-    if (exists) {
-      return res.json({ ok: true, message: 'Уже подписаны' });
+    /* п.5: валидация существования цели — для shop/master/author цель
+       обязана существовать в таблице sellers (через репозиторный слой). */
+    const { SHOP_TARGET_TYPES } = require('./repo.cjs');
+    if (SHOP_TARGET_TYPES.includes(targetType)) {
+      const exists = await R.sellerExists(targetId);
+      if (!exists) return res.status(400).json({ ok: false, error: 'Продавец не найден' });
     }
 
-    const newSub = {
-      id: genId(),
-      userId,
-      targetType,
-      targetId,
-      createdAt: new Date().toISOString()
-    };
-
-    db.subscriptions.push(newSub);
-    writeDb(db);
-    res.json({ ok: true, subscription: newSub });
+    try {
+      /* п.5/п.6: создание подписки через репозиторий; дубликат обрабатывается
+         уникальным индексом subscriptions_user_target_ux (PG код 23505). */
+      const newSub = await R.createSubscription(userId, targetType, targetId);
+      return res.json({ ok: true, subscription: newSub });
+    } catch (e) {
+      if (e && e.code === '23505') return res.json({ ok: true, message: 'Уже подписаны' });
+      throw e;
+    }
+    } catch (e) {
+      console.error('[SUBSCRIPTION CREATE ERROR]', e);
+      return res.status(500).json({ ok: false, error: 'server' });
+    }
   });
 
-  // 3. Удалить подписку
-  app.delete('/api/subscriptions/:targetType/:targetId', (req, res) => {
-    const userId = resolveUserId(req, ctx);
-    if (!userId) return res.status(401).json({ ok: false, error: 'no_session' });
-    const { targetType, targetId } = req.params;
-    
-    const db = readDb();
-    const initialLength = db.subscriptions.length;
-    
-    db.subscriptions = db.subscriptions.filter(s => 
-      !(s.userId === userId && s.targetType === targetType && s.targetId === targetId)
-    );
-
-    if (db.subscriptions.length < initialLength) {
-      writeDb(db);
-      res.json({ ok: true, message: 'Подписка удалена' });
-    } else {
-      res.status(404).json({ ok: false, error: 'Подписка не найдена' });
+  // 3. Удалить подписку (п.7 — через репозиторный слой)
+  app.delete('/api/subscriptions/:targetType/:targetId', async (req, res) => {
+    try {
+      const userId = resolveUserId(req, ctx);
+      if (!userId) return res.status(401).json({ ok: false, error: 'no_session' });
+      const { targetType, targetId } = req.params;
+      const removed = await R.deleteSubscription(userId, String(targetType), String(targetId));
+      if (removed) return res.json({ ok: true, message: 'Подписка удалена' });
+      return res.status(404).json({ ok: false, error: 'Подписка не найдена' });
+    } catch (e) {
+      console.error('[SUBSCRIPTION DELETE ERROR]', e);
+      return res.status(500).json({ ok: false, error: 'server' });
     }
   });
 };

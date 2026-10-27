@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: uyart
+      POSTGRES_PASSWORD: uyart_dev_pass
+      POSTGRES_DB: uyart
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uyart -d uyart"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 8787
+      DATABASE_URL: postgres://uyart:uyart_dev_pass@db:5432/uyart
+      JWT_SECRET: dev-insecure-secret-change-me
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
+      SMTP_HOST: ""
+    ports:
+      - "8787:8787"
+    command: sh -c "node server/db/migrate.cjs && node server/index.cjs"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:
+
+networks:
+  default:
+    name: uyart-net

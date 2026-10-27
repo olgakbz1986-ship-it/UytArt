@@ -73,6 +73,10 @@ if (process.env.DATABASE_URL) {
   };
 }
 
+/* ЗАДАЧА 2: репозиторный слой подписок/продавцов/товаров/уведомлений
+   (два режима: postgres при DATABASE_URL, file — локальная разработка). */
+const repo = require("./repo.cjs")({ pool: typeof db !== "undefined" && db.pool ? db.pool : null });
+
 const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 465), secure: +(process.env.SMTP_PORT || 465) === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }) : null;
 
 /* ---------- Пункт 1.3: двухтокенная схема (JWT 15 мин + refresh 7 дней) ---------- */
@@ -1474,64 +1478,10 @@ app.put("/api/orders/:id/milestones/:mid", guard, async (req, res) => {
 
 // ==========================================
 // API ЭТАПА 9: УВЕДОМЛЕНИЯ
+// ЗАДАЧА 3 (п.8–п.10): эндпоинты уведомлений перенесены в server/feed.cjs
+// и работают через репозиторный слой (postgres + файловый dev-режим),
+// с поддержкой limit/cursor/unread_only и проверкой принадлежности.
 // ==========================================
-app.get("/api/notifications", softGuard, async (req, res) => {
-  try {
-    /* Приватность: пользователь видит только СВОИ уведомления.
-       Гость получает пустой список; legacy-записи без user_id не раскрываются. */
-    let notifications = [];
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
-      const all = (d.notifications || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      notifications = req.userId ? all.filter(n => n.user_id === req.userId) : [];
-    }
-    res.json({ ok: true, notifications });
-  } catch (e) {
-    console.error("[NOTIFICATIONS API ERROR]", e);
-    res.status(500).json({ error: "server" });
-  }
-});
-
-app.put("/api/notifications/:id/read", guard, async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
-      const n = (d.notifications || []).find(x => x.id === id);
-      /* Отметить можно только своё уведомление. */
-      if (n && n.user_id === req.userId) {
-        n.read = true;
-        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-      }
-    }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[READ NOTIFICATION API ERROR]", e);
-    res.status(500).json({ error: "server" });
-  }
-});
-
-app.put("/api/notifications/read-all", guard, async (req, res) => {
-  try {
-    if (db.mode === "json-dev (бесплатно)") {
-      const FILE = require("path").resolve(__dirname, "dev-db.json");
-      const fs = require("fs");
-      const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : { notifications: [] };
-      if (d.notifications) {
-        d.notifications.forEach(n => { if (n.user_id === req.userId) n.read = true; });
-        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-      }
-    }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[READ ALL NOTIFICATIONS API ERROR]", e);
-    res.status(500).json({ error: "server" });
-  }
-});
 
 // Хелпер для создания уведомления (используется внутри других роутов)
 function createNotification(userId, type, title, text, link) {
@@ -1795,31 +1745,28 @@ app.post("/api/products", guard, async (req, res) => {
     }
     fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
 
-    /* ЭТАП 4: Уведомления подписчиков о новом товаре */
-    if (isNew && d.subscriptions) {
-      // Ищем всех, кто подписан на этого продавца (ownerId = req.userId)
-      const subscribers = d.subscriptions.filter(sub => String(sub.targetId) === String(req.userId));
-      if (subscribers.length > 0) {
-        if (!d.notifications) d.notifications = [];
-        const nowIso = new Date().toISOString();
-        subscribers.forEach(sub => {
-          d.notifications.push({
-            id: "n-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            user_id: sub.userId,
-            kind: "alert",
-            title: "Новая публикация",
-            text: "Магазин опубликовал новый товар: " + (p.name || "Без названия"),
-            created_at: nowIso,
-            read: false,
-            deepLink: "/catalog?q=" + encodeURIComponent(p.name || "")
+    /* ЗАДАЧА 2, п.12–п.14: создание уведомлений подписчикам вынесено из
+       маршрута в метод репозитория createProductWithNotifications
+       (группировка по продавцу/времени + пользовательские настройки email/push).
+       В файловом режиме товар уже сохранён выше — уведомления генерирует
+       репозиторий; в postgres-режиме маршрут работает через dev-db, схема
+       уведомлений единая. */
+    let notifyInfo = null;
+    if (isNew) {
+      try {
+        notifyInfo = await repo.notifySubscribersOfProduct(null, String(req.userId), p.id || "", p.name || "Без названия",
+          "/catalog?q=" + encodeURIComponent(p.name || ""), {
+            sendChannel: ({ userId, email, push, title, text }) => {
+              if (email && mail) {
+                mail.sendMail({ from: MAIL_FROM, to: userId, subject: "[Quantiform] " + title, text }).catch(() => {});
+              }
+              if (push) log.info("push:notify", { userId, title });
+            },
           });
-        });
-        // Сохраняем уведомления в базу
-        fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
-      }
+      } catch (eNotify) { console.error("[NOTIFY SUBSCRIBERS ERROR]", eNotify); }
     }
 
-    res.json({ ok: true });
+    res.json({ ok: true, notifications: notifyInfo || undefined });
   } catch (e) { console.error("[PRODUCTS ERROR]", e); res.status(500).json({ error: "server" }); }
 });
 
@@ -2073,7 +2020,9 @@ require("./ai-designer.cjs").mount(app, { guard, db });
 /* Цифровые продукты: /api/digital/* (загрузка, presigned-скачивание, покупки, подписки) */
 const digital = require("./digital.cjs");
 digital.setNotifySink(createNotification); // переиспользуем существующую систему уведомлений + email
-require("./subscriptions.cjs")(app);
+require("./subscriptions.cjs")(app, { JWT_SECRET }, repo);
+/* ЗАДАЧА 3: лента подписок, лента продавца, уведомления, фоновые обработчики email/push */
+require("./feed.cjs")(app, { JWT_SECRET, startNotifyWorkers: true, mailTransport: mail, mailFrom: typeof MAIL_FROM !== "undefined" ? MAIL_FROM : undefined }, repo);
 digital.mount(app, { guard, softGuard, db });
 
 /* Кабинет администратора (закрытая приватная зона): /api/admin/* — OTP-вход, RBAC,

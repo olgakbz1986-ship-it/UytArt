@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: uyart
+          POSTGRES_PASSWORD: uyart
+          POSTGRES_DB: uyart_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uyart"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (TypeScript)
+        run: npm run typecheck
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Apply migrations (clean DB)
+        run: npm run migrate
+        env:
+          DATABASE_URL: postgres://uyart:uyart@localhost:5432/uyart_test
+
+      - name: Unit tests (Vitest)
+        run: npm run test
+
+      - name: Integration tests (Supertest + PostgreSQL)
+        run: npm run test:integration
+        env:
+          DATABASE_URL: postgres://uyart:uyart@localhost:5432/uyart_test
+
+      - name: Build frontend (Vite)
+        run: npm run build
