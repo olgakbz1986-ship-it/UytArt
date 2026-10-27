@@ -1,0 +1,620 @@
+import {  useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2 } from "lucide-react";
+import { useSellerAccount, useSellerReg, currentSellerProfile, type DeliveryZone } from "../lib/seller";
+import { useAppStore } from "../lib/store";
+import { useTariffStore, LimitReachedError, type LimitAction } from "../lib/tariff";
+import OverlimitPackModal from "./OverlimitPackModal";
+import { CITIES, zoneLabel } from "../lib/geo";
+import { CATEGORIES } from "../data/seed";
+import { Modal, Btn, Field, Badge } from "./ui";
+
+type Media = { type: "image" | "video"; url: string; name: string };
+type Draft = {
+  name: string; category: string; price: string; description: string;
+  serviceMode?: "online" | "visit" | "both";
+  slots?: string[];
+  instant?: boolean;
+  minOrder?: string;
+  restored?: boolean;
+  fileFormat?: string;
+  style?: string; color?: string; size?: string; weight?: string;
+  specs?: { key: string; value: string }[];
+  materials: string[]; newMaterial: string; manufacturer: string;
+  dims: { length: string; width: string; height: string; unit: "см" | "мм" | "м" };
+  tags: string[]; newTag: string; media: Media[];
+  aiCover?: string; aiBullets?: string[];
+  sellerCity?: string;
+  deliveryZone?: DeliveryZone;
+};
+const empty: Draft = {
+  name: "", category: CATEGORIES[0]?.name || "", price: "", description: "",
+  serviceMode: "both", slots: [], instant: false, minOrder: "", restored: false, fileFormat: "zip",
+  style: "", color: "", size: "", weight: "", specs: [],
+  materials: [], newMaterial: "", manufacturer: "",
+  dims: { length: "", width: "", height: "", unit: "см" },
+  tags: [], newTag: "", media: [],
+  deliveryZone: { mode: "nationwide" },
+};
+
+export function ProductWizard({ open, onClose, editId, initialData }: { open: boolean; onClose: () => void; editId?: string | null; initialData?: { name?: string; description?: string; category?: string; photo?: string; tags?: string[] } }) {
+  const [step, setStep] = useState(1);
+  const [draft, setDraft] = useState<Draft>(empty);
+  const [generating, setGenerating] = useState(false);
+  /* §2.4/§2.5: платная стена при исчерпании серверного лимита */
+  const [limitWall, setLimitWall] = useState<{ title: string; limit: number; used: number; action?: LimitAction } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const acc = useSellerAccount();
+  const sellerReg = useSellerReg();
+  const editItem = editId ? acc.products.find((pp) => pp.id === editId) : undefined;
+  useEffect(() => {
+    if (!open) return;
+    if (editItem) {
+      setDraft({
+        name: editItem.name, category: editItem.category, price: String(editItem.price),
+        style: editItem.style || "", color: editItem.color || "", size: editItem.size || "", weight: editItem.weight ? String(editItem.weight) : "", specs: editItem.specs || [],
+        description: editItem.description || "", materials: editItem.materials || [], newMaterial: "",
+        manufacturer: editItem.manufacturer || "",
+        dims: {
+          length: editItem.dimensions?.length ? String(editItem.dimensions.length) : "",
+          width: editItem.dimensions?.width ? String(editItem.dimensions.width) : "",
+          height: editItem.dimensions?.height ? String(editItem.dimensions.height) : "",
+          unit: editItem.dimensions?.unit || "см",
+        },
+        tags: editItem.tags || [], newTag: "", media: editItem.media || [],
+        sellerCity: editItem.sellerCity || sellerReg.city || "",
+        deliveryZone: editItem.deliveryZone || { mode: "nationwide" },
+      });
+    } else if (initialData) {
+      setDraft({
+        ...empty,
+        name: initialData.name || "",
+        description: initialData.description || "",
+        category: initialData.category || CATEGORIES[0]?.name || "",
+        tags: initialData.tags || [],
+        media: initialData.photo ? [{ type: "image", url: initialData.photo, name: "from-studio.jpg" }] : [],
+      });
+    } else {
+      setDraft(empty);
+    }
+    setStep(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editId]);
+  const month = new Date().toISOString().slice(0, 7);
+  /* §2.5: остаток AI-генераций карточек — из СЕРВЕРНОГО тарифа (кэш), а не хардкод 10 */
+  const tariffCache = useTariffStore((s) => s.tariff);
+  const cardGenLimit = tariffCache?.limits?.seller?.aiCardGens ?? Infinity;
+  const productLimit = tariffCache?.limits?.seller?.maxProducts ?? Infinity;
+  const aiLeft = Number.isFinite(cardGenLimit)
+    ? Math.max(0, cardGenLimit - (acc.aiCardGens[month] || 0))
+    : cardGenLimit;
+  const productsUsed = acc.products.length;
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return;
+    const list = Array.from(files).slice(0, Math.max(0, 10 - draft.media.length));
+    list.forEach((f) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const url = r.result as string;
+        setDraft((d) => ({
+          ...d,
+          media: [...d.media, { type: f.type.startsWith("video/") ? "video" : "image", url, name: f.name }],
+        }));
+      };
+      r.readAsDataURL(f);
+    });
+  };
+
+  const generateAi = async () => {
+    if (generating) return;
+    /* §1.5/§2.5: СЕРВЕРНАЯ проверка и списание перед запуском AI */
+    try {
+      await useTariffStore.getState().assertLimit("ai_card_gen");
+    } catch (e) {
+      if (e instanceof LimitReachedError) {
+        setLimitWall({ title: "Лимит AI-генераций исчерпан", limit: e.limit, used: e.used, action: "ai_card_gen" });
+        return;
+      }
+      setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
+      return;
+    }
+    acc.consumeAiCardGen(month); /* зеркалим локальный счётчик для отображения остатка */
+    setGenerating(true);
+    setTimeout(() => {
+      const cover = draft.media[0]?.url;
+      const bullets = [
+        draft.description ? draft.description.slice(0, 90) : "Уникальная ручная работа",
+        draft.materials.length ? `Материалы: ${draft.materials.slice(0, 3).join(", ")}` : "Качественные материалы",
+        draft.manufacturer || "Российское производство",
+        `${draft.category}${draft.dims.length && draft.dims.width ? ` · ${draft.dims.length}×${draft.dims.width} ${draft.dims.unit}` : ""}`,
+      ];
+      setDraft({ ...draft, aiCover: cover, aiBullets: bullets });
+      setGenerating(false);
+    }, 1500);
+  };
+
+  const publish = async () => {
+    /* §1.5/§2.4: СЕРВЕРНАЯ проверка лимита товаров перед публикацией (редактирование не тратит слот) */
+    if (!editItem) {
+      try {
+        await useTariffStore.getState().assertLimit("product_create");
+      } catch (e) {
+        if (e instanceof LimitReachedError) {
+          setLimitWall({ title: "Лимит товаров исчерпан", limit: e.limit, used: e.used, action: "product_create" });
+          return;
+        }
+        setLimitWall({ title: "Сервер недоступен, попробуйте позже", limit: -1, used: -1 });
+        return;
+      }
+    }
+    const data = {
+      sellerCity: draft.sellerCity || sellerReg.city || "",
+      deliveryZone: draft.deliveryZone || { mode: "nationwide" },
+      serviceMode: draft.serviceMode,
+      slots: draft.slots,
+      instant: draft.instant,
+      minOrder: draft.minOrder ? +draft.minOrder : undefined,
+      restored: draft.restored,
+      fileFormat: draft.fileFormat || undefined,
+      style: draft.style?.trim() || undefined,
+      color: draft.color?.trim() || undefined,
+      size: draft.size?.trim() || undefined,
+      weight: draft.weight ? +draft.weight : undefined,
+      specs: (draft.specs || []).filter((x) => x.key.trim() && x.value.trim()),
+      name: draft.name.trim(),
+      category: draft.category,
+      price: +draft.price,
+      description: draft.description.trim() || (draft.aiBullets || []).join(" · "),
+      materials: draft.materials,
+      manufacturer: draft.manufacturer.trim() || undefined,
+      dimensions: +draft.dims.length && +draft.dims.width ? {
+        length: +draft.dims.length, width: +draft.dims.width,
+        height: +draft.dims.height || undefined, unit: draft.dims.unit,
+      } : undefined,
+      tags: draft.tags,
+      media: draft.media,
+      aiGenerated: !!draft.aiCover,
+    };
+    /* Проблемa №3: реквизиты продавца — из актуального профиля, а не из снимка */
+    const prof = currentSellerProfile();
+    const stamped = {
+      ...data,
+      ownerId: useAppStore.getState().session?.userId,
+      shopName: prof?.shopName || undefined,
+      sellerCity: data.sellerCity || prof?.city || undefined,
+      legalType: prof?.legalType || undefined,
+      inn: prof?.inn || undefined,
+      avatar: prof?.shopLogo || prof?.masterAvatar || undefined,
+    };
+    if (editItem) acc.updateProduct(editItem.id, stamped);
+    else acc.addProduct(stamped);
+    setDraft(empty);
+    setStep(1);
+    onClose();
+  };
+
+  const canNext =
+    step === 1 ? draft.media.length > 0 :
+    step === 2 ? draft.name.trim().length >= 3 && +draft.price > 0 :
+    step === 3 ? true :
+    !!draft.aiCover || !!draft.description;
+
+  return (
+    <Modal open={open} onClose={onClose} title={editItem ? "Редактирование карточки" : "Мастер карточки товара"} wide>
+      <div className="grid lg:grid-cols-[1fr_300px] gap-6">
+        <div>
+          <div className="flex items-center gap-2 mb-6">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold ${step === n ? "bg-dark text-cream" : step > n ? "bg-success text-cream" : "bg-line-soft text-ink-mute"}`}>
+                  {step > n ? <Check size={14} /> : n}
+                </div>
+                <span className={`text-[12px] font-semibold hidden sm:block ${step === n ? "text-ink" : "text-ink-mute"}`}>
+                  {["Медиа", "Основное", "Детали", "AI-карточка"][n - 1]}
+                </span>
+                {n < 4 && <div className={`w-8 h-px ${step > n ? "bg-success" : "bg-line"}`} />}
+              </div>
+            ))}
+          </div>
+
+          {step === 1 && (
+            <div>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                <h3 className="font-display font-bold text-[18px] text-ink">Загрузите фото и видео</h3>
+              </div>
+              <p className="text-[13px] text-ink-soft mb-4">До 10 файлов. Первое фото станет обложкой. Видео повышает конверсию на 30%.</p>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4">
+                {draft.media.map((m, i) => (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-line-soft group">
+                    {m.type === "video" ? (
+                      <video src={m.url} className="w-full h-full object-cover" muted />
+                    ) : (
+                      <img src={m.url} alt={m.name} className="w-full h-full object-cover" />
+                    )}
+                    {i === 0 && <span className="absolute top-1 left-1 text-[10px] font-bold bg-dark text-cream px-1.5 py-0.5 rounded">Обложка</span>}
+                    <button
+                      onClick={() => setDraft({ ...draft, media: draft.media.filter((_, x) => x !== i) })}
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-error text-white flex items-center justify-center opacity-0 group-hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {draft.media.length < 10 && (
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    className="aspect-square rounded-xl border-2 border-dashed border-line flex flex-col items-center justify-center gap-1 hover:border-ai hover:bg-ai-soft/30"
+                  >
+                    <Camera size={20} className="text-ink-mute" />
+                    <span className="text-[11px] text-ink-mute">Добавить</span>
+                  </button>
+                )}
+              </div>
+              <input ref={fileRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => addFiles(e.target.files)} />
+              <p className="text-[11px] text-ink-mute">
+                {draft.media.length}/10 · видео: {draft.media.filter((m) => m.type === "video").length}/1
+              </p>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <Field label="Название товара" required>
+                <input className="field" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Глиняная ваза «Утро»" maxLength={120} />
+              </Field>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Категория">
+                  <select className="field" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
+                    {CATEGORIES.map((c) => <option key={c.slug}>{c.name}</option>)}
+                  </select>
+                </Field>
+
+                {/* === Ветвление по группе (цифра / услуги / фудкорт / вещи) === */}
+                {(() => {
+                  const cat = CATEGORIES.find((c) => c.name === draft.category);
+                  const group = cat?.group;
+                  if (group === "digital") return (
+                    <div className="bg-surface-soft rounded-xl p-4 space-y-3 fade-up border border-line-soft">
+                      <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">⚡ Мгновенная доставка</p>
+                      <p className="text-[11.5px] text-ink-soft">Цифровой товар — покупатель получает доступ сразу после оплаты. Логистика не нужна.</p>
+                      <Field label="Формат файла">
+                        <select className="field" value={draft.fileFormat} onChange={(e) => setDraft({ ...draft, fileFormat: e.target.value })}>
+                          <option value="zip">Архив (zip)</option>
+                          <option value="pdf">PDF</option>
+                          <option value="psd">PSD / исходники</option>
+                          <option value="fig">Figma / Sketch</option>
+                          <option value="mp4">Видео (mp4)</option>
+                          <option value="link">Ссылка / облако</option>
+                        </select>
+                      </Field>
+                      <label className="flex items-center gap-2 text-[12.5px] cursor-pointer">
+                        <input type="checkbox" checked={draft.instant} onChange={(e) => setDraft({ ...draft, instant: e.target.checked })} />
+                        <span>Автоматическая выдача ссылки после оплаты</span>
+                      </label>
+                    </div>
+                  );
+                  if (group === "services") return (
+                    <div className="bg-surface-soft rounded-xl p-4 space-y-3 fade-up border border-line-soft">
+                      <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">🛠 Режим оказания услуги</p>
+                      <div className="inline-flex bg-line-soft rounded-[10px] p-1">
+                        {([["online","Онлайн"],["visit","Выезд к клиенту"],["both","Оба варианта"]] as const).map(([v,l]) => (
+                          <button key={v} type="button" onClick={() => setDraft({ ...draft, serviceMode: v })}
+                            className={`h-9 px-3 rounded-[8px] text-[11.5px] font-bold transition-all ${draft.serviceMode === v ? "bg-dark text-cream" : "text-ink-soft"}`}>{l}</button>
+                        ))}
+                      </div>
+                      {(draft.serviceMode === "visit" || draft.serviceMode === "both") && (
+                        <Field label="Зона выезда" hint="Укажите до какого радиуса выезжаете">
+                          <select className="field" value={draft.deliveryZone?.mode || "city"} onChange={(e) => {
+                            const mode = e.target.value as any;
+                            setDraft({ ...draft, deliveryZone: mode === "radius" ? { mode, km: 30 } : mode === "region" ? { mode } : mode === "nationwide" ? { mode } : { mode, withDistrict: false } });
+                          }}>
+                            <option value="city">В пределах города</option>
+                            <option value="radius">Город + радиус (км)</option>
+                            <option value="region">Область / регион</option>
+                            <option value="nationwide">Вся Россия (командировки)</option>
+                          </select>
+                        </Field>
+                      )}
+                    </div>
+                  );
+                  if (group === "foodcourt") return (
+                    <div className="bg-surface-soft rounded-xl p-4 space-y-3 fade-up border border-line-soft">
+                      <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">🕐 Слоты доставки</p>
+                      <p className="text-[11.5px] text-ink-soft">Выберите окна, в которые вы готовы доставлять. Покупатель видит только доступные.</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {["сегодня 12:00–14:00","сегодня 18:00–20:00","завтра 12:00–14:00","завтра 18:00–20:00","послезавтра 12:00–14:00","послезавтра 18:00–20:00"].map((slot) => (
+                          <label key={slot} className="flex items-center gap-2 text-[11.5px] cursor-pointer bg-cream rounded-lg px-3 py-2 border border-line-soft">
+                            <input type="checkbox" checked={(draft.slots || []).includes(slot)} onChange={(e) => setDraft({ ...draft, slots: e.target.checked ? [...(draft.slots || []), slot] : (draft.slots || []).filter(x => x !== slot) })} />
+                            <span>{slot}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <Field label="Минимальная сумма заказа, ₽" hint="Заказы ниже суммы не принимаются">
+                        <input className="field" inputMode="numeric" value={draft.minOrder} onChange={(e) => setDraft({ ...draft, minOrder: e.target.value.replace(/\D/g, "") })} placeholder="800" />
+                      </Field>
+                      <Field label="Зона доставки">
+                        <select className="field" value={draft.deliveryZone?.mode || "city"} onChange={(e) => {
+                          const mode = e.target.value as any;
+                          setDraft({ ...draft, deliveryZone: mode === "radius" ? { mode, km: 10 } : { mode, withDistrict: true } });
+                        }}>
+                          <option value="city">По городу</option>
+                          <option value="radius">Город + пригород</option>
+                        </select>
+                      </Field>
+                    </div>
+                  );
+                  return null;
+                })()}
+
+                {/* Бейдж Реставрация — доступен для любой группы */}
+                <label className="flex items-center gap-2 text-[12.5px] cursor-pointer mt-2">
+                  <input type="checkbox" checked={draft.restored} onChange={(e) => setDraft({ ...draft, restored: e.target.checked })} />
+                  <span>♻️ Это восстановленный / винтажный товар (получит бейдж в каталоге)</span>
+                </label>
+                <Field label="Цена, ₽" required>
+                  <input className="field" inputMode="numeric" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/\D/g, "") })} placeholder="4900" />
+                </Field>
+              </div>
+              <Field label="Описание">
+                <textarea className="field" rows={5} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="История создания, особенности, для чего подойдёт…" />
+              </Field>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              {/* === Студия Quantiform: редактор характеристик === */}
+              <div className="bg-surface-soft rounded-xl p-4 mb-4 border border-line-soft">
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <p className="text-[12px] font-bold text-ink">🧾 Характеристики товара</p>
+                  <button type="button" onClick={() => {
+                    const src = (draft.name + " " + draft.category + " " + draft.description).toLowerCase();
+                    const mat = /глин|керамик|фарфор/.test(src) ? "Керамика" : /дерев|дуб|ясень|сосн/.test(src) ? "Дерево" : /латун|стал|метал/.test(src) ? "Металл" : /кож/.test(src) ? "Кожа" : /льн|хлоп|шерст|ткан/.test(src) ? "Текстиль" : /стекл/.test(src) ? "Стекло" : "";
+                    const st = /бохо/.test(src) ? "Бохо" : /лофт/.test(src) ? "Лофт" : /сканд/.test(src) ? "Сканди" : /минимал/.test(src) ? "Минимализм" : /неоклас/.test(src) ? "Неоклассика" : /прованс/.test(src) ? "Прованс" : /эко/.test(src) ? "Эко" : /джапанд/.test(src) ? "Джапанди" : "";
+                    const col = /графит/.test(src) ? "Графит" : /слонов|бел/.test(src) ? "Слоновая кость" : /шалфей|зелён|зелен/.test(src) ? "Шалфей" : /терракот|корич/.test(src) ? "Терракота" : /медов|беж/.test(src) ? "Медовый" : /олив/.test(src) ? "Оливковый" : /розов/.test(src) ? "Пыльная роза" : /индиго|син/.test(src) ? "Индиго" : "";
+                    const sz = draft.dims.length && draft.dims.width ? draft.dims.length + "×" + draft.dims.width + " " + draft.dims.unit : "";
+                    setDraft({ ...draft,
+                      style: draft.style || st, color: draft.color || col, size: draft.size || sz,
+                      materials: draft.materials.length ? draft.materials : (mat ? [mat] : draft.materials) });
+                  }} className="h-8 px-3 rounded-[8px] bg-accent text-ink text-[11.5px] font-bold hover:bg-accent-deep hover:text-cream transition-colors cursor-pointer">✍️ Заполнить ИИ</button>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Стиль"><input className="field" value={draft.style || ""} onChange={(e) => setDraft({ ...draft, style: e.target.value })} placeholder="Бохо, сканди, лофт…" /></Field>
+                  <Field label="Цвет"><input className="field" value={draft.color || ""} onChange={(e) => setDraft({ ...draft, color: e.target.value })} placeholder="Шалфей, терракота…" /></Field>
+                  <Field label="Размер"><input className="field" value={draft.size || ""} onChange={(e) => setDraft({ ...draft, size: e.target.value })} placeholder="Ø 20 см, 40×60 см…" /></Field>
+                  <Field label="Вес, кг"><input className="field" inputMode="decimal" value={draft.weight || ""} onChange={(e) => setDraft({ ...draft, weight: e.target.value.replace(/[^\d.]/g, "") })} placeholder="1.2" /></Field>
+                </div>
+                <p className="text-[11px] font-bold text-ink-mute mt-3 mb-1.5">Дополнительные параметры (ключ — значение)</p>
+                {(draft.specs || []).map((sp, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input className="field" value={sp.key} onChange={(e) => setDraft({ ...draft, specs: (draft.specs || []).map((x, xi) => xi === i ? { ...x, key: e.target.value } : x) })} placeholder="Параметр (например, Комплектация)" />
+                    <input className="field" value={sp.value} onChange={(e) => setDraft({ ...draft, specs: (draft.specs || []).map((x, xi) => xi === i ? { ...x, value: e.target.value } : x) })} placeholder="Значение" />
+                    <button type="button" onClick={() => setDraft({ ...draft, specs: (draft.specs || []).filter((_, xi) => xi !== i) })} className="w-9 h-9 shrink-0 rounded-[8px] bg-line-soft text-ink-mute hover:bg-error hover:text-white cursor-pointer">×</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setDraft({ ...draft, specs: [...(draft.specs || []), { key: "", value: "" }] })} className="h-8 px-3 rounded-[8px] bg-line-soft text-[11.5px] font-bold text-ink-soft hover:bg-line cursor-pointer">+ Добавить параметр</button>
+              </div>
+
+              <Field label="Производитель / мастер">
+                <input className="field" value={draft.manufacturer} onChange={(e) => setDraft({ ...draft, manufacturer: e.target.value })} placeholder="Мастерская «Глиняный дом»" />
+              </Field>
+              <Field label="Материалы">
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  {draft.materials.map((m, i) => (
+                    <Badge key={i} tone="honey">
+                      {m}
+                      <button onClick={() => setDraft({ ...draft, materials: draft.materials.filter((_, x) => x !== i) })} className="ml-1">×</button>
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input className="field flex-1" value={draft.newMaterial} onChange={(e) => setDraft({ ...draft, newMaterial: e.target.value })} placeholder="Глина, глазурь" />
+                  <Btn size="sm" variant="outline" onClick={() => {
+                    if (draft.newMaterial.trim()) setDraft({ ...draft, materials: [...draft.materials, draft.newMaterial.trim()], newMaterial: "" });
+                  }}>+</Btn>
+                </div>
+              </Field>
+              <div className="grid grid-cols-4 gap-2">
+                <Field label="Длина"><input className="field" inputMode="numeric" value={draft.dims.length} onChange={(e) => setDraft({ ...draft, dims: { ...draft.dims, length: e.target.value } })} /></Field>
+                <Field label="Ширина"><input className="field" inputMode="numeric" value={draft.dims.width} onChange={(e) => setDraft({ ...draft, dims: { ...draft.dims, width: e.target.value } })} /></Field>
+                <Field label="Высота"><input className="field" inputMode="numeric" value={draft.dims.height} onChange={(e) => setDraft({ ...draft, dims: { ...draft.dims, height: e.target.value } })} /></Field>
+                <Field label="Ед.">
+                  <select className="field" value={draft.dims.unit} onChange={(e) => setDraft({ ...draft, dims: { ...draft.dims, unit: e.target.value as "см" | "мм" | "м" } })}>
+                    <option>см</option><option>мм</option><option>м</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="bg-cream/60 rounded-2xl p-4 border border-line-soft">
+                <p className="font-bold text-[14px] text-ink mb-3 flex items-center gap-2">🗺️ География доставки</p>
+                <div className="grid sm:grid-cols-2 gap-2.5 mb-3">
+                  <Field label="Город отправки (любой населённый пункт)">
+                    <input className="field" list="uyt-cities" placeholder="Напр.: Углич" value={draft.sellerCity || sellerReg.city || ""} onChange={(e) => setDraft({ ...draft, sellerCity: e.target.value })} />
+                    <datalist id="uyt-cities">
+                      {CITIES.map((c) => <option key={c.name} value={c.name} />)}
+                    </datalist>
+                  </Field>
+                  <Field label="Подсказка по категории">
+                    <div className="field bg-surface text-[12px] text-ink-soft">
+                      {(draft.category || "").toLowerCase().match(/кирпич|бетон|плит|цемент|дверь|окн|мебел|диван|стол|шкаф|зеркал/)
+                        ? "📦 Крупногабарит — рекомендуем «Только город» или «Радиус»"
+                        : "📦 Стандартный товар — можно «По России»"}
+                    </div>
+                  </Field>
+                </div>
+                <p className="text-[11.5px] text-ink-mute mb-2 font-semibold uppercase tracking-wide">Зона доставки</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { m: "city",        label: "Только город",      icon: "📍" },
+                    { m: "radius",      label: "Радиус",             icon: "🚚" },
+                    { m: "region",      label: "Округ",              icon: "🏛" },
+                    { m: "nationwide",  label: "По России",          icon: "🇷🇺" },
+                  ].map((opt) => (
+                    <button key={opt.m} type="button"
+                      onClick={() => setDraft({ ...draft, deliveryZone: opt.m === "radius" ? { mode: "radius", km: 50 } : { mode: opt.m as any } })}
+                      className={`rounded-xl border p-2.5 text-left transition-all cursor-pointer ${
+                        (draft.deliveryZone as any)?.mode === opt.m
+                          ? "border-accent bg-surface shadow-card"
+                          : "border-line bg-surface/50 hover:border-ink-mute"
+                      }`}>
+                      <div className="text-[18px]">{opt.icon}</div>
+                      <p className="text-[12px] font-bold text-ink mt-1">{opt.label}</p>
+                    </button>
+                  ))}
+                </div>
+                {(draft.deliveryZone as any)?.mode === "city" && (
+                  <label className="mt-3 flex items-center gap-2 text-[12.5px] text-ink-soft cursor-pointer">
+                    <input type="checkbox" checked={!!(draft.deliveryZone as any)?.withDistrict} onChange={(e) => setDraft({ ...draft, deliveryZone: { mode: "city", withDistrict: e.target.checked } })} className="accent-accent w-4 h-4" />
+                    Включая район и ближайшие населённые пункты
+                  </label>
+                )}
+                {(draft.deliveryZone as any)?.mode === "radius" && (
+                  <div className="mt-3 flex items-center gap-2.5">
+                    <span className="text-[12.5px] text-ink-soft whitespace-nowrap">Радиус:</span>
+                    <input type="range" min="10" max="500" step="10"
+                      value={(draft.deliveryZone as any)?.km || 50}
+                      onChange={(e) => setDraft({ ...draft, deliveryZone: { mode: "radius", km: Number(e.target.value) } })}
+                      className="flex-1 accent-accent" />
+                    <span className="text-[13px] font-bold text-ink w-16 text-right">{(draft.deliveryZone as any)?.km || 50} км</span>
+                  </div>
+                )}
+                <p className="text-[12px] text-ink-soft mt-3 flex items-center gap-1.5">
+                  <span className="text-success">●</span>
+                  Покупатель увидит товар: <strong className="text-ink">{zoneLabel(draft.deliveryZone as any, draft.sellerCity || sellerReg.city || "")}</strong>
+                </p>
+              </div>
+              <Field label="Теги для поиска">
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  {draft.tags.map((t, i) => (
+                    <Badge key={i}>#{t}<button onClick={() => setDraft({ ...draft, tags: draft.tags.filter((_, x) => x !== i) })} className="ml-1">×</button></Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input className="field flex-1" value={draft.newTag} onChange={(e) => setDraft({ ...draft, newTag: e.target.value })} placeholder="подарок, интерьер" />
+                  <Btn size="sm" variant="outline" onClick={() => {
+                    if (draft.newTag.trim()) setDraft({ ...draft, tags: [...draft.tags, draft.newTag.trim()], newTag: "" });
+                  }}>+</Btn>
+                </div>
+              </Field>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <div className="bg-ai-soft/40 border border-ai/30 rounded-xl p-4">
+                <p className="text-[13px] text-ink mb-3">
+                  <Sparkles size={14} className="inline text-ai mr-1" />
+                  AI соберёт карточку из ваших данных. Осталось генераций: <b>{Number.isFinite(aiLeft) ? aiLeft : "∞"} / {Number.isFinite(cardGenLimit) ? cardGenLimit : "∞"}</b>
+                </p>
+                <Btn variant="dark" className="w-full" disabled={generating || aiLeft === 0} onClick={generateAi}>
+                  <Wand2 size={15} /> {generating ? "Генерирую…" : aiLeft === 0 ? "Лимит исчерпан" : "Сгенерировать карточку"}
+                </Btn>
+              </div>
+              {draft.aiCover && (
+                <div className="bg-surface rounded-xl overflow-hidden shadow-card">
+                  <img src={draft.aiCover} className="w-full aspect-[16/9] object-cover" />
+                  <div className="p-4">
+                    <h4 className="font-display font-bold text-[17px] text-ink mb-1">{draft.name}</h4>
+                    <p className="text-[12px] text-ink-mute mb-3">
+                      {draft.category}{draft.manufacturer ? ` · ${draft.manufacturer}` : ""}
+                    </p>
+                    <ul className="space-y-1.5 mb-3">
+                      {(draft.aiBullets || []).map((b, i) => (
+                        <li key={i} className="text-[12.5px] text-ink-soft">• {b}</li>
+                      ))}
+                    </ul>
+                    <div className="flex items-baseline justify-between pt-3 border-t border-line-soft">
+                      <span className="font-display font-extrabold text-[22px] text-accent">
+                        {(+draft.price || 0).toLocaleString("ru-RU")} ₽
+                      </span>
+                      <Btn size="sm" variant="ghost" disabled={aiLeft === 0} onClick={generateAi}>
+                        <Sparkles size={12} /> Ещё вариант
+                      </Btn>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-between mt-8 pt-5 border-t border-line-soft">
+            <Btn variant="ghost" onClick={() => (step === 1 ? onClose() : setStep(step - 1))}>
+              <ArrowLeft size={14} /> {step === 1 ? "Отмена" : "Назад"}
+            </Btn>
+            {step < 4 ? (
+              <Btn disabled={!canNext} onClick={() => setStep(step + 1)}>Далее <ArrowRight size={14} /></Btn>
+            ) : (
+              <Btn disabled={!canNext} onClick={publish}><Package size={14} /> Опубликовать</Btn>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-cream rounded-xl p-4 sticky top-4 self-start">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute mb-3">Сводка</p>
+          <div className="space-y-2 text-[12px]">
+            <div className="flex items-center gap-2">
+              <ImageIcon size={13} className={draft.media.length ? "text-success" : "text-ink-mute"} />
+              <span>{draft.media.length} файлов</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Package size={13} className={draft.name ? "text-success" : "text-ink-mute"} />
+              <span className={draft.name ? "text-ink" : "text-ink-mute"}>{draft.name || "Без названия"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Layers size={13} className="text-ink-mute" />
+              <span>{draft.category}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Tags size={13} className={+draft.price ? "text-success" : "text-ink-mute"} />
+              <span>{+draft.price ? `${(+draft.price).toLocaleString("ru-RU")} ₽` : "Цена не задана"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Ruler size={13} className={draft.materials.length ? "text-success" : "text-ink-mute"} />
+              <span>{draft.materials.length ? `${draft.materials.length} материалов` : "Без материалов"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Sparkles size={13} className={draft.aiCover ? "text-ai" : "text-ink-mute"} />
+              <span>{draft.aiCover ? "AI-карточка готова" : "AI не запущен"}</span>
+            </div>
+            {/* §2.4: счётчик размещённых товаров против лимита тарифа */}
+            <div className="flex items-center gap-2">
+              <Package size={13} className={Number.isFinite(productLimit) && productsUsed >= productLimit ? "text-error" : "text-ink-mute"} />
+              <span>Товары: {productsUsed} из {Number.isFinite(productLimit) ? productLimit : "∞"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* §2.1/§2.4/§2.5: платная стена с переходом на следующий тариф */}
+      {limitWall && (
+        <div className="absolute inset-0 z-20 bg-dark/40 rounded-2xl flex items-center justify-center p-6">
+          <div className="bg-surface rounded-2xl shadow-card max-w-sm w-full p-6 text-center fade-up">
+            <p className="text-[34px] mb-2">🔒</p>
+            <h4 className="font-display font-bold text-[18px] text-ink mb-1">{limitWall.title}</h4>
+            {limitWall.limit >= 0 && (
+              <p className="text-[13px] text-ink-soft mb-4">Использовано: {limitWall.used} из {Number.isFinite(limitWall.limit) ? limitWall.limit : "∞"} по тарифу.</p>
+            )}
+            <p className="text-[12.5px] text-ink-mute mb-5">Можно докупить пакет сверх лимита (+50 слотов за 300 ₽ / +50 генераций за 500 ₽) или перейти на тариф выше.</p>
+            <div className="flex gap-2 justify-center">
+              <Btn variant="ghost" onClick={() => setLimitWall(null)}>Закрыть</Btn>
+              {limitWall.action && (
+                <Btn onClick={() => setLimitWall({ ...limitWall, action: undefined })}>Докупить пакет</Btn>
+              )}
+              <Link to="/plans" onClick={() => setLimitWall(null)} className="inline-flex items-center h-10 px-5 rounded-[10px] bg-accent text-white text-sm font-bold hover:bg-accent-deep transition-colors">Перейти на следующий тариф</Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* §4.5: покупка пакета сверх лимита прямо в момент отказа */}
+      {limitWall?.action && (
+        <OverlimitPackModal
+          open
+          action={limitWall.action}
+          reason={limitWall.title}
+          onClose={() => setLimitWall(null)}
+        />
+      )}
+    </Modal>
+  );
+}
