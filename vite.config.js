@@ -4,7 +4,6 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
-  // Production build: вырезаем отладочные console.log/debug/info из бандла
   esbuild:
     mode === "production"
       ? { pure: ["console.log", "console.debug", "console.info"] }
@@ -21,7 +20,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Разносим тяжёлые библиотеки в отдельные кэшируемые чанки
     rollupOptions: {
       output: {
         manualChunks: {

@@ -24,8 +24,8 @@ const log = require("./logger.cjs");
 /* ---------- матрицы: единое тарифное ядро shared/tariffs/core.js ----------
    Единственный источник истины для клиента (subscriptions.ts / seller.ts)
    и сервера. Локальные дубли таблиц удалены — рассинхрон невозможен. */
-const CORE = require("../shared/tariffs/core.js");
 
+const CORE = require("../shared/tariffs/core.mjs");
 const COMMISSION_MATRIX = CORE.COMMISSION_MATRIX;
 
 /* §3.5: безлимит отслеживания цен — маркер "∞" из ядра резолвится в Infinity */

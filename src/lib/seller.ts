@@ -7,7 +7,7 @@ import { getPaymentMethodToken, clearPaymentMethodToken } from "./yookassa";
 import { useTariffStore, applyServerTariff } from "./tariff";
 /* Единое тарифное ядро (shared/tariffs/core.js) — единственный источник
    истинных числовых таблиц комиссий/цен/взносов для клиента и сервера. */
-import * as core from "../../shared/tariffs/core.js";
+import * as core from "../../shared/tariffs/core.mjs";
 
 /* ============================================================
    Раздельные регистрации продавцов: самозанятый / ИП / ООО
