@@ -1,0 +1,737 @@
+import { useMarketProducts } from "../lib/market";
+import { useSellerAccount, useSellerReg } from "../lib/seller";
+import { useMemo, useState, useEffect } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2, Truck, Wrench } from "lucide-react";
+import { SellerAboutModal } from "../components/SellerAboutModal";
+import {
+  GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
+  vendorById, productBySlug,
+} from "../data/seed";
+import { canDeliver, CITIES, zoneLabel } from "../lib/geo";
+import { useAppStore } from "../lib/store";
+import { useSubStore, buyerLimits } from "../lib/subscriptions";
+import { ProductGrid } from "../components/product";
+import { Badge, Btn, GroupImg, ProductImg, Rating } from "../components/ui";
+import { SubscribeButton } from "../components/SubscribeButton";
+import { useTopSlots } from "../lib/premium";
+import { ChatModal } from "../components/chat";
+import { ReviewsSection } from "../components/review";
+import { productRating } from "../lib/review";
+import { SpecSections } from "../components/SpecSections";
+import { canonicalSellerId } from "../lib/userFeed";
+import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
+
+/* ЭТАП 2 (§2.3): динамический калькулятор логистики в карточке товара.
+   Запрашивает серверный расчёт (GET /api/products/:id/logistics) для города
+   покупателя; отображает конкретное предложение СДЭК/Почты, сроки,
+   подтверждение доставки и возможности монтажа именно в городе покупателя. */
+interface LogisticsResp {
+  ok: boolean;
+  sellerCity?: string;
+  buyerCity?: string;
+  deliverable: boolean;
+  installAvailable: boolean;
+  quote: null | {
+    distanceKm: number;
+    methods: { id: string; name: string; priceRub: number; daysMin: number; daysMax: number }[];
+  };
+}
+function LogisticsQuoteBox({ productId, fallbackCity }: { productId: string; fallbackCity: string }) {
+  const viewerCity = useAppStore((s) => s.viewerCity);
+  const addresses = useAppStore((s) => s.addresses);
+  const buyerCity = viewerCity || (addresses.find((a) => a.isDefault)?.city || "");
+  const [data, setData] = useState<LogisticsResp | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/products/${encodeURIComponent(productId)}/logistics${buyerCity ? `?city=${encodeURIComponent(buyerCity)}` : ""}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive) setData(j as LogisticsResp | null); })
+      .catch(() => { if (alive) setData(null); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [productId, buyerCity]);
+
+  if (loading) {
+    return (
+      <div className="bg-cream/60 rounded-xl p-4 border border-line-soft animate-pulse text-[13px] text-ink-mute flex items-center gap-2">
+        <Truck size={16} className="text-ai" /> Рассчитываем доставку{buyerCity ? ` в г. ${buyerCity}` : ""}…
+      </div>
+    );
+  }
+  if (!data) return null;
+  const best = data.quote?.methods?.length ? [...data.quote.methods].sort((a, b) => a.priceRub - b.priceRub)[0] : null;
+  return (
+    <div className="bg-surface rounded-xl p-4 border border-accent/30 shadow-card space-y-2.5">
+      <div className="flex items-center gap-2 text-[14px] font-bold text-ink">
+        <Truck size={16} className="text-accent-deep" /> Доставка{data.buyerCity ? <> в г. <span className="text-accent-deep">{data.buyerCity}</span></> : ""}
+        {data.sellerCity && <span className="font-normal text-[12px] text-ink-mute">из г. {data.sellerCity}{data.quote?.distanceKm ? ` · ${data.quote.distanceKm} км` : ""}</span>}
+      </div>
+      {!data.deliverable && (
+        <p className="flex gap-2 text-[13px] text-error font-semibold"><Ban size={15} className="shrink-0 mt-0.5" /> Продавец не доставляет в ваш город — выберите другой регион в фильтрах.</p>
+      )}
+      {data.deliverable && data.quote && data.quote.methods.map((m) => (
+        <div key={m.id} className={`flex items-center justify-between gap-3 text-[13.5px] px-3 py-2 rounded-lg ${best?.id === m.id ? "bg-accent/10" : "bg-cream/60"}`}>
+          <span className="font-semibold text-ink">{m.name}</span>
+          <span className="text-ink-soft">{m.daysMin}–{m.daysMax} дн.</span>
+          <span className="font-extrabold text-ink">{fmt(m.priceRub)}</span>
+        </div>
+      ))}
+      {data.deliverable && !data.quote && (
+        <p className="text-[13px] text-ink-soft">Укажите город получения или адрес продавца ({fallbackCity || "не задан"}), чтобы рассчитать точную стоимость и сроки.</p>
+      )}
+      {data.installAvailable && (
+        <p className="flex gap-2 text-[13px] text-success font-bold"><Wrench size={15} className="shrink-0 mt-0.5" /> Монтаж доступен в г. {data.buyerCity}: ориентировочно 7–14 дней после доставки.</p>
+      )}
+    </div>
+  );
+}
+
+type SortId = "popular" | "price-asc" | "price-desc" | "new" | "rating";
+const SORTS: { id: SortId; label: string }[] = [
+  { id: "popular", label: "По популярности" },
+  { id: "price-asc", label: "Сначала дешевле" },
+  { id: "price-desc", label: "Сначала дороже" },
+  { id: "new", label: "По новизне" },
+  { id: "rating", label: "По рейтингу" },
+];
+
+function Crumbs({ parts }: { parts: { label: string; to?: string }[] }) {
+  return (
+    <nav className="flex items-center gap-1.5 text-[12.5px] text-ink-mute flex-wrap mb-4" aria-label="Хлебные крошки">
+      <Link to="/catalog" className="hover:text-accent-deep transition-colors font-semibold">Каталог</Link>
+      {parts.map((p, i) => (
+        <span key={i} className="flex items-center gap-1.5">
+          <span>/</span>
+          {p.to ? <Link to={p.to} className="hover:text-accent-deep transition-colors font-semibold">{p.label}</Link> : <span className="text-ink-soft font-semibold">{p.label}</span>}
+        </span>
+      ))}
+    </nav>
+  );
+}
+
+export function CatalogPage() {
+  const [sp] = useSearchParams();
+  const group = sp.get("group") || "all";
+  const cat = sp.get("cat") || "all";
+  const sub = sp.get("sub") || "all";
+  const q = (sp.get("q") || "").trim().toLowerCase();
+  const [sort, setSort] = useState<SortId>("popular");
+  /* Сброс скролла при изменении категории/группы */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [group, cat, sub]);
+  const [inStock, setInStock] = useState(false);
+  const [region, setRegion] = useState<string>("all"); /* город покупателя (или "all") */
+  const [showOther, setShowOther] = useState(true);
+  const [quality, setQuality] = useState(false);
+  /* Умный поиск города с сохранением в глобальном стейте */
+  const [cityInput, setCityInput] = useState(region === "all" ? "" : region);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  useEffect(() => {
+    setCityInput(region === "all" ? "" : region);
+  }, [region]);
+
+  // Загрузка серверных товаров при монтировании каталога.
+  // ЭТАП 2: город покупателя передаётся серверу явно — жёсткий гео-фильтр
+  // применяется на уровне выборки (чужие регионы не доезжают до клиента).
+  useEffect(() => {
+    const st = useAppStore.getState();
+    const city = st.viewerCity || (st.addresses.find((a) => a.isDefault)?.city || "");
+    fetch('/api/products' + (city ? '?city=' + encodeURIComponent(city) : ''), { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && Array.isArray(d.products)) {
+          const acc = useSellerAccount.getState();
+          d.products.forEach((p: any) => {
+            if (!acc.products.find((x: any) => x.id === p.id)) {
+              acc.addProduct(p);
+            }
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const accountId = useAppStore((s) => s.session?.userId || "guest");
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(accountId));
+  const lim = buyerLimits(buyerPlan);
+
+  const activeGroup = groupById(group);
+  const activeCat = catBySlug(cat);
+  const activeSub = activeCat?.subs.find((s) => s.slug === sub);
+  const groupCats = catsByGroup(group);
+  const browseMode = !q && group === "all" && cat === "all";
+
+  const market = useMarketProducts();
+  /* Счётчики сервисных лент второго уровня каталога: уникальные владельцы
+     товаров витрины (sp-) текущей группы; для «Мастеров» — только те, у кого
+     включён флаг isMaster (профиль продавца или сам товар). */
+  const { groupShopOwners, groupMasterOwners } = useMemo(() => {
+    const shops = new Set<string>();
+    const masters = new Set<string>();
+    const profiles = useSellerReg.getState().profilesByAccount;
+    market.forEach((p: any) => {
+      if (!p.id.startsWith("sp-") || !p.ownerId) return;
+      if (catBySlug(p.categoryId)?.group !== group) return;
+      shops.add(p.ownerId);
+      const isM = profiles[p.ownerId]?.isMaster || p.isMaster;
+      if (isM) masters.add(p.ownerId);
+    });
+    return { groupShopOwners: shops, groupMasterOwners: masters };
+  }, [market, group]);
+  const items = useMemo(() => {
+    let l = market.filter((x) => (x.id.startsWith("sp-") || x.id.startsWith("dp-")) && !x.isDraft); /* демо скрыто: витрина только для реальных товаров */
+    if (q) {
+      l = l.filter((p) => {
+        const c = catBySlug(p.categoryId);
+        const g = c ? groupById(c.group) : undefined;
+        const subName = c?.subs.find((s) => s.slug === p.sub)?.name.toLowerCase() ?? "";
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) || /* цифровые товары ищутся также по описанию */
+          p.material.toLowerCase().includes(q) ||
+          p.tags.some((t) => t.toLowerCase().includes(q)) ||
+          subName.includes(q) ||
+          (c?.name.toLowerCase().includes(q) ?? false) ||
+          (g?.name.toLowerCase().includes(q) ?? false)
+        );
+      });
+    } else if (sub !== "all" && cat !== "all") {
+      l = l.filter((p) => p.categoryId === cat && p.sub === sub);
+    } else if (cat !== "all") {
+      l = l.filter((p) => p.categoryId === cat);
+    } else if (group !== "all") {
+      l = l.filter((p) => catBySlug(p.categoryId)?.group === group);
+    }
+    if (inStock) l = l.filter((p) => p.stock > 0);
+    if (region !== "all" && !showOther) l = l.filter((p) => canDeliver(p, region));
+    /* премиум-фильтр качества: рейтинг мастера от 4.8 + ручная работа */
+    if (quality && lim.qualityFilters) {
+      l = l.filter((p) => (vendorById(p.vendorId)?.rating || 0) >= 4.8);
+    }
+    switch (sort) {
+      case "price-asc": return l.sort((a, b) => a.price - b.price);
+      case "price-desc": return l.sort((a, b) => b.price - a.price);
+      case "new": return l.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+      case "rating": return l.sort((a, b) => b.rating - a.rating);
+      default: return l.sort((a, b) => (b.isHit ? 1 : 0) + b.views / 10000 - ((a.isHit ? 1 : 0) + a.views / 10000));
+    }
+  }, [market, group, cat, sub, q, sort, inStock, region, showOther, quality, lim.qualityFilters]);
+
+  return (
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-6 py-8">
+      <Crumbs parts={[
+        ...(activeGroup ? [{ label: activeGroup.name, to: `/catalog?group=${activeGroup.id}` }] : []),
+        ...(activeCat ? [{ label: activeCat.name, to: `/catalog?cat=${activeCat.slug}` }] : []),
+        ...(activeSub ? [{ label: activeSub.name }] : []),
+      ]} />
+
+      <div className="flex items-end justify-between flex-wrap gap-4 mt-2 mb-7">
+        <div>
+          <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink">
+            {q ? `По запросу «${q}»` : activeSub ? activeSub.name : activeCat ? activeCat.name : activeGroup ? activeGroup.name : "Каталог"}
+          </h1>
+          <p className="text-sm text-ink-soft mt-1.5 max-w-xl">
+            {q ? `Найдено ${items.length} товаров.` : activeCat ? activeCat.desc : activeGroup ? activeGroup.desc : "От авторского декора до техники и одежды — выбирайте группу."}
+          </p>
+        </div>
+      </div>
+
+      {/* верхний уровень — группы (при просмотре «всё») */}
+      {browseMode && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-8">
+          {GROUPS.map((g, i) => (
+            <Link key={g.id} to={`/catalog?group=${g.id}`}
+              className="group relative rounded-2xl overflow-hidden shadow-card hover:shadow-lift hover:-translate-y-1.5 transition-all duration-300 block bg-surface fade-up"
+              style={{ animationDelay: `${(i % 8) * 50}ms` }}>
+              <div className="aspect-[4/3]">
+                <GroupImg src={GROUP_IMG[g.id]} emoji={g.emoji} alt={g.name} pos={i} />
+              </div>
+              <div className="p-4">
+                <span className="block font-bold text-[15px] text-ink leading-tight group-hover:text-accent-deep transition-colors">{g.name}</span>
+                <span className="block text-[11.5px] text-ink-mute mt-1 leading-snug">{catsByGroup(g.id).length} категорий</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* второй уровень — категории группы */}
+      {!q && group !== "all" && (
+        <>
+          <div className="bg-surface rounded-2xl shadow-card p-3 mb-6">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute px-2 pb-2">Категории</p>
+            {/* Сервисные ленты: магазины и мастера, отфильтрованные по текущей группе */}
+            <button onClick={() => (window.location.hash = `#/catalog?group=${group}`)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors ${cat === "all" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+              ✦ Все категории
+            </button>
+            <Link to={`/shops?group=${group}`}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors ${sp.get("shops") === "1" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+              <span>🏪</span>
+              <span className="flex-1 text-left leading-tight">Магазины</span>
+              <span className={`text-[11px] ${sp.get("shops") === "1" ? "text-cream/60" : "text-ink-mute"}`}>{groupShopOwners.size}</span>
+            </Link>
+            <Link to={`/masters?group=${group}`}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors ${sp.get("masters") === "1" ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+              <span>🛠️</span>
+              <span className="flex-1 text-left leading-tight">Мастера</span>
+              <span className={`text-[11px] ${sp.get("masters") === "1" ? "text-cream/60" : "text-ink-mute"}`}>{groupMasterOwners.size}</span>
+            </Link>
+            {groupCats.map((c) => (
+              <Link key={c.slug} to={`/catalog?cat=${c.slug}`}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors ${cat === c.slug ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream"}`}>
+                <span>{c.emoji}</span>
+                <span className="flex-1 text-left leading-tight">{c.name}</span>
+                <span className={`text-[11px] ${cat === c.slug ? "text-cream/60" : "text-ink-mute"}`}>{c.subs.length} подкат.</span>
+              </Link>
+            ))}
+          </div>
+
+        </>
+      )}
+
+      {/* третий уровень — подкатегории */}
+      {!q && cat !== "all" && activeCat && (
+        <div className="bg-surface rounded-2xl shadow-card p-3 mb-6">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute px-2 pb-2">Подкатегории</p>
+          <button onClick={() => (window.location.hash = `#/catalog?cat=${cat}`)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors text-left ${sub === "all" ? "bg-accent text-ink" : "text-ink-soft hover:bg-cream"}`}>
+            ✦ Все подкатегории
+          </button>
+          {activeCat.subs.map((s) => (
+            <button key={s.slug} onClick={() => (window.location.hash = `#/catalog?cat=${cat}&sub=${s.slug}`)}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-colors text-left ${sub === s.slug ? "bg-accent text-ink" : "text-ink-soft hover:bg-cream"}`}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* панель управления */}
+      {!browseMode && (
+        <div className="flex items-center gap-3 flex-wrap mb-6">
+          <span className="text-sm text-ink-soft">
+            <span className="font-display font-bold text-ink">{items.length}</span>{" "}
+            {items.length === 1 ? "товар" : items.length < 5 ? "товара" : "товаров"}
+          </span>
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-soft cursor-pointer select-none">
+              <input type="checkbox" checked={inStock} onChange={(e) => setInStock(e.target.checked)} /> В наличии
+            </label>
+            {lim.qualityFilters ? (
+              <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-soft cursor-pointer select-none">
+                <input type="checkbox" checked={quality} onChange={(e) => setQuality(e.target.checked)} /> Премиум-качество
+              </label>
+            ) : (
+              <Link to="/plans" className="text-[12.5px] font-bold text-premium" title="Доступно на платных тарифах">★ Премиум-фильтры</Link>
+            )}
+            {/* Умный поиск города */}
+            <div className="relative w-48">
+              <input
+                type="text"
+                value={cityInput}
+                onChange={(e) => {
+                  setCityInput(e.target.value);
+                  setShowCityDropdown(true);
+                  if (!e.target.value.trim()) {
+                    setRegion("all");
+                    useAppStore.setState({ viewerCity: "" });
+                  }
+                }}
+                onFocus={() => setShowCityDropdown(true)}
+                onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
+                placeholder="🏙️ По городу..."
+                className="h-[44px] w-full px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium outline-none focus:border-ai placeholder:text-ink-mute/50"
+              />
+              {showCityDropdown && cityInput.trim().length > 0 && (
+                <div className="absolute top-full left-0 mt-1 w-full bg-surface border border-line rounded-[10px] shadow-xl z-50 max-h-60 overflow-y-auto">
+                  {CITIES.filter(c => c.name.toLowerCase().includes(cityInput.toLowerCase()))
+                    .slice(0, 10)
+                    .map(c => (
+                      <button
+                        key={c.name}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setCityInput(c.name);
+                          setRegion(c.name);
+                          setShowCityDropdown(false);
+                          useAppStore.setState({ viewerCity: c.name });
+                        }}
+                        className="w-full text-left px-3.5 py-2.5 hover:bg-line-soft text-sm text-ink transition-colors"
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  {CITIES.filter(c => c.name.toLowerCase().includes(cityInput.toLowerCase())).length === 0 && (
+                    <div className="px-3.5 py-2.5 text-sm text-ink-mute">Город не найден</div>
+                  )}
+                </div>
+              )}
+            </div>
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Сортировка"
+              className="h-[44px] px-3.5 rounded-[10px] border border-line bg-surface text-sm text-ink font-medium cursor-pointer outline-none focus:border-ai">
+              {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {region !== "all" && !browseMode && (
+        <div className="flex items-center gap-2.5 bg-ai-soft border border-ai/20 rounded-[10px] px-4 py-3 mb-6 fade-up">
+          <MapPin size={16} className="text-ai shrink-0" />
+          <p className="text-[13px] text-ink flex-1">
+            Выбран город <strong>{region}</strong>. Крупногабарит показывается только от мастеров, которые сюда доставляют.
+          </p>
+          <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-soft cursor-pointer select-none whitespace-nowrap">
+            <input type="checkbox" checked={showOther} onChange={(e) => setShowOther(e.target.checked)} /> Показывать из других регионов
+          </label>
+        </div>
+      )}
+
+      {!browseMode && (
+        items.length ? (
+          <ProductGrid items={items} />
+        ) : (
+          <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
+            <p className="text-[44px] mb-3">🔍</p>
+            <p className="font-display font-bold text-[20px] text-ink mb-2">Ничего не нашлось</p>
+            <p className="text-[14px] text-ink-soft">Попробуйте другой запрос или сбросьте фильтры.</p>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   Карточка товара
+   ============================================================ */
+const viewedOnce = new Set<string>();
+
+export function ProductPage() {
+  const { slug = "" } = useParams();
+  const market = useMarketProducts();
+  const p = useMemo(() => market.find((x) => x.slug === slug) || productBySlug(slug), [market, slug]);
+  /* цифровые товары обслуживает существующая страница /digital/:id (ТЗ: без дублирования рендера) */
+  useEffect(() => {
+    if (p?.digitalId) window.location.hash = `#/digital/${p.digitalId}`;
+  }, [p?.digitalId]);
+  const addToCart = useAppStore((s) => s.addToCart);
+  const toggleFav = useAppStore((s) => s.toggleFav);
+  const favs = useAppStore((s) => s.favorites);
+  const [qty, setQty] = useState(1);
+  const [variant, setVariant] = useState(0);
+  const [tab, setTab] = useState<"desc" | "specs" | "delivery" | "reviews">("desc");
+  const [sellerAboutOpen, setSellerAboutOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const cat = p ? catBySlug(p.categoryId) : undefined;
+  const vendor = p ? vendorById(p.vendorId) : undefined;
+  const similar = useMemo(
+    () => (p ? market.filter((x) => x.categoryId === p.categoryId && x.id !== p.id).slice(0, 4) : []),
+    [market, p]
+  );
+  const sellerProducts = useSellerAccount((st) => st.products);
+  /* Реактивная подписка на топ-слоты (бейдж «Реклама», 38-ФЗ): обновляется
+     сразу после reserve()/release(), без getState() внутри render. */
+  const topSlotsByOwner = useTopSlots((s) => s.slots);
+  const sellerItem = useMemo(() => {
+    if (!p || !p.id.startsWith("sp-")) return undefined;
+    return sellerProducts.find((x) => x.id === p.id.slice(3));
+  }, [sellerProducts, p]);
+  /* ЛЕНТА ПРОДАВЦА: все товары того же магазина/мастерской/автора, что и
+     текущий товар (канонический id владельца — ownerId/sellerId/vendorId).
+     Требование задачи: заходя на товар, пользователь видит не только
+     карточку продавца, но и ленту его продукции. */
+  const sellerFeed = useMemo(() => {
+    if (!p) return [] as typeof market;
+    const sid =
+      sellerItem?.ownerId ||
+      (p as any).ownerId ||
+      (p as any).sellerId ||
+      (String(p.vendorId || "").startsWith("vendor-") ? p.vendorId : "");
+    if (!sid) return [];
+    return market.filter((x) => x.id !== p.id && canonicalSellerId(x as any) === String(sid)).slice(0, 8);
+  }, [market, p, sellerItem]);
+  const sellerMedia = sellerItem?.media || [];
+  useEffect(() => {
+    if (sellerItem && !viewedOnce.has(sellerItem.id)) {
+      viewedOnce.add(sellerItem.id);
+      useSellerAccount.getState().incrementViews(sellerItem.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p?.id]);
+  const sellerReg = useSellerReg();
+  const session = useAppStore((s) => s.session);
+
+  if (!p) {
+    return (
+      <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
+        <p className="text-[56px] mb-3">🧐</p>
+        <h1 className="font-display font-bold text-[28px] text-ink mb-3">Товар не найден</h1>
+        <Link to="/catalog" className="inline-flex items-center justify-center h-11 px-6 rounded-[10px] bg-dark text-cream text-sm font-semibold hover:bg-dark-deep transition-colors">В каталог</Link>
+      </div>
+    );
+  }
+
+  const onFav = favs.includes(p.id);
+  const custom = p.is_non_returnable;
+
+  return (
+    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <Crumbs parts={[
+        { label: cat ? (groupById(cat.group)?.name || "") : "", to: cat ? `/catalog?group=${cat.group}` : undefined },
+        { label: cat?.name || "", to: cat ? `/catalog?cat=${cat.slug}` : undefined },
+        { label: p.name },
+      ]} />
+
+      <div className="grid lg:grid-cols-2 gap-10 items-start">
+        <div>
+          {sellerMedia.length > 0 ? (
+            <>
+              <div className="rounded-2xl overflow-hidden shadow-card aspect-square group bg-cream">
+                {sellerMedia[variant]?.type === "video" ? (
+                  <video src={sellerMedia[variant].url} className="w-full h-full object-cover" controls muted />
+                ) : (
+                  <img src={sellerMedia[variant]?.url} alt={p.name} className="w-full h-full object-cover" />
+                )}
+              </div>
+              <div className="flex gap-2.5 mt-3.5 flex-wrap">
+                {sellerMedia.map((m, v) => (
+                  <button key={v} onClick={() => setVariant(v)} aria-label={`Фото ${v + 1}`}
+                    className={`relative w-[76px] h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ${variant === v ? "border-accent shadow-card" : "border-transparent opacity-70 hover:opacity-100"}`}>
+                    {m.type === "video" ? <video src={m.url} className="w-full h-full object-cover" muted /> : <img src={m.url} className="w-full h-full object-cover" />}
+                    {m.type === "video" && <span className="absolute inset-0 flex items-center justify-center bg-dark/40"><Play size={14} className="text-cream" /></span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl overflow-hidden shadow-card aspect-square group">
+                <ProductImg p={p} variant={variant} />
+              </div>
+              <div className="flex gap-2.5 mt-3.5">
+                {[0, 1, 2, 3].map((v) => (
+                  <button key={v} onClick={() => setVariant(v)} aria-label={`Вариант фото ${v + 1}`}
+                    className={`w-[76px] h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer group ${variant === v ? "border-accent shadow-card" : "border-transparent opacity-70 hover:opacity-100"}`}>
+                    <ProductImg p={p} variant={v} />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {p.isHit && <Badge tone="premium">Хит</Badge>}
+            {p.isNew && <Badge tone="dark">Новинка</Badge>}
+            {p.oldPrice && <Badge tone="honey">−{Math.round((1 - p.price / p.oldPrice) * 100)}%</Badge>}
+            {custom && <Badge tone="error"><Ban size={12} /> Товар на заказ: возврат невозможен</Badge>}
+            {/* Пункт Г (38-ФЗ): бейдж «Реклама» для категорий с занятым топ-слотом;
+                атрибут title и мелкий текст содержат идентификатор размещения adToken. */}
+            {(() => {
+              /* Реактивная подписка: бейдж «Реклама» появляется сразу после
+                 бронирования топ-слота, без перезагрузки страницы. */
+              const allSlots = Object.values(topSlotsByOwner).flat();
+              const slot = allSlots.find((s) => s.category === (cat?.name || p.categoryId));
+              if (!slot) return null;
+              return (
+                <>
+                  <Badge tone="warning" className="ml-1" title={slot.adToken}>Реклама</Badge>
+                  {slot.adToken && <span className="text-[9px] text-ink-mute self-center">{slot.adToken}</span>}
+                </>
+              );
+            })()}
+          </div>
+          <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] leading-tight text-ink">{p.name}</h1>
+          <div className="flex items-center gap-3 mt-2.5 flex-wrap">
+            <Rating value={productRating(p.id).avg} />
+            <span className="text-[12.5px] text-ink-mute">{productRating(p.id).count} отзывов · арт. {p.sku}</span>
+          </div>
+
+          <div className="flex items-end gap-3.5 mt-5">
+            <span className="font-display font-extrabold text-[34px] leading-none text-ink">{fmt(p.price)}</span>
+            {p.oldPrice && <span className="text-lg text-ink-mute line-through mb-0.5">{fmt(p.oldPrice)}</span>}
+          </div>
+          <p className="text-[13px] mt-2.5 flex items-center gap-2">
+            {p.stock > 0
+              ? <><span className="w-2 h-2 rounded-full bg-success" /><span className="text-[#4d7327] font-bold">В наличии: {p.stock} шт</span></>
+              : <><span className="w-2 h-2 rounded-full bg-ink-mute" /><span className="text-ink-soft font-bold">Под заказ{p.production_time_days ? ` · изготовление ${p.production_time_days} дней` : ""}</span></>}
+          </p>
+
+          {/* ТЗ 10.2: на мобильных действия приклеиваются к низу экрана с учётом safe-area */}
+          <div className="hidden md:flex items-center gap-3 mt-6 flex-wrap">
+            <div className="flex items-center border border-line rounded-[10px] bg-surface overflow-hidden">
+              <button onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Меньше" className="w-11 h-[46px] flex items-center justify-center text-ink-soft hover:bg-line-soft cursor-pointer transition-colors"><Minus size={16} /></button>
+              <span className="w-10 text-center font-bold text-[15px] text-ink">{qty}</span>
+              <button onClick={() => setQty(qty + 1)} aria-label="Больше" className="w-11 h-[46px] flex items-center justify-center text-ink-soft hover:bg-line-soft cursor-pointer transition-colors"><Plus size={16} /></button>
+            </div>
+            <Btn size="lg" className="flex-1 min-w-[200px]" onClick={() => addToCart(p.id, qty)}>
+              <ShoppingBag size={18} /> В корзину
+            </Btn>
+            <button onClick={() => { console.log("[FAV] Toggling:", p.id); toggleFav(p.id); }} aria-label="В избранное"
+              className={`w-[52px] h-[52px] rounded-[10px] flex items-center justify-center transition-colors cursor-pointer ${onFav ? "bg-error text-white" : "border border-line bg-surface text-ink-soft hover:text-error"}`}>
+              <Heart size={20} fill={onFav ? "currentColor" : "none"} />
+            </button>
+          </div>
+
+          <div className="mt-3.5 hidden md:block">
+            <Btn variant="outline" className="w-full" onClick={() => setChatOpen(true)}>
+              <MessageSquare size={17} /> Написать продавцу
+            </Btn>
+          </div>
+
+          {/* мобильная sticky-панель действий (ТЗ 10.2) */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[80] bg-cream/95 backdrop-blur-md border-t border-line px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-lift">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center border border-line rounded-[10px] bg-surface overflow-hidden shrink-0">
+                <button onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Меньше" className="w-11 h-11 flex items-center justify-center text-ink-soft active:bg-line-soft cursor-pointer"><Minus size={16} /></button>
+                <span className="w-8 text-center font-bold text-[15px] text-ink">{qty}</span>
+                <button onClick={() => setQty(qty + 1)} aria-label="Больше" className="w-11 h-11 flex items-center justify-center text-ink-soft active:bg-line-soft cursor-pointer"><Plus size={16} /></button>
+              </div>
+              <Btn size="lg" className="flex-1 min-w-0" onClick={() => addToCart(p.id, qty)}>
+                <ShoppingBag size={18} /> В корзину · {fmt(p.price * qty)}
+              </Btn>
+              <button onClick={() => toggleFav(p.id)} aria-label="В избранное"
+                className={`w-11 h-11 shrink-0 rounded-[10px] flex items-center justify-center transition-colors cursor-pointer ${onFav ? "bg-error text-white" : "border border-line bg-surface text-ink-soft active:text-error"}`}>
+                <Heart size={20} fill={onFav ? "currentColor" : "none"} />
+              </button>
+            </div>
+            <button onClick={() => setChatOpen(true)}
+              className="mt-2 w-full h-11 flex items-center justify-center gap-2 rounded-[10px] border border-line bg-surface text-sm font-semibold text-ink active:bg-line-soft cursor-pointer">
+              <MessageSquare size={17} /> Написать продавцу
+            </button>
+          </div>
+          {/* компенсатор, чтобы липкая панель не перекрывала контент внизу страницы */}
+          <div className="md:hidden h-[132px]" aria-hidden="true" />
+
+          {/* продавец — обязателен по ст. 12 ЗоЗПП */}
+          <div className="mt-7 bg-surface rounded-2xl shadow-card p-5">
+            <div className="flex items-center gap-3.5 pb-4">
+              {(p as any).avatar ? (
+                <img src={(p as any).avatar} className="w-12 h-12 rounded-[14px] object-cover" />
+              ) : sellerItem ? (
+                session?.avatar ? (
+                  <img src={session.avatar} className="w-12 h-12 rounded-[14px] object-cover" />
+                ) : (
+                  <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: "var(--color-dark)" }}>{((p as any).shopName?.[0] || "М").toUpperCase()}</span>
+                )
+              ) : (
+                <span className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] text-cream" style={{ background: vendor?.avatarColor }}>{vendor?.emoji}</span>
+              )}
+              <div className="flex-1 min-w-0">
+                {(p as any).shopName ? (
+                  <span className="font-bold text-[15px] text-ink">{(p as any).shopName}</span>
+                ) : (
+                  <Link to={`/shop/${vendor?.slug}`} className="font-bold text-[15px] text-ink hover:text-accent-deep transition-colors">{vendor?.name || "Мастерская"}</Link>
+                )}
+                <p className="text-[12px] text-ink-mute flex items-center gap-1.5 mt-0.5">
+                  <MapPin size={12} /> {(p as any).sellerCity || vendor?.city || "Россия"} · <Rating value={(p as any).shopName ? 0 : (vendor?.rating || 0)} size={10} />
+                </p>
+              </div>
+              {(p as any).shopName
+                ? <Badge tone="success"><ShieldCheck size={12} /> Проверенный продавец</Badge>
+                : (vendor?.verified ? <Badge tone="success"><ShieldCheck size={12} /> Проверен</Badge> : <Badge tone="honey">На проверке</Badge>)}
+            </div>
+            <div className="py-3 border-t border-line-soft">
+              <SubscribeButton 
+                targetType="shop" 
+                targetId={sellerItem?.ownerId || (p as any).ownerId || vendor?.id || ""} 
+                variant="small"
+              />
+            </div>
+            <button type="button" onClick={() => setSellerAboutOpen(true)}
+              className="pt-4 border-t border-line-soft w-full group">
+              <div className="flex items-center justify-between gap-2 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent-deep flex items-center justify-center">
+                    <Building2 size={14} />
+                  </span>
+                  <div>
+                    <div className="text-[13px] font-bold text-ink group-hover:text-accent-deep transition-colors">🏛 Подробнее о продавце</div>
+                    <div className="text-[11px] text-ink-mute">История · видео · мастерская · реквизиты</div>
+                  </div>
+                </div>
+                <span className="text-ink-mute group-hover:translate-x-1 transition-transform text-[18px]">›</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* вкладки */}
+      <div className="mt-12">
+        <div className="flex gap-1.5 border-b border-line-soft overflow-x-auto no-scrollbar">
+          {[["desc", "Описание"], ["specs", "Характеристики"], ["delivery", "Доставка"], ["reviews", "Отзывы"]].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id as typeof tab)}
+              className={`px-5 py-3 text-sm font-bold whitespace-nowrap border-b-[2.5px] -mb-px transition-colors cursor-pointer ${tab === id ? "border-accent text-ink" : "border-transparent text-ink-mute hover:text-ink"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="py-7 max-w-3xl">
+          {tab === "desc" && <p className="text-[15px] leading-[1.75] text-ink-soft">{p.description}</p>}
+          {tab === "specs" && (
+            <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
+              {(sellerItem ? [["Материалы", sellerItem.materials?.join(", ") || "—"], ["Производитель", sellerItem.manufacturer || "—"], ["Размеры", p.size], ["Теги", sellerItem.tags?.map((t) => "#" + t).join(" ") || "—"], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Добавлен", fmtDate(p.createdAt)] as [string, string]] : [["Материал", p.material], ["Стиль", p.style], ["Цвет", p.color], ["Размер", p.size], ["Категория", cat?.name || ""], ["Артикул", p.sku], ["Тип", custom ? "На заказ (custom-made)" : "Готовый (ready-made)"], ["Добавлен", fmtDate(p.createdAt)] as [string, string]]).map(([k, v], i) => (
+                <div key={k} className={`flex justify-between gap-4 px-5 py-3 text-[14px] ${i % 2 ? "bg-cream/50" : ""}`}>
+                  <span className="text-ink-soft">{k}</span><span className="font-semibold text-ink text-right">{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {tab === "specs" && <SpecSections category={cat?.name || ""} specs={(sellerItem as any)?.specs || (p as any).specs || []} />}
+          {tab === "delivery" && (
+            <div className="space-y-3 text-[14px] text-ink-soft leading-relaxed">
+              {/* ЭТАП 2 (§2.3): динамический калькулятор логистики — серверный расчёт СДЭК/Почты для города покупателя */}
+              <LogisticsQuoteBox productId={p.id.startsWith("sp-") ? p.id.slice(3) : p.id} fallbackCity={(p as any).sellerCity || vendor?.city || ""} />
+              <p className="flex gap-2.5"><ShieldCheck size={17} className="text-success shrink-0 mt-0.5" /> <span><strong className="text-ink">Безопасная сделка:</strong> деньги резервируются на транзитном счёте и уходят мастеру только после отправки.</span></p>
+              <p className="flex gap-2.5"><MapPin size={17} className="text-ai shrink-0 mt-0.5" /> <span>{sellerItem?.deliveryZone && sellerItem.deliveryZone.mode !== "nationwide" ? <>Зона доставки продавца: <strong className="text-ink">{zoneLabel(sellerItem.deliveryZone, sellerItem.sellerCity || "")}</strong>. За пределы зоны товар не отправляется.</> : <>СДЭК, Boxberry и Почта России — 2–7 дней по России. Отправка из г. {(p as any).sellerCity || vendor?.city}.</>}</span></p>
+              <p className="flex gap-2.5"><Ban size={17} className="text-error shrink-0 mt-0.5" /> <span>{custom ? "Товар изготавливается по индивидуальным параметрам и возврату не подлежит (абз. 4 п. 4 ст. 26.1 ЗоЗПП)." : "Возврат в течение 7 дней с момента получения (ст. 26.1 ЗоЗПП)."}</span></p>
+            </div>
+          )}
+          {tab === "reviews" && <ReviewsSection product={p} />}
+        </div>
+      </div>
+
+      {/* ЛЕНТА ПРОДАВЦА: продукция того же магазина/мастерской/автора —
+          по требованию задачи карточка товара показывает не только витрину
+          продавца, но и ленту его товаров (как в каталоге, так и из «Мои
+          подписки» по клику на подписку открывается та же лента /shop/:id). */}
+      {sellerFeed.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <h2 className="font-display font-bold text-[22px] text-ink">
+              Товары этого продавца
+              {(p as any).shopName ? <span className="text-ink-soft font-semibold"> · {(p as any).shopName}</span> : null}
+            </h2>
+            {(sellerItem?.ownerId || (p as any).ownerId) && (
+              <Link to={`/shop/${encodeURIComponent(String(sellerItem?.ownerId || (p as any).ownerId))}`}
+                className="text-[13px] font-semibold text-accent-deep hover:underline shrink-0">
+                Вся лента ›
+              </Link>
+            )}
+          </div>
+          <ProductGrid items={sellerFeed as any} />
+        </div>
+      )}
+
+      {/* похожие */}
+      {similar.length > 0 && (
+        <div className="mt-10">
+          <h2 className="font-display font-bold text-[22px] text-ink mb-5">Похожие товары</h2>
+          <ProductGrid items={similar} />
+        </div>
+      )}
+
+      <ChatModal open={chatOpen} onClose={() => setChatOpen(false)} kind="product" product={p} />
+      <SellerAboutModal open={sellerAboutOpen} onClose={() => setSellerAboutOpen(false)} sellerData={{ shopName: (p as any)?.shopName, sellerCity: (p as any)?.sellerCity, inn: (p as any)?.inn, legalType: (p as any)?.legalType, avatar: (p as any)?.avatar }} />
+    </div>
+  );
+}

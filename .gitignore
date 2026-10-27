@@ -1,0 +1,15 @@
+tsc.out
+node_modules/
+dist/
+server/dev-db.json
+server/dev-admin.json
+# отладочные артефакты (защита от повторного появления)
+dbg*.mjs
+*.tmp.mjs
+*.tmp.cjs
+flash-test.mjs
+repro-flash.mjs
+cj*.txt
+fee.json
+login.json
+login-admin.sh

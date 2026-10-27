@@ -1,0 +1,3641 @@
+import { ProductWizard_v2 } from "../components/ProductWizard_v2";
+import { DigitalProductWizard, DigitalVersionForm, DigitalAnalyticsModal } from "../components/DigitalProductWizard";
+import { useNotifyStore } from "../lib/notify";
+import { useDigitalStore } from "../lib/digital";
+import type { DigitalProduct } from "../types/digital";
+import { DIGITAL_TYPE_META } from "../types/digital";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
+} from "recharts";
+import { useEffect, useMemo, useState } from "react";
+import { PasswordInput } from "../components/PasswordInput";
+import { CategoryMultiPicker } from "../components/CategoryPicker";
+import { useSearchParams,  Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import {
+  CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
+  ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
+  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, Home, Shirt, Clock,
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag, BellRing} from "lucide-react";
+import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
+import { CITIES, safeDistrictLabel } from "../lib/geo";
+import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from "../lib/inn";
+import { useAppStore } from "../lib/store";
+import { orderOwnerIdLike } from "../lib/ownership";
+import { useMarketProducts, sellerProfileOf } from "../lib/market";
+import {
+  useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById, yearPriceOf,
+  SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX, previewLegalTypeChange, LegalTypePreview, SellerProfile,
+} from "../lib/seller";
+import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
+import {
+  useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
+} from "../lib/subscriptions";
+import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
+import MarketOrderDetail from "../components/MarketOrderDetail";
+import { Markdown } from "../components/markdown";
+;
+import { SellerAvatar } from "../components/SellerAvatar";
+import { SellerPremiumBlocksLite } from "../components/PremiumBlocks";
+import LimitWarning, { LimitCounters, SELLER_WATCHED } from "../components/LimitWarning";
+/* Панели покупателя — переиспользуются в кабинете продавца: продавец тоже покупатель */
+import { BuyerSubscriptionsPanel } from "../components/BuyerSubscriptionsPanel";
+import { BuyerOrdersPanel } from "../components/BuyerOrdersPanel";
+import { BuyerFavoritesPanel, BuyerAddressesPanel, BuyerBonusPanel, BuyerComplaintsPanel } from "../components/BuyerPanels";
+import { BuyerConceptsPanel, BuyerPriceWatchesPanel } from "../components/BuyerConceptPanels";
+import { usePrefsStore } from "../lib/prefs";
+
+/* ============================================================
+   Биржа индивидуальных заказов (пункт меню «Заказы»)
+   ============================================================ */
+/* ЭТАП 3 (п.1): единый жёсткий конвейер статусов заказа (синхронно с
+   серверным ORDER_PIPELINE в server/index.cjs) и его человекочитаемое представление. */
+export const ORDER_STATUS_RU: Record<string, { ru: string; tone: "success" | "honey" | "ai" | "premium" }> = {
+  draft: { ru: "Черновик", tone: "honey" },
+  moderation: { ru: "На модерации", tone: "honey" },
+  published: { ru: "Создан — собирает отклики", tone: "success" },
+  in_progress: { ru: "В работе", tone: "ai" },
+  shipped: { ru: "Отправлен", tone: "ai" },
+  delivered: { ru: "Доставлен", tone: "premium" },
+  confirmed: { ru: "Подтверждён покупателем", tone: "premium" },
+  completed: { ru: "Завершён", tone: "success" },
+  cancelled: { ru: "Отменён", tone: "honey" },
+};
+
+/* MarketOrder, useMarketStore и агент модерации вынесены в src/lib/marketStore.ts
+   (разрыв циклического импорта profile<->extras). Реэкспорт — для совместимости. */
+export type { MarketOrder } from "../lib/marketStore";
+export { useMarketStore, orderOwnerId, moderateOrder } from "../lib/marketStore";
+import { useMarketStore, moderateOrder, type MarketOrder } from "../lib/marketStore";
+
+export function MarketPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Загрузка заказов с сервера при монтировании
+  useEffect(() => {
+    const loadOrders = async () => {
+      try {
+        const response = await fetch('/api/orders');
+        const data = await response.json();
+        if (data.ok && data.orders.length > 0) {
+          const existingIds = new Set(useMarketStore.getState().orders.map(o => o.id));
+          const newOrders = data.orders
+            .filter((o: any) => !existingIds.has(o.id))
+            .map((o: any) => ({
+              id: o.id,
+              title: o.title || 'Без названия',
+              type: o.type || o.category || 'Другое',
+              desc: o.desc || o.description || '',
+              material: o.material || '',
+              budget: Number(o.budget ?? o.budget_min ?? 0),
+              term: o.term || o.deadline || '',
+              region: o.region || '',
+              date: o.date || o.created_at || new Date().toISOString(),
+              status: o.status || 'published',
+              responses: Number(o.responses || 0),
+              refName: o.refName,
+              refType: o.refType,
+              coverImage: o.coverImage || (Array.isArray(o.images) ? o.images[0] : Array.isArray(o.attachments) ? o.attachments[0] : undefined),
+              images: Array.isArray(o.images) ? o.images : Array.isArray(o.attachments) ? o.attachments : [],
+              agentDraft: !!o.agentDraft,
+              agentPhoto: o.agentPhoto || null,
+              user_id: o.user_id,
+              ownerId: o.user_id || o.ownerId || undefined,
+              moderationIssues: Array.isArray(o.moderationIssues) ? o.moderationIssues : [],
+              moderationWarnings: Array.isArray(o.moderationWarnings) ? o.moderationWarnings : [],
+              /* myOwn вычисляется динамически по владельцу (см. isMyOrder),
+                 захардкоженный 'dev-user-1' удалён */
+              myOwn: false,
+              attachments: o.attachments || []
+            }));
+          if (newOrders.length > 0) {
+            useMarketStore.setState((s) => ({ orders: [...newOrders, ...s.orders] }));
+          }
+        }
+      } catch (e) {
+        console.error('[MarketPage] Ошибка загрузки заказов:', e);
+      }
+    };
+    loadOrders();
+  }, []);
+  const focusId = searchParams.get("focus") || "";
+  const [editingDraft, setEditingDraft] = useState<string | null>(null);
+  useEffect(() => {
+    if (focusId) {
+      const el = document.getElementById("order-" + focusId);
+      if (el) { setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 200); }
+      const t = setTimeout(() => { const p = new URLSearchParams(searchParams); p.delete("focus"); setSearchParams(p, { replace: true }); }, 4000);
+      return () => clearTimeout(t);
+    }
+  }, [focusId]);
+  const [draftForm, setDraftForm] = useState<any>({});
+  const [editOrderId, setEditOrderId] = useState<string | null>(null);
+  const [editPhoto, setEditPhoto] = useState<string | null>(null);
+  const user = useAppStore((s) => s.session);
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
+  const sellerSub = useSellerAccount((s) => s);
+  const isTopTier = buyerPlan === "premium" || (["self_employed", "ip", "ooo"] as SellerLegalType[]).some((t) => { const list = SELLER_PLANS[t]; return list.length > 0 && sellerSub.getPlan(user?.userId || "guest", t) === list[list.length - 1].id; });
+  const lim = { ...buyerLimits(buyerPlan), marketOrders: isTopTier ? Infinity : buyerLimits(buyerPlan).marketOrders };
+  const orders = useMarketStore((s) => s.orders);
+  const responded = useMarketStore((s) => s.responded);
+  const addOrder = useMarketStore((s) => s.addOrder);
+  const respond = useMarketStore((s) => s.respond);
+  const sellerActive = useSellerReg((s) => s.status === "active");
+
+  /* ===== Правило владения (ТЗ «Фундаментальный принцип») =====
+     isMine(o) — текущий пользователь является владельцем заказа.
+     Гость (user === null) → false: только публичная информация,
+     без кнопок редактирования/удаления и без чужих откликов. */
+  const uid = user?.userId || "";
+  const isMine = (o: MarketOrder) => {
+    const owner = orderOwnerIdLike(o);
+    return !!uid && !!owner && owner === uid;
+  };
+
+  const patchOrder = async (id: string, patch: any) => {
+    /* Правило владения: чужой заказ не мутируется локально;
+       сервер дополнительно проверит JWT (403 not_owner). */
+    const target = useMarketStore.getState().orders.find((o) => o.id === id);
+    if (!target || !isMine(target)) return;
+    useMarketStore.setState((st) => ({ orders: st.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
+    const updated = useMarketStore.getState().orders.find((o) => o.id === id);
+    try {
+      const res = await fetch('/api/orders/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+
+      if (res.status === 404 && updated) {
+        const postRes = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+        const postData = await postRes.json();
+        const newId = postData && postData.order ? postData.order.id : null;
+        if (newId) {
+          useMarketStore.setState((st) => ({
+            orders: st.orders.map((o) => (o.id === id ? { ...o, id: newId } : o))
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('[sync PUT/POST]', e);
+    }
+  };
+  const removeOrder = async (id: string) => {
+    /* Правило владения: удалять заказ может только владелец */
+    const target = useMarketStore.getState().orders.find((o) => o.id === id);
+    if (!target || !isMine(target)) return;
+    useMarketStore.setState((st) => ({ orders: st.orders.filter((o) => o.id !== id) }));
+    try { await fetch('/api/orders/' + id, { method: 'DELETE' }); } catch (e) { console.error('[sync DELETE]', e); }
+  };
+  const startEdit = (o: any) => { if (!isMine(o)) return; setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); const photos: Array<{ name: string; type: "image" | "video"; url: string }> = []; if (o.images && o.images.length > 0) { o.images.forEach((url: string, idx: number) => photos.push({ name: o.refName || "Фото " + (idx+1), type: "image", url })); } else if (o.coverImage) { photos.push({ name: "Обложка", type: "image", url: o.coverImage }); } else if (o.agentPhoto) { photos.push({ name: "Фото агента", type: "image", url: o.agentPhoto }); } setRefs(photos); setSelectedCoverImage(o.coverImage || photos[0]?.url || null); setFErr(""); setWizardOpen(true); };
+  const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
+  const cancelEdit = () => { setEditingDraft(null); };
+  const sendDraft = (id: string) => {
+    const o = useMarketStore.getState().orders.find((x) => x.id === id);
+    const verdict = moderateOrder(o || {});
+    const p: any = { agentDraft: false, moderationIssues: verdict.issues, moderationWarnings: verdict.warnings, status: verdict.issues.length ? "moderation" : "published" };
+    patchOrder(id, p);
+    useNotifyStore.getState().push(verdict.issues.length ? { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + verdict.issues.length + ". " + verdict.issues.join(" ") + " Исправьте и отправьте снова." } : { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (verdict.warnings.length ? " Рекомендации: " + verdict.warnings.join(" ") : "") });
+  };
+  const saveDraft = (send: boolean) => {
+    if (!editOrderId) return;
+    if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
+    const patch: any = { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion };
+    if (editPhoto) patch.agentPhoto = editPhoto;
+    if (refs.length > 0) { patch.refName = refs[0].name; patch.refType = refs[0].type; patch.coverImage = selectedCoverImage || refs[0].url; patch.images = refs.map(r => r.url); }
+    if (send) {
+      patch.agentDraft = false;
+      const candidate = { ...(useMarketStore.getState().orders.find((o) => o.id === editOrderId) || {}), ...patch };
+      const verdict = moderateOrder(candidate);
+      patch.status = verdict.issues.length ? "moderation" : "published";
+      patch.moderationIssues = verdict.issues;
+      patch.moderationWarnings = verdict.warnings;
+    }
+    patchOrder(editOrderId, patch);
+    if (send) {
+      useNotifyStore.getState().push(patch.status === "published" ? { kind: "report", title: "Агент модерации: заказ опубликован", text: "Карточка прошла все проверки." + (patch.moderationWarnings?.length ? " Рекомендации: " + patch.moderationWarnings.join(" ") : "") } : { kind: "alert", title: "Агент модерации: заказ не опубликован", text: "Замечаний: " + patch.moderationIssues.length + ". " + patch.moderationIssues.join(" ") + " Исправьте и нажмите «Сохранить и опубликовать» снова." });
+    } else {
+      useNotifyStore.getState().push({ kind: "report", title: "Черновик обновлён", text: "Изменения сохранены, включая фото референса." });
+    }
+    setEditOrderId(null); setEditPhoto(null); setRefs([]); setFErr(""); setWizardOpen(false);
+  };
+  const deleteDraft = (id: string) => { if (confirm("Удалить черновик безвозвратно?")) { removeOrder(id); useNotifyStore.getState().push({ kind: "report", title: "Черновик удалён", text: "Запись убрана с биржи." }); } };
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [fType, setFType] = useState("Мебель и интерьер");
+  const [fBudget, setFBudget] = useState("30000");
+  const [fTerm, setFTerm] = useState("1–2 месяца");
+  const [fRegion, setFRegion] = useState("ЦФО");
+  const [fMaterial, setFMaterial] = useState("Дуб");
+  const [fTitle, setFTitle] = useState("");
+  const [fDesc, setFDesc] = useState("");
+  const [refs, setRefs] = useState<Array<{ name: string; type: "image" | "video"; url: string; file?: File }>>([]);
+  const [selectedCoverImage, setSelectedCoverImage] = useState<string | null>(null);
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+  const [respondOrderId, setRespondOrderId] = useState<string | null>(null);
+  const [fErr, setFErr] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  /* ЭТАП 4 (§4.1): защищённое предзаполнение исполнителя — карточка мастера
+     открывает /market?invite=<masterId>&new=1; id приглашённого мастера
+     фиксируется в адресном заказе на сервере (POST /api/orders). */
+  const invitedMasterId = searchParams.get("invite") || "";
+  useEffect(() => {
+    if (invitedMasterId) { setEditOrderId(null); setWizardOpen(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invitedMasterId]);
+  
+  const REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
+
+  const myActive = orders.filter((o) => isMine(o) && o.status === "published").length;
+  const overLimit = myActive >= lim.marketOrders;
+
+  const TYPES = [
+  "Мебель и интерьер", "Декор и аксессуары", "Освещение", "Текстиль и одежда", 
+  "3D-печать и прототипирование", "Ковка и металл", "Керамика и стекло", "Кожа и дерево", 
+  "Ювелирные изделия", "Строительство и ремонт", "Садоводство и благоустройство", 
+  "Искусство и живопись", "Полиграфия и печать", "Электроника и гаджеты", "Другое",
+  "Столярные изделия", "Резьба по дереву", "Художественная ковка", "Лазерная резка", 
+  "Гравировка", "Вышивка и шитье", "Вязание", "Лоскутное шитье", "Изделия из кожи", 
+  "Плетение из лозы", "Макраме", "Бисероплетение", "Скрапбукинг", "Декупаж", 
+  "Мыловарение", "Свечеварение", "Гончарное дело", "Флористика", "Фитодизайн", 
+  "Аэрография", "Роспись по ткани", "Витражи", "Мозаика", "Лепка", "Скульптура", 
+  "Реставрация", "Пошив штор", "Дизайн интерьера", "Архитектурное моделирование", 
+  "Сувенирная продукция", "Упаковка и брендирование", "Изготовление штампов", 
+  "Переплетное дело", "Ремонт обуви", "Ремонт одежды", "Кастомизация одежды"
+];
+  const visible = orders
+    /* Публичный список: опубликованные заказы + собственные (любое состояние).
+       Черновики и заказы на модерации других пользователей не видны никому. */
+    .filter((o) => o.status === "published" || isMine(o))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const detailOrder = visible.find((o: any) => o.id === detailOrderId);
+  const respondOrder = visible.find((o: any) => o.id === respondOrderId);
+
+  const publish = () => {
+    if (!user) { setFErr("Войдите, чтобы разместить заказ."); return; }
+    if (editOrderId) {
+      patchOrder(editOrderId, { title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion });
+      useNotifyStore.getState().push({ kind: "report", title: "Черновик обновлён", text: "Изменения сохранены. Черновик остаётся на бирже до отправки мастерам." });
+      setEditOrderId(null); setFTitle(""); setFDesc(""); setRefs([]); setFErr("");
+      setWizardOpen(false);
+      return;
+    }
+    if (overLimit) { setFErr(buyerPlan === "premium" ? `Тариф Премиум: максимум ${fmtLimit(lim.marketOrders)} активных заказов. Завершите или удалите один из заказов.` : `Лимит тарифа: ${fmtLimit(lim.marketOrders)} активных заказов. Улучшите тариф.`); return; }
+    if (fTitle.trim().length < 3 || fDesc.trim().length < 10) { setFErr("Заполните название и описание (минимум 10 символов)."); return; }
+    addOrder({ title: fTitle.trim(), type: fType, desc: fDesc.trim(), material: fMaterial, budget: +fBudget || 0, term: fTerm, region: fRegion, refName: refs[0]?.name, refType: refs[0]?.type, master_requested: invitedMasterId || undefined });
+    setFTitle(""); setFDesc(""); setRefs([]); setFErr("");
+    setWizardOpen(false);
+  };
+
+  return (
+    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
+      <div className="flex items-end justify-between flex-wrap gap-4 mb-7">
+        <div>
+          <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Биржа индивидуальных заказов</h1>
+          <p className="text-[14px] text-ink-soft max-w-xl">Опишите, что нужно изготовить, — мастера пришлют предложения. Сделка защищена: предоплата резервируется на платформе.</p>
+        </div>
+        <Btn size="lg" onClick={() => { setEditOrderId(null); setFTitle(""); setFDesc(""); setFMaterial(""); setFBudget(""); setRefs([]); setFErr(""); setWizardOpen(true); }}><Sparkles size={18} /> Создать заказ</Btn>
+      </div>
+
+      {overLimit && (
+        <div className="flex items-center gap-2.5 bg-premium-soft border border-premium/40 rounded-[10px] px-4 py-3 mb-6">
+          <AlertTriangle size={16} className="text-[#a07c50] shrink-0" />
+          {buyerPlan === "premium" ? (
+            <p className="text-[13px] text-ink flex-1">Тариф Премиум: это максимум активных заказов ({fmtLimit(lim.marketOrders)}). Завершите или удалите один из заказов, чтобы разместить новый.</p>
+          ) : (
+            <p className="text-[13px] text-ink flex-1">Вы достигли лимита активных заказов ({fmtLimit(lim.marketOrders)}). <Link to="/plans" className="font-bold text-accent-deep underline">Улучшить тариф</Link></p>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {visible.length === 0 && (
+          <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+            <p className="text-[14px] font-bold text-ink mb-1">Заказов на бирже пока нет</p>
+            <p className="text-[13px] text-ink-soft">Опишите, что нужно изготовить, — мастера увидят заказ и пришлют предложения. Или создайте первый заказ сами.</p>
+          </div>
+        )}
+        {visible.map((o, i) => (
+          <div id={"order-" + o.id} key={o.id} className={`bg-surface rounded-2xl shadow-card overflow-hidden fade-up ${focusId === o.id ? "ring-2 ring-accent" : ""} ${(o as any).agentDraft ? "border-2 border-accent/40" : ""}`} style={{ animationDelay: `${(i % 6) * 60}ms` }}>
+            <div className="relative h-40 bg-cream/50 border-b border-line-soft flex items-center justify-center overflow-hidden group">
+              {o.coverImage ? (
+                <img src={o.coverImage} alt={o.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              ) : (
+                <div className="text-center">
+                  <Boxes size={32} className="text-ink-mute mx-auto mb-2" />
+                  <p className="text-[12px] font-semibold text-ink-mute">Без фото</p>
+                </div>
+              )}
+              <div className="absolute top-3 right-3 flex gap-2">
+                {o.status === "moderation" ? <Badge tone="honey">На модерации{(o as any).moderationIssues?.length ? " · " + (o as any).moderationIssues.length : ""}</Badge>
+                : (o as any).agentDraft ? <Badge tone="ai">Черновик</Badge>
+                : isMine(o) ? <Badge tone="ai">Ваш заказ</Badge> : <Badge tone="neutral">{o.type}</Badge>}
+              </div>
+            </div>
+            <div className="p-5">
+              <h2 className="font-bold text-[17px] text-ink leading-tight mb-2 line-clamp-2">{o.title}</h2>
+              <p className="text-[13px] text-ink-soft leading-relaxed mb-4 line-clamp-3">{o.desc}</p>
+              {/* ТЗ 11.2: на мобильных сетки перестраиваются в одну колонку */}
+              <div className="grid xs:grid-cols-2 gap-y-3 text-[12.5px] mb-4">
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Бюджет</span><span className="font-bold text-ink text-[14px]">до {fmt(o.budget)}</span></div>
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Срок</span><span className="font-semibold text-ink">{o.term}</span></div>
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Материал</span><span className="font-semibold text-ink">{o.material || "Не указан"}</span></div>
+                <div><span className="text-ink-mute block text-[11px] uppercase tracking-wide mb-0.5">Регион</span><span className="font-semibold text-ink truncate" title={o.region}>{o.region}</span></div>
+              </div>
+              <div className="flex items-center justify-between pt-4 border-t border-line-soft gap-2 flex-wrap">
+                <span className="text-[11px] text-ink-mute">{fmtDate(o.date)} · {isMine(o) || o.status !== "published" ? <><strong className="text-ink">{o.responses + (responded.includes(o.id) ? 1 : 0)}</strong> откликов</> : "отклики скрыты"}</span>
+                <div className="flex gap-2 flex-wrap">
+                  {/* Управление заказом — ТОЛЬКО владельцу (правило владения, без исключений).
+                      Гость и чужие пользователи этих кнопок не видят. */}
+                  {isMine(o) && (
+                    <>
+                      <button onClick={() => setDetailOrderId(o.id)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Eye size={12} /> Подробнее</button>
+                      <button onClick={() => startEdit(o)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Edit3 size={12} /> Изменить</button>
+                      {(o as any).agentDraft && o.status === "draft" && (
+                        <button onClick={() => sendDraft(o.id)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-accent text-ink text-[12px] font-bold hover:bg-accent-deep cursor-pointer flex items-center gap-1 transition-colors"><Send size={12} /> Отправить</button>
+                      )}
+                      <button onClick={() => deleteDraft(o.id)} className="h-9 xs:h-8 min-h-[36px] w-9 px-0 rounded-lg bg-error/10 text-error text-[12px] font-bold hover:bg-error/20 cursor-pointer flex items-center justify-center transition-colors" title="Удалить" aria-label="Удалить заказ"><Trash2 size={12} /></button>
+                    </>
+                  )}
+                  {/* Откликнуться: авторизованный мастер, не владелец, опубликованный заказ.
+                      Гостю показывается мягкий призыв войти вместо формы. */}
+                  {!isMine(o) && o.status === "published" && (
+                    !user ? (
+                      <Link to="/auth" className="h-9 min-h-[36px] px-3 rounded-lg border border-line text-ink text-[12px] font-bold hover:bg-line-soft flex items-center gap-1 transition-colors">Войдите, чтобы откликнуться</Link>
+                    ) : sellerActive ? (
+                      responded.includes(o.id)
+                        ? <span className="h-9 min-h-[36px] px-3 rounded-lg bg-success/10 text-success text-[12px] font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Отклик отправлен</span>
+                        : <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn><Btn size="sm" onClick={() => setRespondOrderId(o.id)}>Откликнуться</Btn></div>
+                    ) : (
+                      <Btn size="sm" variant="outline" onClick={() => setDetailOrderId(o.id)}>Подробнее</Btn>
+                    )
+                  )}
+                  {!isMine(o) && o.status !== "published" && (
+                    <button onClick={() => setDetailOrderId(o.id)} className="h-9 xs:h-8 min-h-[36px] px-3 rounded-lg bg-line-soft text-ink text-[12px] font-bold hover:bg-line cursor-pointer flex items-center gap-1 transition-colors"><Eye size={12} /> Подробнее</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {visible.length === 0 && (
+        <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
+          <p className="text-[44px] mb-3">🛠️</p>
+          <p className="font-display font-bold text-[20px] text-ink mb-2">Заказов пока нет</p>
+          <p className="text-[14px] text-ink-soft">Создайте первый индивидуальный заказ.</p>
+        </div>
+      )}
+
+
+      {/* Модальное окно подробностей заказа */}
+      <Modal open={!!detailOrderId} onClose={() => setDetailOrderId(null)} title="Подробности заказа" wide>
+        {detailOrder && (
+          <div className="space-y-4">
+            {detailOrder.coverImage && (
+              <img src={detailOrder.coverImage} alt={detailOrder.title} className="w-full h-64 object-cover rounded-xl" />
+            )}
+            <div>
+              <h3 className="font-bold text-[20px] text-ink mb-2">{detailOrder.title}</h3>
+              <p className="text-[14px] text-ink-soft leading-relaxed">{detailOrder.desc}</p>
+            </div>
+            <div className="grid xs:grid-cols-2 gap-4 bg-cream/50 rounded-xl p-4">
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Бюджет</span><span className="font-bold text-[16px] text-ink">до {fmt(detailOrder.budget)}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Срок</span><span className="font-semibold text-ink">{detailOrder.term}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Материал</span><span className="font-semibold text-ink">{detailOrder.material || "Не указан"}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Регион</span><span className="font-semibold text-ink">{detailOrder.region}</span></div>
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Категория</span><span className="font-semibold text-ink">{detailOrder.type}</span></div>
+              {/* ЭТАП 3 (п.1): единый человекочитаемый маппинг конвейера статусов */}
+              <div><span className="text-[11px] uppercase tracking-wide text-ink-mute block">Статус</span><Badge tone={ORDER_STATUS_RU[detailOrder.status]?.tone || "honey"}>{ORDER_STATUS_RU[detailOrder.status]?.ru || detailOrder.status}</Badge></div>
+              {detailOrder.status === "moderation" && (detailOrder as any).moderationIssues?.length > 0 && (
+                <div className="col-span-full rounded-[10px] bg-accent-soft p-3">
+                  <p className="text-[12px] font-bold text-ink mb-1">🤖 Агент модерации: исправьте замечания и отправьте заказ снова</p>
+                  <ul className="list-disc pl-4 text-[12px] text-ink-soft space-y-0.5">{(detailOrder as any).moderationIssues.map((t: string, i: number) => (<li key={i}>{t}</li>))}</ul>
+                </div>
+              )}
+            </div>
+            {detailOrder.images && detailOrder.images.length > 0 && (
+              <div>
+                <p className="text-[12px] font-semibold text-ink-mute mb-2">Фотографии ({detailOrder.images.length}):</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {detailOrder.images.map((img, idx) => (
+                    <img key={idx} src={img} alt="" className="aspect-square object-cover rounded-lg border border-line-soft cursor-pointer hover:ring-2 hover:ring-accent transition-all" />
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Кнопка отклика: только авторизованному не-владельцу опубликованного заказа.
+                Гостю — призыв войти; владельцу — ничего (управление в карточке). */}
+            {!isMine(detailOrder) && detailOrder.status === "published" && (
+              <div className="pt-4 border-t border-line-soft">
+                {!user ? (
+                  <Link to="/auth" className="block w-full h-[44px] leading-[44px] text-center rounded-xl border border-line font-bold text-[14px] text-ink hover:bg-line-soft transition-colors">Войдите, чтобы откликнуться</Link>
+                ) : sellerActive ? (
+                  responded.includes(detailOrder.id) ? (
+                    <p className="text-center text-success font-semibold flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Вы уже откликнулись на этот заказ</p>
+                  ) : (
+                    <Btn size="lg" className="w-full" onClick={() => { setDetailOrderId(null); setRespondOrderId(detailOrder.id); }}>Откликнуться на заказ</Btn>
+                  )
+                ) : (
+                  <p className="text-center text-[13px] text-ink-soft">Откликаться могут мастера с подтверждённым профилем.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Модальное окно детальной карточки: роль наблюдателя определяет доступный функционал
+          (владелец — отклики/статусы/предоплата; чужой мастер — только отклик; гость — публичные данные) */}
+      {detailOrder && (
+        <MarketOrderDetail
+          order={detailOrder}
+          role={!user ? "guest" : isMine(detailOrder) ? "owner" : "other"}
+          onClose={() => setDetailOrderId(null)}
+          onStatusChange={(id, status) => patchOrder(id, { status })}
+        />
+      )}
+
+      {/* Модальное окно отклика мастера */}
+      {respondOrder && (
+        <MarketOrderDetail
+          order={respondOrder}
+          role={!user ? "guest" : isMine(respondOrder) ? "owner" : "other"}
+          onClose={() => setRespondOrderId(null)}
+          onStatusChange={(id, status) => patchOrder(id, { status })}
+        />
+      )}
+
+      {/* AI-визард */}
+      <Modal open={wizardOpen} onClose={() => { setWizardOpen(false); setEditOrderId(null); }} title={editOrderId ? "Редактирование черновика" : invitedMasterId ? "Адресный заказ мастеру" : "Новый индивидуальный заказ"} wide>
+        {/* ЭТАП 4 (§4.1): поле исполнителя заранее и защищённо заполнено id мастера;
+            снять или подменить его в форме нельзя — сервер перезафиксирует из сессии. */}
+        {invitedMasterId && !editOrderId && (
+          <div className="mb-4 flex items-center gap-2 bg-accent/10 border border-accent/30 rounded-[10px] px-4 py-2.5">
+            <ShieldCheck size={16} className="text-accent-deep shrink-0" />
+            <p className="text-[13px] text-ink font-semibold">Исполнитель закреплён: <span className="text-accent-deep">{invitedMasterId}</span>. Откликнуться на этот заказ сможет только этот мастер.</p>
+          </div>
+        )}
+        <p className="text-[13px] text-ink-soft mb-5 flex items-center gap-2"><Sparkles size={15} className="text-ai" /> AI-помощник поможет мастеру понять задачу. Прикрепите референс и опишите детали.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Field label="Название" required>
+            <input className="field" value={fTitle} onChange={(e) => setFTitle(e.target.value)} placeholder="Например: Дубовый стол на кухню" />
+          </Field>
+          <Field label="Тип изделия" required>
+            <input list="types-datalist" value={fType} onChange={(e) => setFType(e.target.value)} placeholder="Начните вводить или выберите..." className="w-full h-[44px] px-4 rounded-[10px] border border-line bg-cream/50 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all" />
+            <datalist id="types-datalist">
+              {TYPES.map(t => <option key={t} value={t} />)}
+            </datalist>
+          </Field>
+          <Field label="Материал">
+            <input className="field" value={fMaterial} onChange={(e) => setFMaterial(e.target.value)} placeholder="Дуб, ротанг, лён…" />
+          </Field>
+          <Field label="Бюджет, ₽" required>
+            <input className="field" inputMode="numeric" value={fBudget} onChange={(e) => setFBudget(e.target.value.replace(/\D/g, ""))} placeholder="30000" />
+          </Field>
+          <Field label="Срок">
+            <select className="field" value={fTerm} onChange={(e) => setFTerm(e.target.value)}>
+              {!["2–3 недели", "1–2 месяца", "2–3 месяца", "Не срочно"].includes(fTerm) && <option>{fTerm}</option>}
+              {["2–3 недели", "1–2 месяца", "2–3 месяца", "Не срочно"].map((t) => <option key={t}>{t}</option>)}
+            </select>
+          </Field>
+          <Field label="Регион доставки / Адрес">
+            <input type="text" value={fRegion} onChange={(e) => setFRegion(e.target.value)} placeholder="Например: Москва, ул. Ленина 10" className="w-full h-[44px] px-4 rounded-[10px] border border-line bg-cream/50 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all" />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Field label="Описание" required>
+            <textarea className="field" rows={4} value={fDesc} onChange={(e) => setFDesc(e.target.value)} placeholder="Габариты, стиль, особые пожелания…" />
+          </Field>
+        </div>
+        <div className="mt-4">
+          {/* Зона превью загруженных файлов */}
+          {refs.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[12px] font-semibold text-ink-mute mb-2">Прикрепленные файлы:</p>
+              <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+                {refs.map((file, idx) => (
+                  <div key={idx} className="relative group">
+                    {file.type === "video" ? (
+                      <div className="aspect-square bg-cream rounded-[8px] border border-line flex items-center justify-center">
+                        <Video size={24} className="text-ai" />
+                      </div>
+                    ) : (
+                      <img src={file.url} alt="" className="aspect-square object-cover rounded-[8px] border border-line" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setRefs((prev) => prev.filter((_, i) => i !== idx)); }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-cream rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
+                      aria-label="Удалить файл"
+                    >
+                      <X size={12} />
+                    </button>
+                    <p className="text-[9px] text-ink-soft mt-1 truncate" title={file.name}>{file.name.slice(0, 12)}{file.name.length > 12 ? '...' : ''}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Кнопка загрузки */}
+          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-line rounded-[10px] px-4 py-4 cursor-pointer hover:border-ai hover:bg-ai-soft/40 transition-colors w-full">
+            <Upload size={18} className="text-ink-mute" />
+            <span className="text-[13px] font-semibold text-ink-soft">
+              {editPhoto ? "Фото черновика прикреплено" : (refs.length > 0 ? "Добавить еще фото или видео" : "Прикрепить фото и видео (до 10 фото + 1 видео)")}
+            </span>
+            <input 
+              type="file" 
+              accept="image/*,video/*" 
+              multiple 
+              className="hidden" 
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                const videoCount = refs.filter(r => r.type === "video").length;
+                const imageCount = refs.filter(r => r.type === "image").length;
+                
+                files.forEach((f) => {
+                  const isVideo = f.type.startsWith("video/");
+                  if (isVideo && videoCount >= 1) {
+                    setFErr("Можно загрузить только одно видео");
+                    return;
+                  }
+                  if (!isVideo && imageCount >= 10) {
+                    setFErr("Можно загрузить не более 10 фото");
+                    return;
+                  }
+                  const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+                  if (f.size > maxSize) {
+                    setFErr('Файл "' + f.name + '" слишком большой (макс ' + (isVideo ? '50' : '10') + 'MB)');
+                    return;
+                  }
+                  
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    setRefs((prev) => [...prev, {
+                      name: f.name,
+                      type: isVideo ? "video" : "image",
+                      url: reader.result as string,
+                      file: f
+                    }]);
+                    setFErr("");
+                  };
+                  reader.readAsDataURL(f);
+                });
+                e.target.value = "";
+              }} 
+            />
+          </label>
+          
+          {refs.length > 0 && (
+            <button 
+              type="button"
+              onClick={(e) => { e.preventDefault(); setRefs([]); }} 
+              className="mt-2 text-[12px] font-semibold text-error hover:text-error-deep cursor-pointer flex items-center gap-1"
+            >
+              <X size={12} /> Очистить все файлы
+            </button>
+          )}
+        </div>
+        {fErr && <p className="text-[12.5px] font-semibold text-error mt-3">{fErr}</p>}
+        {refs.length > 1 && (
+          <div className="mt-4">
+            <p className="text-[12px] font-semibold text-ink-mute mb-2">Выберите обложку для карточки заказа:</p>
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+              {refs.filter(r => r.type === "image").map((file, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSelectedCoverImage(file.url)}
+                  className={`relative group aspect-square rounded-lg border-2 overflow-hidden transition-all ${selectedCoverImage === file.url ? 'border-accent ring-2 ring-accent/30' : 'border-line-soft hover:border-accent/50'}`}
+                  title={file.name}
+                >
+                  <img src={file.url} alt="" className="w-full h-full object-cover" />
+                  {selectedCoverImage === file.url && (
+                    <div className="absolute inset-0 bg-accent/80 flex items-center justify-center">
+                      <Check size={20} className="text-cream" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-ink-soft mt-2">Первое фото будет обложкой по умолчанию</p>
+          </div>
+        )}
+        {editOrderId ? (
+          <div className="flex gap-3 mt-5">
+            <Btn size="lg" className="flex-1" variant="outline" onClick={() => saveDraft(false)}>Сохранить черновик</Btn>
+            <Btn size="lg" className="flex-1" onClick={() => saveDraft(true)}>Сохранить и опубликовать</Btn>
+          </div>
+        ) : (
+          <Btn size="lg" className="w-full mt-5" onClick={publish}>Опубликовать заказ</Btn>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/* ============================================================
+   Тарифы: покупатели (4 тарифа) и продавцы (3 юрлица)
+   Страница отображает тарифы ТОЛЬКО по роли активной сессии.
+   ============================================================ */
+export function PlansPage() {
+  const session = useAppStore((s) => s.session);
+  const login = useAppStore((s) => s.login);
+  
+  const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
+  const setBuyerPlan = (p: BuyerPlanId) => useSubStore.getState().setBuyerPlan(session?.userId || "guest", p);
+  const acc = useSellerAccount();
+  const reg = useSellerReg();
+
+  /* Состояния для переключателей (используются только гостями) */
+  const [audience, setAudience] = useState<"buyer" | "seller">("buyer");
+  const [sellerType, setSellerType] = useState<SellerLegalType>("self_employed");
+
+  /* Определяем роль для отображения тарифов строго из активной сессии */
+  const role = session?.role || null;
+  const sessSellerType = session?.sellerType || null;
+  
+  /* Если пользователь зарегистрирован как продавец — показываем только его тарифы */
+  const isRegisteredSeller = reg.status === "active" && !!reg.legalType;
+  
+  /* Для гостя показываем переключатель, для залогиненного — только его линейку */
+  const showBuyerTariffs = role === "buyer" || (!role && audience === "buyer");
+  const showSellerTariffs = (role === "seller" && (!!sessSellerType || isRegisteredSeller)) || (!role && audience === "seller");
+  
+  /* Эффективный тип юрлица: из сессии или из регистрации, или выбранный гостем */
+  const effectiveSellerType: SellerLegalType = sessSellerType || (isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType);
+
+  const BUYER_PRICES: Record<BuyerPlanId, number> = { free: 0, start: 500, designer: 1000, premium: 1500 };
+  const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Бесплатный", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
+  const BUYER_FEATURES: Record<BuyerPlanId, string[]> = {
+    free: ["AI-агент: диалог и поиск по каталогу", "2 AI-генерации в месяц", "1 индивидуальный заказ", "Базовый поиск", "Без уведомлений о ценах"],
+    start: ["AI-агент: фото-поиск и мониторинг (3 задачи)", "15 AI-генераций", "3 индивидуальных заказа", "Фильтры качества", "Скидка 3% на заказы", "10 отслеживаемых цен"],
+    designer: ["AI-агент: проекты интерьера и корзина (10 задач)", "50 AI-генераций", "10 индивидуальных заказов", "Скидка 5%", "Ранний доступ к коллекциям", "Безлимит отслеживания цен"],
+    premium: ["AI-агент-партнёр: безлимит задач, черновики заказов", "Безлимит AI-генераций", "Безлимит заказов", "Скидка 7%", "Персональный куратор", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
+  };
+
+  const price = (id: BuyerPlanId) => {
+    const m = BUYER_PRICES[id];
+    if (m === 0) return "0 ₽";
+    return period === "month" ? `${m} ₽/мес` : `${Math.round((m * 12 * 0.8) / 10) * 10} ₽/год`;
+  };
+
+  const [period, setPeriod] = useState<"month" | "year">("month");
+
+  return (
+    <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
+      <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2 text-center">Тарифы</h1>
+      <p className="text-[14px] text-ink-soft mb-8 text-center max-w-xl mx-auto">Подписки открывают AI-инструменты, приоритеты и сниженные комиссии.</p>
+
+      {/* переключатель аудиторий — только для гостей (незалогиненных) */}
+      {!session && (
+        <div className="flex items-center justify-center mb-8">
+          <div className="inline-flex bg-line-soft rounded-[14px] p-1.5">
+            {([["buyer", "Покупателям"], ["seller", "Продавцам"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setAudience(id)}
+                className={`h-12 px-8 rounded-[10px] text-[14px] font-bold transition-all duration-200 cursor-pointer ${audience === id ? "bg-dark text-cream shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showBuyerTariffs && !showSellerTariffs ? (
+        <>
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
+              {([["month", "Месяц"], ["year", "Год −20%"]] as const).map(([id, label]) => (
+                <button key={id} onClick={() => setPeriod(id)}
+                  className={`h-10 px-6 rounded-[10px] text-[13px] font-bold transition-all cursor-pointer ${period === id ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(Object.keys(BUYER_PRICES) as BuyerPlanId[]).map((id, i) => {
+              const active = buyerPlan === id;
+              const isPremium = id === "premium";
+              return (
+                <div key={id} className={`rounded-2xl p-6 flex flex-col fade-up ${isPremium ? "bg-dark text-cream shadow-lift" : "bg-surface shadow-card"}`} style={{ animationDelay: `${i * 60}ms` }}>
+                  {isPremium && <Badge tone="premium" className="self-start mb-3"><Gem size={11} /> Максимум</Badge>}
+                  <h2 className={`font-display font-bold text-[19px] ${isPremium ? "text-cream" : "text-ink"}`}>{BUYER_NAMES[id]}</h2>
+                  <p className={`font-display font-extrabold text-[28px] mt-2 ${isPremium ? "text-accent" : "text-ink"}`}>{price(id)}</p>
+                  <ul className="mt-4 space-y-2 flex-1">
+                    {BUYER_FEATURES[id].map((f) => (
+                      <li key={f} className={`flex items-start gap-2 text-[12.5px] ${isPremium ? "text-cream/80" : "text-ink-soft"}`}>
+                        <CheckCircle2 size={14} className={isPremium ? "text-accent shrink-0 mt-0.5" : "text-success shrink-0 mt-0.5"} /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Btn className="w-full mt-5" variant={active ? "outline" : isPremium ? "primary" : "dark"} disabled={active}
+                    onClick={() => setBuyerPlan(id)}>
+                    {active ? "Текущий тариф" : id === "free" ? "Бесплатно" : "Подключить"}
+                  </Btn>
+                </div>
+              );
+            })}
+          </div>
+          {session && session.role === "buyer" && (
+            <div className="mt-8 flex justify-center">
+              <Link to="/profile" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
+                В личный кабинет покупателя <ArrowRight size={17} />
+              </Link>
+            </div>
+          )}
+        </>
+      ) : showSellerTariffs ? (
+        <>
+          {/* переключатель юрлиц — только для гостей; зарегистрированный продавец видит только свои тарифы */}
+          {!session && !isRegisteredSeller ? (
+            <div className="flex justify-center mb-8">
+              <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
+                {SELLER_TYPES.map((t) => (
+                  <button key={t.type} onClick={() => setSellerType(t.type)}
+                    className={`h-10 px-5 rounded-[10px] text-[13px] font-bold transition-all cursor-pointer ${sellerType === t.type ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                    {t.short} · {t.commission}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-[13px] text-ink-soft mb-6">
+              Тарифы для <strong className="text-ink">{sellerTypeInfo(effectiveSellerType)?.label}</strong>
+            </p>
+          )}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex bg-line-soft rounded-[12px] p-1.5">
+              {([["month", "Месяц"], ["year", "Год −20%"]] as const).map(([id, label]) => (
+                <button key={id} onClick={() => setPeriod(id)}
+                  className={`h-10 px-6 rounded-[10px] text-[13px] font-bold transition-all cursor-pointer ${period === id ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {SELLER_PLANS[effectiveSellerType].map((plan, i) => {
+              const active = acc.getPlan(session?.userId || "guest", effectiveSellerType) === plan.id;
+              const limits = sellerLimits(effectiveSellerType, plan.id);
+              return (
+                <div key={plan.id} className="bg-surface rounded-2xl shadow-card p-6 flex flex-col fade-up" style={{ animationDelay: `${i * 60}ms` }}>
+                  <h2 className="font-display font-bold text-[18px] text-ink">{plan.name}</h2>
+                  {/* §3.2/§4: переключатель Месяц/Год −20%, годовая цена через yearPriceOf */}
+                  <p className="font-display font-extrabold text-[26px] text-ink mt-2">{plan.price === 0 ? "0 ₽" : period === "year" ? `${yearPriceOf(plan.price)} ₽/год` : `${plan.price} ₽/мес`}</p>
+                  <p className="text-[11.5px] text-ink-mute mt-1">Товаров: {fmtLimit(limits.maxProducts)} · AI: {fmtLimit(limits.aiCardGens)}/мес</p>
+                  <ul className="mt-4 space-y-2 flex-1">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-[12.5px] text-ink-soft">
+                        <CheckCircle2 size={14} className="text-success shrink-0 mt-0.5" /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Btn className="w-full mt-5" variant={active ? "outline" : "dark"} disabled={active}
+                    onClick={() => acc.setPlan(session?.userId || "guest", effectiveSellerType, plan.id)}>
+                    {active ? "Текущий тариф" : "Подключить"}
+                  </Btn>
+                </div>
+              );
+            })}
+          </div>
+          {reg.status === "active" && (
+            <div className="mt-8 flex justify-center">
+              <Link to="/seller/dashboard" className="inline-flex items-center gap-2 h-[52px] px-8 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">
+                В кабинет продавца <ArrowRight size={17} />
+              </Link>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/* ============================================================
+   Регистрация продавца: 4 этапа (юрлицо → документы → модерация → оплата)
+   + блок «О мастере». Используется на /seller/register и в /auth.
+   ============================================================ */
+export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
+  const s = useSellerReg();
+  const login = useAppStore((st) => st.login);
+  const session = useAppStore((st) => st.session);
+  const nav = useNavigate();
+  const [ocrOk, setOcrOk] = useState<Record<string, boolean>>({});
+  const [modScenario, setModScenario] = useState<"approve" | "reject">("approve");
+  const [agree, setAgree] = useState(false);
+  const [err, setErr] = useState("");
+  const sellerAcc = useSellerAccount();
+
+  const info = sellerTypeInfo(s.legalType);
+
+  /* OCR-имитация: файл «проверяется» 1.2с */
+  useEffect(() => {
+    const pending = Object.entries(s.docs).filter(([k, d]) => d && !ocrOk[k]);
+    if (!pending.length) return;
+    const t = setTimeout(() => {
+      setOcrOk((o) => ({ ...o, ...Object.fromEntries(pending.map(([k]) => [k, true])) }));
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [s.docs, ocrOk]);
+
+  /* модерация 2.5с */
+  useEffect(() => {
+    if (s.status !== "moderation") return;
+    const t = setTimeout(() => {
+      if (modScenario === "approve") s.approveModeration();
+      else s.rejectModeration("Документы нечитаемы или не соответствуют данным анкеты.");
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [s.status, modScenario, s]);
+
+  const nextFromStep1 = () => {
+    if (!s.legalType) { setErr("Выберите юридический статус."); return; }
+    if (s.shopName.trim().length < 2 || s.contactName.trim().length < 2 || !s.email.includes("@") || s.masterName.trim().length < 2) {
+      setErr("Заполните магазин, ФИО, email и имя мастера."); return;
+    }
+    if (!agree) { setErr("Примите агентский договор-оферту."); return; }
+    if (pwd.length < 8) { setErr("Пароль для входа должен быть не короче 8 символов"); return; }
+    if (pwd !== pwd2) { setErr("Пароли не совпадают"); return; }
+    setErr("");
+    s.toDocs();
+  };
+
+  const [pwd, setPwd] = useState("");
+  const [pwd2, setPwd2] = useState("");
+
+  const finish = async (method: string) => {
+    /* §1.4: сначала — реальная оплата разового взноса; без успешного платежа
+       регистрация НЕ переходит в активный статус */
+    const payRes = await s.payFee(method);
+    if (!payRes.ok && !payRes.offline) {
+      useNotifyStore.getState().push({ kind: "alert", title: "Оплата взноса не прошла", text: payRes.error === "payment_not_confirmed" ? "Платёж не подтверждён провайдером. Попробуйте ещё раз или выберите другой способ." : "Сервис оплаты недоступен: " + (payRes.error || "сеть") });
+      return;
+    }
+    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd, role: "seller", legalType: s.legalType || "self_employed" });
+    { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[s.email.trim().toLowerCase()] = pwd; localStorage.setItem(vk, JSON.stringify(vv)); }
+    if (regRes.ok && regRes.needConfirm) {
+      useNotifyStore.getState().push({ kind: "report", title: "Подтвердите email", text: "Письмо отправлено на " + s.email + (regRes.devConfirmUrl ? ". Dev-ссылка: " + regRes.devConfirmUrl : "") });
+    } else if (!regRes.ok && regRes.error !== "exists") {
+      useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт входа не создан на сервере", text: "Локальный кабинет работает, но вход с другого устройства будет недоступен: " + (regRes.error || "сеть") });
+    }
+    /* ИСПРАВЛЕНИЕ ВХОДА ПРОДАВЦА: id аккаунта приводится к СЕРВЕРНОМУ id
+       (regRes.userId из /auth/register). Ранее продавец жил под локальным
+       id "seller-<timestamp>", а после повторного входа authLogin подставлял
+       серверный UUID — подписки/товары/заказы «переезжали» и терялись,
+       а в «Моих подписках» продавца появлялся чужой список demo-user-1. */
+    const serverId = regRes.ok && regRes.userId ? String(regRes.userId) : "";
+    const existingSeller = Object.values(useAppStore.getState().accounts)
+      .flat()
+      .find((acc) => acc.email.toLowerCase() === s.email.trim().toLowerCase() && acc.role === "seller");
+    if (existingSeller) {
+      login(serverId ? { ...existingSeller, id: serverId } : existingSeller);
+    } else {
+      login({ id: serverId || "seller-" + Date.now(), name: s.contactName || s.masterName, email: s.email, role: "seller", sellerType: (s.legalType ?? undefined) });
+    }
+    const uid = useAppStore.getState().session?.userId;
+    const sac = useSellerAccount.getState();
+    const guestPlans = sac.planIdsByAccount["guest"];
+    const lt2 = s.legalType || "self_employed";
+    if (uid && guestPlans && !sac.planIdsByAccount[uid] && guestPlans[lt2] && guestPlans[lt2] !== "free") {
+      sac.setPlan(uid, lt2, guestPlans[lt2]);
+    }
+    useNotifyStore.getState().push({ kind: "confirm", title: "Регистрация завершена!", text: "Добро пожаловать в Quantiform! Кабинет продавца доступен в меню профиля." });
+    nav("/");
+  };
+
+  return (
+    <div className={embedded ? "" : "max-w-[760px] mx-auto"}>
+      {!embedded && (
+        <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Стать продавцом</h1>
+      )}
+      <p className="text-[13.5px] text-ink-soft mb-6">
+        Регистрация платная и зависит от юридического статуса. Доступ к витрине откроется после верификации документов и оплаты.
+      <span className="block mb-4 flex gap-2 flex-wrap"><Btn size="sm" variant="outline" onClick={() => { const accs = Object.values(useAppStore.getState().accounts).flat().filter((a) => a.role === "seller"); const match = accs.find((a) => a.email === s.email) || accs[0]; if (match) { login(match); nav("/seller/dashboard"); } else { useNotifyStore.getState().push({ kind: "alert", title: "Аккаунт не найден в этом браузере", text: "Регистрация продавца хранится в браузере, где она была завершена. Завершите регистрацию здесь или вернитесь к тому устройству." }); } }}>Уже зарегистрированы? Войти в кабинет</Btn><Btn size="sm" variant="ghost" onClick={() => s.resetFlow()}>Начать регистрацию заново</Btn></span>
+      </p>
+
+      {/* ШАГ 1: юрлицо */}
+      {s.status === "inactive" && (
+        <div className="bg-surface rounded-2xl shadow-card p-6 fade-up">
+          <h2 className="font-display font-bold text-[19px] text-ink mb-1">Шаг 1 из 4 · Юридический статус</h2>
+          <p className="text-[12.5px] text-ink-mute mb-5">От статуса зависят взнос, комиссия и комплект документов.</p>
+          <div className="grid sm:grid-cols-3 gap-3 mb-6">
+            {SELLER_TYPES.map((t) => (
+              <button key={t.type} onClick={() => { s.setLegalType(t.type); setErr(""); }}
+                className={`text-left rounded-xl border p-4 transition-all cursor-pointer ${s.legalType === t.type ? "border-dark bg-cream shadow-card" : "border-line hover:border-ink-mute"}`}>
+                <p className="font-bold text-[15px] text-ink">{t.short}</p>
+                <p className="text-[11.5px] text-ink-mute mt-0.5">{t.label}</p>
+                <p className="text-[12.5px] font-bold text-accent-deep mt-2">Взнос {fmt(t.fee)}</p>
+                <p className="text-[12px] text-ink-soft">Комиссия {t.commission}%</p>
+              </button>
+            ))}
+          </div>
+
+          {info && (
+            <div className="bg-cream rounded-xl px-4 py-3 mb-5 fade-up">
+              <p className="text-[12px] font-bold text-ink mb-1">Понадобятся документы:</p>
+              <ul className="space-y-1">
+                {info.docs.map((d) => <li key={d.key} className="text-[12px] text-ink-soft flex items-center gap-1.5"><FileText size={12} className="text-accent-deep" /> {d.name}</li>)}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Field label="Название магазина" required><input className="field" value={s.shopName} onChange={(e) => s.setInfo({ shopName: e.target.value })} placeholder="Глиняный дом" /></Field>
+            <Field label="Имя мастера" required><input className="field" value={s.masterName} onChange={(e) => s.setInfo({ masterName: e.target.value })} placeholder="Мария" /></Field>
+            <Field label="ФИО" required><input className="field" value={s.contactName} onChange={(e) => s.setInfo({ contactName: e.target.value })} placeholder="Ковалёва Мария Сергеевна" /></Field>
+            <Field label="Email" required><input className="field" type="email" value={s.email} onChange={(e) => s.setInfo({ email: e.target.value })} placeholder="maria@studio.ru" /></Field>
+            <Field label="Город"><input className="field" value={s.city} onChange={(e) => s.setInfo({ city: e.target.value })} placeholder="Псков" /></Field>
+            <Field label="ИНН"><input className="field" value={s.inn} onChange={(e) => s.setInfo({ inn: e.target.value.replace(/\D/g, "") })} placeholder="602709876543" /></Field>
+            <Field label="Пароль для входа" required hint="Минимум 8 символов"><PasswordInput value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="••••••••" /></Field>
+            <Field label="Повторите пароль" required hint="Должен совпасть"><PasswordInput value={pwd2} onChange={(e) => setPwd2(e.target.value)} placeholder="••••••••" /></Field>
+          </div>
+
+          {/* блок «О мастере» */}
+          <div className="mt-6 pt-6 border-t border-line-soft">
+            <p className="font-display font-bold text-[16px] text-ink mb-1">О мастере</p>
+            <p className="text-[12px] text-ink-mute mb-4">Расскажите о становлении бизнеса — это повышает доверие покупателей. Сервис распределит вас по категориям.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Field label="Лет опыта"><input className="field" value={s.yearsExperience} onChange={(e) => s.setInfo({ yearsExperience: e.target.value })} placeholder="7" /></Field>
+              <Field label="Достижения"><input className="field" value={s.achievements} onChange={(e) => s.setInfo({ achievements: e.target.value })} placeholder="Ярмарки, конкурсы, публикации…" /></Field>
+            </div>
+            <div className="mt-4">
+              <Field label="Категории (минимум 1)">
+                <CategoryMultiPicker value={s.categories} onChange={(next) => { s.categories.filter((x) => !next.includes(x)).forEach((x) => s.toggleCategory(x)); next.filter((x) => !s.categories.includes(x)).forEach((x) => s.toggleCategory(x)); }} />
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field label="История бизнеса — взлёты и падения">
+                <textarea className="field" rows={4} value={s.businessStory} onChange={(e) => s.setInfo({ businessStory: e.target.value })} placeholder="Как вы начинали, с какими трудностями столкнулись, чем гордитесь…" />
+              </Field>
+              <MasterProfileBlock />
+            </div>
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer select-none mt-6">
+            <input type="checkbox" checked={agree} onChange={(e) => { setAgree(e.target.checked); setErr(""); }} className="mt-0.5" />
+            <span className="text-[13px] text-ink-soft leading-relaxed">
+              Принимаю <Link to="/legal/seller_agreement" className="font-bold text-accent-deep underline">агентский договор-оферту</Link>, гарантирую авторство товаров и отвечаю за интеллектуальную собственность <span className="text-error">*</span>
+            </span>
+          </label>
+
+          {err && <p className="text-[12.5px] font-semibold text-error mt-3">{err}</p>}
+          <div className="flex justify-end mt-5">
+            <Btn size="lg" onClick={nextFromStep1}>Продолжить</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* ШАГ 2: документы */}
+      {s.status === "docs" && info && (
+        <div className="bg-surface rounded-2xl shadow-card p-6 fade-up">
+          <h2 className="font-display font-bold text-[19px] text-ink mb-1">Шаг 2 из 4 · Документы</h2>
+          <p className="text-[12.5px] text-ink-mute mb-5">JPG, PNG или PDF до 5 МБ. Каждый файл проходит OCR-проверку читаемости.</p>
+          <div className="space-y-3">
+            {info.docs.map((d) => {
+              const doc = s.docs[d.key];
+              const ok = !!ocrOk[d.key];
+              return (
+                <div key={d.key} className={`border rounded-xl p-4 ${doc ? (ok ? "border-success/40 bg-success-soft/40" : "border-line bg-cream") : "border-line"}`}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-[13.5px] font-bold text-ink">{d.name}</p>
+                      <p className="text-[11.5px] text-ink-mute">{d.note}</p>
+                    </div>
+                    {doc ? (
+                      ok
+                        ? <Badge tone="success"><CheckCircle2 size={11} /> Прочитано</Badge>
+                        : <Badge tone="honey"><Sparkles size={11} /> OCR-проверка…</Badge>
+                    ) : (
+                      <label className="inline-flex items-center gap-2 h-10 px-4 rounded-[10px] border border-line bg-surface text-[12.5px] font-semibold text-ink-soft hover:border-dark hover:text-ink transition-colors cursor-pointer">
+                        <Upload size={14} /> Загрузить
+                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) s.addDoc(d.key, f.name, f.size); }} />
+                      </label>
+                    )}
+                  </div>
+                  {doc && <p className="text-[11.5px] text-ink-mute mt-2 flex items-center gap-1.5"><FileText size={12} /> {doc.fileName} · {(doc.size / 1024).toFixed(0)} КБ</p>}
+                </div>
+              );
+            })}
+          </div>
+          {err && <p className="text-[12.5px] font-semibold text-error mt-3">{err}</p>}
+          <div className="flex justify-between mt-5">
+            <Btn variant="ghost" onClick={() => s.backToStep1()}>Назад</Btn>
+            <Btn disabled={info.docs.some((d) => !s.docs[d.key] || !ocrOk[d.key])} onClick={() => s.submitForModeration()}>Отправить на модерацию</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* ШАГ 3: модерация */}
+      {s.status === "moderation" && (
+        <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up">
+          <span className="inline-flex w-16 h-16 rounded-full bg-ai-soft text-ai items-center justify-center mb-4"><ShieldCheck size={30} /></span>
+          <h2 className="font-display font-bold text-[20px] text-ink mb-2">Шаг 3 из 4 · Документы на модерации</h2>
+          <p className="text-[13px] text-ink-soft mb-6">Проверяем подлинность и соответствие данных. Обычно — несколько часов.</p>
+          <div className="inline-flex bg-line-soft rounded-[12px] p-1.5 mb-4">
+            {([["approve", "Одобрить (демо)"], ["reject", "Отклонить (демо)"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setModScenario(id)}
+                className={`h-10 px-5 rounded-[10px] text-[12.5px] font-bold transition-all cursor-pointer ${modScenario === id ? "bg-surface text-ink shadow-card" : "text-ink-soft hover:text-ink"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {s.status === "rejected" && (
+        <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up">
+          <p className="text-[40px] mb-2">⚠️</p>
+          <h2 className="font-display font-bold text-[20px] text-ink mb-2">Модерация отклонена ({s.rejectionCount}/3)</h2>
+          <p className="text-[13px] text-ink-soft mb-6">{s.rejectionReason}</p>
+          <Btn onClick={() => s.retryDocuments()}>Загрузить документы заново</Btn>
+        </div>
+      )}
+
+      {s.status === "blocked" && (
+        <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up">
+          <p className="text-[40px] mb-2">🚫</p>
+          <h2 className="font-display font-bold text-[20px] text-ink mb-2">Аккаунт заблокирован</h2>
+          <p className="text-[13px] text-ink-soft mb-6">Три отклонения подряд. Напишите в поддержку: {OPERATOR.supportEmail}</p>
+          <Btn variant="ghost" onClick={() => s.resetFlow()}>Начать заново</Btn>
+        </div>
+      )}
+
+      {/* ШАГ 4: оплата */}
+      {s.status === "payment" && info && (
+        <div className="bg-surface rounded-2xl shadow-card p-6 fade-up">
+          <h2 className="font-display font-bold text-[19px] text-ink mb-1">Шаг 4 из 4 · Оплата взноса</h2>
+          <p className="text-[12.5px] text-ink-mute mb-5">Документы подтверждены. Оплатите регистрационный взнос — и витрина откроется.</p>
+          <div className="bg-dark text-cream rounded-xl p-5 mb-5 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-[12px] text-cream/60">Регистрационный взнос · {info.short}</p>
+              <p className="font-display font-extrabold text-[30px] text-accent">{fmt(info.fee)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[12px] text-cream/60">Комиссия с продаж</p>
+              <p className="font-display font-bold text-[20px] text-cream">{info.commission}%</p>
+            </div>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            <Btn size="lg" onClick={() => finish("Банковская карта (ЮKassa)")}><CreditCard size={17} /> Картой</Btn>
+            <Btn size="lg" variant="dark" onClick={() => finish("СБП")}><Smartphone size={17} /> СБП</Btn>
+          </div>
+        </div>
+      )}
+
+      {s.status === "active" && (() => {
+        const session = useAppStore.getState().session;
+        
+        // Если сессия не продавца или отсутствует — предлагаем выбор
+        if (!session || session.role !== 'seller') {
+          const regData = s;
+          const existingAccount = Object.values(useAppStore.getState().accounts)
+            .flat()
+            .find(acc => acc.email === regData?.email && acc.role === 'seller');
+
+          return (
+            <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up max-w-md mx-auto">
+              <span className="inline-flex w-16 h-16 rounded-full bg-info-soft text-info items-center justify-center mb-4"><Users size={32} /></span>
+              <h2 className="font-display font-bold text-[22px] text-ink mb-2">Продавец уже зарегистрирован</h2>
+              <p className="text-[13.5px] text-ink-soft mb-6">
+                Магазин: <b>{regData?.shopName}</b><br/>
+                Email: {regData?.email}
+              </p>
+              <div className="flex flex-col gap-3">
+                <Btn size="lg" onClick={() => {
+                  if (existingAccount) {
+                    useAppStore.getState().login(existingAccount);
+                  } else {
+                    useAppStore.getState().login({
+                      id: `seller-${regData?.slug || Date.now()}`,
+                      name: regData?.contactName || regData?.masterName || 'Продавец',
+                      email: regData?.email || '',
+                      role: 'seller',
+                      sellerType: regData?.legalType ?? undefined,
+                    });
+                  }
+                  window.location.href = '/seller/dashboard';
+                }}>
+                  Войти в существующий кабинет
+                </Btn>
+                <Btn size="lg" variant="outline" onClick={() => s.resetFlow()}>
+                  Зарегистрировать нового продавца
+                </Btn>
+              </div>
+            </div>
+          );
+        }
+
+        // Если сессия продавца активна — показываем экран с комиссией из тарифа
+        const legalType = s.legalType;
+        // Получаем текущий план из активного аккаунта
+        const accountIds = Object.keys(sellerAcc.planIdsByAccount);
+        const accountId = useAppStore.getState().session?.userId || accountIds[0];
+        const currentPlanId = accountId ? (sellerAcc.planIdsByAccount[accountId]?.[legalType!] || 'free') : 'free';
+        const commission = COMMISSION_MATRIX[legalType!]?.[currentPlanId] ?? COMMISSION_MATRIX[legalType!]?.free ?? 15;
+        
+        return (
+          <div className="bg-surface rounded-2xl shadow-card p-8 text-center fade-up">
+            <span className="inline-flex w-16 h-16 rounded-full bg-success-soft text-success items-center justify-center mb-4"><CheckCircle2 size={32} /></span>
+            <h2 className="font-display font-bold text-[22px] text-ink mb-2">Витрина открыта!</h2>
+            <p className="text-[13.5px] text-ink-soft mb-6">Магазин «{s.shopName}» активен. Комиссия текущего тарифа: <b>{commission}%</b></p>
+            <Link to="/seller/dashboard" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep hover:text-cream transition-colors">В кабинет продавца</Link>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+export function SellerRegisterPage() {
+  const regAuto = useSellerReg();
+  if (regAuto.status === "active") return <Navigate to="/seller/dashboard" replace />;
+  return (
+    <div className="max-w-[860px] mx-auto px-4 sm:px-6 py-10">
+      <SellerRegWizard />
+    </div>
+  );
+}
+
+/* Визуальные токены уровней продавца (по позиции тарифа: 0 free → 3 топ) */
+const SELLER_LEVEL: { accent: string; soft: string; tagline: string }[] = [
+  { accent: "#6b6b66", soft: "#eae4d4", tagline: "Старт продаж" },
+  { accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Растущая мастерская" },
+  { accent: "#c77e28", soft: "#f9ebd2", tagline: "Профессиональные продажи" },
+  { accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей" },
+];
+const COMMISSION_BY_LEVEL: Record<SellerLegalType, number[]> = { self_employed: [10, 9, 8, 7], ip: [12, 11, 10, 9], ooo: [15, 14, 13, 11] };
+const levelOf = (lt: SellerLegalType, planId: string) => {
+  const idx = (SELLER_PLANS[lt] || []).findIndex((p) => p.id === planId);
+  return idx < 0 ? 0 : idx;
+};
+
+/* ============================================================
+   Кабинет продавца: товары (медиа + AI), заказы, финансы,
+   аналитика, команда, настройки — гейтится тарифом
+   ============================================================ */
+import AgentPanelSeller from "../components/agent-panel-seller";
+
+export function SellerDashboardPage() {
+  const s = useSellerReg();
+  const acc = useSellerAccount();
+  const marketList = useMarketProducts();
+  const user = useAppStore((st) => st.session);
+  const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "buyer-favorites" | "my-orders" | "subscriptions" | "concepts" | "prices" | "buyer-addresses" | "buyer-bonus" | "buyer-complaints">("products");
+  /* Покупательский тариф продавца (продавец — тоже покупатель): определяет,
+     какие покупательские разделы закрыты замком. Правило тарификации то же,
+     что в кабинете покупателя (profile.tsx): concepts/prices/custom — с paid-тарифа. */
+  const sellerBuyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
+  const sellerBuyerLim = buyerLimits(sellerBuyerPlan);
+  const sellerIsPaidBuyer = sellerBuyerPlan !== "free";
+  const nav = useNavigate();
+  /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
+  const [myResponses, setMyResponses] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (tab !== "responses") return;
+    fetch("/api/my-responses", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { ok: false, responses: [] })
+      .then((d) => setMyResponses(d.responses || []))
+      .catch(() => setMyResponses([]));
+  }, [tab]);
+  const withdrawMyResponse = async (id: string) => {
+    const res = await fetch(`/api/orders/${(myResponses || []).find((r) => r.id === id)?.order_id}/responses/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ status: "withdrawn" }),
+    });
+    if (res.status === 409) { alert("Отозвать отклик можно только до решения заказчика"); return; }
+    if (!res.ok) { alert("Не удалось отозвать отклик"); return; }
+    setMyResponses((prev) => (prev || []).map((r) => (r.id === id ? { ...r, status: "withdrawn" } : r)));
+  };
+
+  /* Цифровые товары: мастер создания/редактирования + аналитика */
+  const [digitalWizardOpen, setDigitalWizardOpen] = useState(false);
+  const [digitalEditId, setDigitalEditId] = useState<string | null>(null);
+  const [digitalAnalyticsId, setDigitalAnalyticsId] = useState<string | null>(null);
+  const [digitalVersionOpen, setDigitalVersionOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardPrefill, setWizardPrefill] = useState<any>(null);
+  const allDigitalProducts = useDigitalStore((s) => s.products);
+  const digitalProducts = useMemo(() => allDigitalProducts.filter((p) => p.ownerId === user?.userId), [allDigitalProducts, user?.userId]);
+  const digitalPurchasesAll = useDigitalStore((s) => s.purchases);
+  const archiveDigitalProduct = useDigitalStore((s) => s.archiveProduct);
+  const allOrders = useAppStore((s) => s.orders);
+  const advanceStatus = useAppStore((s) => s.advanceStatus);
+  const myOrders = allOrders.filter((o) => o.items.some((i) => i.productId.startsWith("sp-")));
+  const [prod, setProd] = useState({ name: "", category: CATEGORIES[0].name, price: "" });
+  const [media, setMedia] = useState<ProductMedia[]>([]);
+  const [prodWizardOpen, setProdWizardOpen] = useState(false);
+  const [editProductId, setEditProductId] = useState<string | null>(null);
+  const [bulk, setBulk] = useState<string[]>([]);
+  const [teamMember, setTeamMember] = useState({ name: "", email: "", role: "Менеджер" as "Менеджер" | "Мастер" | "Кладовщик" });
+  const [teamErr, setTeamErr] = useState("");
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const finance = useFinance();
+  const available = selectAvailable(finance);
+  const held = selectHeld(finance);
+  const inTransit = selectInTransit(finance);
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [newMethodType, setNewMethodType] = useState<PayoutMethodType>("card");
+  const [newMethodMask, setNewMethodMask] = useState("");
+  useEffect(() => {
+    finance.tick();
+    const id = setInterval(() => finance.tick(), 5000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => { finance.tick(); }, [finance.ledger.length, finance.deliveries.length, finance.payouts.length]);
+  const [withdrawSum, setWithdrawSum] = useState("");
+
+  /* настройки: тема и уведомления — глобальные и персистентные */
+  const sTheme = usePrefsStore((st) => st.theme);
+  const setSTheme = usePrefsStore((st) => st.setTheme);
+  const sNotif = usePrefsStore((st) => st.sellerNotif);
+  const setSNotif = usePrefsStore((st) => st.setSellerNotif);
+
+  /* редактируемый профиль магазина и мастера */
+  const [sProf, setSProf] = useState({
+    shopName: s.shopName, contactName: s.contactName, email: s.email, phone: s.phone, city: s.city,
+    masterName: s.masterName, yearsExperience: s.yearsExperience, achievements: s.achievements, businessStory: s.businessStory,
+  });
+  const [sProfSaved, setSProfSaved] = useState(false);
+  const saveSProf = () => {
+    s.setInfo(sProf);
+    setSProfSaved(true);
+    setTimeout(() => setSProfSaved(false), 2200);
+  };
+
+  const lt = s.legalType || "self_employed";
+  const planId = acc.getPlan(useAppStore.getState().session?.userId || "guest", lt);
+  const plan = sellerLimits(lt, planId);
+  const lvl = levelOf(lt, planId);
+  const lvlMeta = SELLER_LEVEL[lvl];
+  const [legalWizardOpen, setLegalWizardOpen] = useState(false);
+  const [legalStep, setLegalStep] = useState<1 | 2 | 3>(1);
+  const [legalTarget, setLegalTarget] = useState<SellerLegalType | null>(null);
+  const [legalPreview, setLegalPreview] = useState<LegalTypePreview | null>(null);
+  const [legalErr, setLegalErr] = useState("");
+  const sellerUid = useMemo(() => user?.userId || "", [user?.userId]);
+  const verificationStatus = useSellerReg((st) => (sellerUid ? st.profilesByAccount[sellerUid]?.verificationStatus : undefined));
+  const [legalDraft, setLegalDraft] = useState({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress });
+  const [legalSaved, setLegalSaved] = useState(false);
+  const [legalFetching, setLegalFetching] = useState(false);
+  useEffect(() => { setLegalDraft({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress }); }, [sellerUid]);
+const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.commissionRate;
+  const sentOrders = myOrders.filter((o) => o.status !== "paid");
+  const revenue = sentOrders.reduce((sum, o) => sum + o.total, 0);
+  const avgCheck = sentOrders.length > 0 ? Math.round(revenue / sentOrders.length) : 0;
+  const payout = Math.round(revenue * (1 - commissionNow / 100));
+  const cartEvents = useAppStore((st) => st.cartEvents);
+  const [anaPeriod, setAnaPeriod] = useState<7 | 30 | 90>(30);
+  /* Проблемa №1: аналитика считается только по товарам ТЕКУЩЕГО аккаунта */
+  const totalViews = acc.products.filter((p) => p.ownerId === user?.userId || (!p.ownerId && user?.role === "seller")).reduce((s2, pr) => s2 + (pr.views || 0), 0);
+  const receivedCount = myOrders.filter((o) => o.status === "received").length;
+  const pctOf = (n: number) => (totalViews ? Math.round((n / totalViews) * 1000) / 10 : 0);
+  const cartAdds = cartEvents.filter((e) => e.productId.startsWith("sp-")).length;
+  const funnel = [
+    ["Просмотры карточек", totalViews, 100],
+    ["Добавили в корзину", cartAdds, pctOf(cartAdds)],
+    ["Заказы", myOrders.length, pctOf(myOrders.length)],
+    ["Отправлено", sentOrders.length, pctOf(sentOrders.length)],
+    ["Получено", receivedCount, pctOf(receivedCount)],
+  ] as [string, number, number][];
+  const days = [...Array(7)].map((_, i) => {
+    const d = new Date(Date.now() - (6 - i) * 864e5);
+    const key = d.toISOString().slice(0, 10);
+    return { key, label: `${d.getDate()}.${d.getMonth() + 1}`, sum: myOrders.filter((o) => o.date.slice(0, 10) === key).reduce((s2, o) => s2 + o.total, 0) };
+  });
+  const maxDay = Math.max(1, ...days.map((d) => d.sum));
+  const topItems = Object.entries(
+    myOrders.flatMap((o) => o.items).filter((i) => i.productId.startsWith("sp-"))
+      .reduce<Record<string, number>>((m2, i) => ({ ...m2, [i.productId]: (m2[i.productId] || 0) + i.qty }), {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
+  const month = currentMonth();
+  const aiUsed = acc.aiCardGens[month] || 0;
+  const balance = acc.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
+  const commission = selectCommissionSum(acc);
+  const turnover = selectTurnover(acc);
+  const nowTs = Date.now();
+  const tx30 = acc.transactions.filter((t) => t.kind === "sale" && nowTs - new Date(t.date).getTime() <= 30 * 864e5);
+  const activeDays = new Set(tx30.map((t) => t.date.slice(0, 10))).size;
+  const sum30 = tx30.reduce((s2, t) => s2 + (t.productPrice || 0), 0);
+  const forecast30 = activeDays >= 7 ? Math.round((sum30 / activeDays) * 30) : 0;
+
+  if (s.status !== "active" || !user || user.role !== "seller") {
+    return (
+      <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
+        <p className="text-[56px] mb-3">🏪</p>
+        <h1 className="font-display font-bold text-[28px] text-ink mb-2">Кабинет продавца недоступен</h1>
+        <p className="text-[14px] text-ink-soft mb-7">Войдите в аккаунт продавца для просмотра кабинета.</p>
+        <div className="flex justify-center gap-4">
+          <Link to="/auth" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-accent text-ink font-semibold hover:bg-accent-deep transition-colors">Войти</Link>
+          <Link to="/seller/register" className="inline-flex items-center justify-center h-[52px] px-7 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors">Стать продавцом</Link>
+        </div>
+      </div>
+    );
+  }
+
+  /* Проблемa №1: кабинет показывает только товары ТЕКУЩЕГО аккаунта.
+     Legacy-товары без ownerId мигрируют к активному продавцу (см. seller.ts). */
+  const myProducts = acc.products.filter((p) => p.ownerId === user?.userId || (!p.ownerId && user?.role === "seller"));
+  const activeProducts = myProducts.filter((p) => !p.archived);
+  const overProducts = activeProducts.length >= plan.maxProducts;
+  const aiLimitReached = Number.isFinite(plan.aiCardGens) && aiUsed >= plan.aiCardGens;
+  const nextCharge = new Date(Date.now() + 20 * 864e5);
+
+  const addMedia = (f: File) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const url = r.result as string;
+      setMedia((m) => [...m, { type: f.type.startsWith("video/") ? "video" : "image", url, name: f.name }]);
+    };
+    r.readAsDataURL(f);
+  };
+
+  const publishProduct = () => {
+    if (prod.name.trim().length < 3 || !+prod.price || overProducts) return;
+    acc.addProduct({
+      name: prod.name.trim(), category: prod.category, price: +prod.price,
+      media: media.length ? media : undefined, aiGenerated: false,
+      ownerId: user?.userId,
+      shopName: s.shopName, sellerCity: s.city, legalType: s.legalType || undefined, inn: s.inn,
+      avatar: s.shopLogo || s.masterAvatar || undefined,
+    } as any);
+    setProd({ name: "", category: CATEGORIES[0].name, price: "" });
+    setMedia([]);
+  };
+
+  const TABS = [
+    { id: "products" as const, label: "Товары", icon: Boxes },
+    { id: "agent" as const, label: "Агент", icon: Bot },
+    { id: "orders" as const, label: "Заказы", icon: FileText },
+    { id: "responses" as const, label: "Мои отклики", icon: Send },
+    /* Покупательские разделы: продавец — тоже покупатель, поэтому в его кабинете
+       доступны ВСЕ разделы кабинета покупателя (подписки, избранное, адреса,
+       бонусы, жалобы) на тех же общих панелях src/components/Buyer*Panel. */
+    { id: "my-orders" as const, label: "Мои заказы", icon: ShoppingBag },
+    { id: "subscriptions" as const, label: "Мои подписки", icon: Bell },
+    { id: "buyer-favorites" as const, label: "Избранное", icon: Heart },
+    /* Покупательские разделы с тарифными замками — те же правила, что в кабинете
+       покупателя: «Мои концепты» и «Отслеживание цен» закрыты на free-тарифе. */
+    { id: "concepts" as const, label: "Мои концепты", icon: Sparkles, locked: !sellerIsPaidBuyer },
+    { id: "prices" as const, label: "Отслеживание цен", icon: BellRing, locked: !sellerIsPaidBuyer },
+    { id: "buyer-addresses" as const, label: "Адреса", icon: MapPin },
+    { id: "buyer-bonus" as const, label: "Бонусы", icon: Gift },
+    { id: "buyer-complaints" as const, label: "Жалобы", icon: Flag },
+    { id: "finance" as const, label: "Финансы", icon: Wallet },
+    { id: "analytics" as const, label: "Аналитика", icon: BarChart3, locked: plan.analytics === "basic" },
+    { id: "team" as const, label: "Команда", icon: Users, locked: plan.team === 0 },
+    { id: "digital" as const, label: "Цифровые товары", icon: Sparkles },
+    { id: "settings" as const, label: "Настройки", icon: UserPlus },
+  ];
+
+  return (
+    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
+      {/* шапка кабинета */}
+      <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
+        <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream overflow-hidden" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{(s.shopLogo || s.masterAvatar || user?.avatar) ? <img src={(s.shopLogo || s.masterAvatar || user?.avatar) as string} className="w-full h-full object-cover" /> : s.shopName[0]?.toUpperCase()}</span>
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
+            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: lvlMeta.accent }}>
+              {sellerTypeInfo(lt)?.short} · {planName}
+            </span>
+            {plan.badge && <Badge tone="premium"><ShieldCheck size={11} /> {plan.badge}</Badge>}
+          </div>
+          <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline} · комиссия {commissionNow}% · списание {fmtDate(nextCharge.toISOString())}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
+        </div>
+      </div>
+
+      {/* Возможности текущего тарифа */}
+      <div className="rounded-[14px] shadow-card px-5 py-4 mb-7 border border-line-soft" style={{ background: `linear-gradient(120deg, ${lvlMeta.soft} 0%, var(--color-surface) 60%)` }}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <p className="text-[12.5px] font-bold text-ink">Тариф «{planName}» — возможности кабинета</p>
+          {lvl < 3 && <Link to="/plans" className="text-[12px] font-bold underline" style={{ color: lvlMeta.accent }}>Улучшить тариф →</Link>}
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5 text-[12.5px]">
+          <p className="flex items-center gap-2 text-ink-soft"><CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> Товары: {fmtLimit(plan.maxProducts)}</p>
+          <p className="flex items-center gap-2 text-ink-soft"><CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> AI-карточки: {fmtLimit(plan.aiCardGens)}/мес</p>
+          <p className={`flex items-center gap-2 ${plan.analytics !== "basic" ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.analytics !== "basic" ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Аналитика {plan.analytics !== "basic" ? "" : "(закрыта)"}</p>
+          <p className={`flex items-center gap-2 ${plan.team > 0 ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.team > 0 ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Команда {plan.team > 0 ? `(${fmtLimit(plan.team)})` : "(закрыта)"}</p>
+          <p className={`flex items-center gap-2 ${plan.massEdit ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.massEdit ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Массовое редактирование</p>
+          <p className={`flex items-center gap-2 ${plan.forecasts ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.forecasts ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Прогнозы продаж</p>
+        </div>
+      </div>
+
+      {/* лимиты */}
+      <div className="grid sm:grid-cols-2 gap-3 mb-7">
+        <div className="bg-surface rounded-[14px] shadow-card px-5 py-4">
+          <div className="flex justify-between mb-2 flex-wrap gap-1">
+            <p className="text-[12.5px] font-bold text-ink flex items-center gap-1.5"><Boxes size={14} className="text-accent-deep" /> Активные товары</p>
+            <p className="text-[12px] text-ink-soft font-semibold">{activeProducts.length} из {fmtLimit(plan.maxProducts)}</p>
+          </div>
+          <ProgressBar value={activeProducts.length} max={Number.isFinite(plan.maxProducts) ? plan.maxProducts : activeProducts.length + 1} tone="accent" />
+        </div>
+        <div className="bg-surface rounded-[14px] shadow-card px-5 py-4">
+          <div className="flex justify-between mb-2 flex-wrap gap-1">
+            <p className="text-[12.5px] font-bold text-ink flex items-center gap-1.5"><Sparkles size={14} className="text-ai" /> AI-генерации карточек</p>
+            <p className="text-[12px] text-ink-soft font-semibold">{Number.isFinite(plan.aiCardGens) ? `${aiUsed} из ${plan.aiCardGens}` : "Безлимит"}</p>
+          </div>
+          <ProgressBar value={aiUsed} max={Number.isFinite(plan.aiCardGens) ? plan.aiCardGens : aiUsed + 1} tone="ai" />
+        </div>
+      </div>
+
+      {/* Живые метрики из реальных заказов */}
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6 mb-8">
+        {[
+          { label: "Выручка (отправленные)", value: fmt(revenue), icon: Wallet, bar: "#4d7327", tint: "bg-[#eef5e9] text-[#4d7327]" },
+          { label: "Заказов всего", value: String(myOrders.length), icon: Package, bar: "#c77e28", tint: "bg-[#f7efe2] text-[#c77e28]" },
+          { label: "Средний чек", value: fmt(avgCheck), icon: Receipt, bar: "#2d5f4c", tint: "bg-[#e9f0ec] text-[#2d5f4c]" },
+          { label: "К выплате · комиссия " + commissionNow + "%", value: fmt(payout), icon: Banknote, bar: "#4d7327", tint: "bg-[#eef5e9] text-[#4d7327]" },
+        ].map((m) => (
+          <div key={m.label} className="relative overflow-hidden bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 p-5">
+            <span className="absolute left-0 top-0 h-full w-1" style={{ background: m.bar }} />
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute truncate">{m.label}</p>
+                <p className="font-display font-extrabold text-[26px] leading-tight text-ink mt-2">{m.value}</p>
+              </div>
+              <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.tint}`}>
+                <m.icon size={18} />
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {aiLimitReached && (
+        <div className="flex items-center gap-2.5 bg-ai-soft border border-ai/20 rounded-[10px] px-4 py-3 mb-6">
+          <Sparkles size={16} className="text-ai shrink-0" />
+          <p className="text-[13px] text-ink flex-1">AI-генерации на этот месяц закончились. <Link to="/plans" className="font-bold text-accent-deep underline">Улучшите тариф для безлимита</Link></p>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-[240px_1fr] gap-6 items-start">
+        {/* Вертикальная навигация кабинета продавца */}
+        <nav className="flex flex-col lg:grid gap-2 fade-up">
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => {
+                /* Тарифный замок: закрытый раздел не открывается, а подсказывает апгрейд
+                   (то же поведение, что в кабинете покупателя profile.tsx). */
+                if (t.locked) {
+                  useNotifyStore.getState().push({ kind: "alert", title: "Раздел закрыт тарифом", text: `«${t.label}» доступно с платного покупательского тарифа. Переключитесь в разделе «Тарифы».` });
+                  return;
+                }
+                setTab(t.id);
+              }}
+              aria-current={tab === t.id ? "page" : undefined}
+              className={`flex items-center gap-3 px-4 h-[48px] rounded-[10px] text-[13.5px] font-bold text-left transition-all ${t.locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${tab === t.id ? "bg-dark text-cream" : "bg-surface border border-line text-ink-soft hover:border-dark hover:text-ink"}`}>
+              <t.icon size={17} /> {t.label}{t.locked && <Lock size={13} className="ml-auto text-ink-mute" />}
+            </button>
+          ))}
+        </nav>
+
+        {/* Контент кабинета */}
+        <div className="min-w-0">
+
+      {/* ТОВАРЫ */}
+      {tab === "agent" && (
+        <div className="fade-up"><AgentPanelSeller /></div>
+      )}
+
+      {tab === "products" && (
+        <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start fade-up">
+          {/* §2.8: счётчики потребления продавца + предупреждение при 80% лимита */}
+          <div className="lg:col-span-full">
+            <LimitCounters actions={SELLER_WATCHED} refreshKey={tab} />
+            <LimitWarning actions={SELLER_WATCHED} refreshKey={tab} />
+          </div>
+          <div className="relative rounded-2xl bg-gradient-to-br from-surface via-surface to-surface/60 p-8 flex flex-col items-center justify-center text-center overflow-hidden border border-line-soft/30">
+            {/* Декоративный glow */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-accent/5 rounded-full blur-3xl"></div>
+            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-accent-deep/5 rounded-full blur-3xl"></div>
+            
+            {/* Иконка с анимацией */}
+            <div className="relative mb-5">
+              <div className="absolute inset-0 bg-accent/20 rounded-2xl blur-xl animate-pulse"></div>
+              <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-accent/20 to-accent-deep/20 border border-accent/30 flex items-center justify-center">
+                <Sparkles size={28} className="text-accent animate-[spin_8s_linear_infinite]" style={{animationDuration: '20s'}} />
+              </div>
+            </div>
+            
+            <h2 className="font-display font-bold text-[22px] text-ink mb-2 tracking-tight">Создать карточку товара</h2>
+            <p className="text-[13px] text-ink-mute mb-7 max-w-[260px] leading-relaxed">Умный редактор с AI-помощником<br/>и контролем качества</p>
+            
+            {overProducts ? (
+              <p className="text-[12px] font-semibold text-error">Достигнут лимит товаров ({fmtLimit(plan.maxProducts)}). Улучшите тариф.</p>
+            ) : (
+              <button onClick={() => window.location.hash = "/seller/product/new"} className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-accent to-accent-deep px-7 py-3 text-cream font-semibold shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border border-accent/40">
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></span>
+                <span className="relative flex items-center gap-2.5">
+                  <Sparkles size={16} className="group-hover:rotate-12 transition-transform duration-300" />
+                  <span className="text-[14px] tracking-wide">Открыть редактор</span>
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {plan.massEdit && bulk.length > 0 && (
+              <div className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-3 flex-wrap fade-up">
+                <p className="text-[13px] font-semibold text-ink">Выбрано: {bulk.length}</p>
+                <Btn size="sm" onClick={() => { acc.bulkSetPrice(bulk, -10); setBulk([]); }}>−10%</Btn>
+                <Btn size="sm" onClick={() => { acc.bulkSetPrice(bulk, 10); setBulk([]); }}>+10%</Btn>
+                <Btn size="sm" variant="ghost" onClick={() => { bulk.forEach((id) => acc.toggleArchive(id)); setBulk([]); }}>В архив</Btn>
+              </div>
+            )}
+            {myProducts.length === 0 && (
+              <div className="bg-surface rounded-2xl shadow-card px-8 py-16 text-center">
+                <p className="text-[44px] mb-3">📦</p>
+                <p className="font-display font-bold text-[19px] text-ink mb-2">Товаров пока нет</p>
+                <p className="text-[14px] text-ink-soft">Добавьте первый товар в форме слева.</p>
+              </div>
+            )}
+            {myProducts.map((p) => (
+              <div key={p.id} className="bg-surface rounded-2xl shadow-card p-4 flex items-center gap-4">
+                {plan.massEdit && (
+                  <input type="checkbox" checked={bulk.includes(p.id)} aria-label={`Выбрать ${p.name}`}
+                    onChange={() => setBulk((sel) => (sel.includes(p.id) ? sel.filter((x) => x !== p.id) : [...sel, p.id]))} />
+                )}
+                {p.media && p.media.length > 0 && (
+                  <div className="flex gap-1.5 shrink-0">
+                    {p.media.slice(0, 3).map((m, i) => (
+                      <span key={i} className="relative w-11 h-11 rounded-[8px] overflow-hidden border border-line-soft">
+                        {m.type === "video" ? <video src={m.url} className="w-full h-full object-cover" muted /> : <img src={m.url} alt="" className="w-full h-full object-cover" />}
+                        {m.type === "video" && <span className="absolute inset-0 flex items-center justify-center bg-dark/30"><Play size={11} className="text-cream" /></span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex-1 min-w-[200px]">
+                  <p className="font-bold text-[14.5px] text-ink flex items-center gap-2">
+                    {p.name}
+                    {p.isDraft && <Badge tone="warning">Черновик</Badge>}
+                    {p.aiGenerated && p.ai_status === "ready" && p.isDraft && (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-emerald-700">AI-карточка готова</span>
+                      </span>
+                    )}
+                    {p.aiGenerated && p.ai_status === "ready" && !p.isDraft && (
+                      <Badge tone="success">Опубликовано</Badge>
+                    )}
+                    {p.aiGenerated && p.ai_status !== "ready" && <Badge tone="ai"><Sparkles size={10} /> AI</Badge>}
+                    {p.archived && <Badge tone="neutral">Архив</Badge>}
+                  </p>
+                  <p className="text-[12px] text-ink-mute mt-0.5">{p.category} · {fmt(p.price)} · {fmtDate(p.createdAt)}</p>
+                  {p.manufacturer && <p className="text-[11px] text-ink-soft mt-0.5">🏭 {p.manufacturer}</p>}
+                  {p.sku && <p className="text-[11px] text-ink-soft">🏷️ {p.sku}</p>}
+                  {p.tags && p.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.tags.slice(0, 3).map((t, i) => (
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent-deep">#{t}</span>
+                      ))}
+                      {p.tags.length > 3 && <span className="text-[10px] text-ink-soft">+{p.tags.length - 3}</span>}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => window.location.hash = "/seller/product/" + p.id + "/edit"} className="text-[12px] font-semibold text-accent hover:text-accent-deep cursor-pointer transition-colors">Изменить</button>
+                <button onClick={() => acc.toggleArchive(p.id)} className="text-[12px] font-semibold text-ink-soft hover:text-ink cursor-pointer transition-colors">{p.archived ? "Вернуть" : "Архив"}</button>
+                <button onClick={() => acc.removeProduct(p.id)} className="w-9 h-9 rounded-[10px] flex items-center justify-center text-ink-mute hover:text-error hover:bg-error-soft cursor-pointer transition-colors"><X size={16} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* МОИ ОТКЛИКИ (мастер → чужие заказы) */}
+      {tab === "responses" && (
+        <div className="space-y-3 fade-up">
+          {myResponses === null && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center text-[13px] text-ink-mute">Загрузка откликов…</div>
+          )}
+          {myResponses !== null && myResponses.length === 0 && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">📨</p>
+              <p className="font-bold text-[15px] text-ink">Откликов пока нет</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Откликайтесь на заказы биржевого рынка — здесь появится список ваших предложений со статусами.</p>
+            </div>
+          )}
+          {(myResponses || []).map((r) => (
+            <div key={r.id} className="bg-surface rounded-2xl shadow-card p-5 flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <p className="font-bold text-[14px] text-ink">{r.order_title}</p>
+                <p className="text-[12px] text-ink-mute mt-0.5 line-clamp-2">{r.comment}</p>
+                <p className="text-[12px] text-ink-soft mt-1">Ваше предложение: <strong>{Number(r.price).toLocaleString("ru-RU")} ₽</strong> · срок {r.deadline_days} дн. · {fmtDate(r.created_at)}</p>
+              </div>
+              <Badge tone={r.status === "accepted" ? "success" : r.status === "pending" ? "honey" : "neutral"}>
+                {r.status === "accepted" ? "Принят" : r.status === "pending" ? "Отправлен" : r.status === "withdrawn" ? "Отозван" : "Отклонён"}
+              </Badge>
+              {r.status === "pending" && (
+                <button onClick={() => withdrawMyResponse(r.id)} className="h-[44px] px-4 rounded-xl border border-line text-ink-soft text-[12px] font-bold hover:bg-line-soft transition-colors cursor-pointer">Отозвать</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* МОИ ЗАКАЗЫ (покупателя) — тот же контент, что в кабинете покупателя */}
+      {tab === "my-orders" && (
+        <BuyerOrdersPanel orders={allOrders} />
+      )}
+
+      {/* МОИ ПОДПИСКИ — тот же контент, что в кабинете покупателя */}
+      {tab === "subscriptions" && <BuyerSubscriptionsPanel />}
+
+      {/* МОИ КОНЦЕПТЫ и ОТСЛЕЖИВАНИЕ ЦЕН — та же архитектура, что в кабинете покупателя:
+          общие панели src/components/BuyerConceptPanels (единый источник useSubStore). */}
+      {tab === "concepts" && <BuyerConceptsPanel />}
+      {tab === "prices" && <BuyerPriceWatchesPanel limitLabel={fmtLimit(sellerBuyerLim.priceWatches)} />}
+
+      {/* ИЗБРАННОЕ — та же панель, что в кабинете покупателя */}
+      {tab === "buyer-favorites" && <BuyerFavoritesPanel />}
+
+      {/* АДРЕСА — та же панель, что в кабинете покупателя */}
+      {tab === "buyer-addresses" && <BuyerAddressesPanel />}
+
+      {/* БОНУСЫ — та же панель, что в кабинете покупателя (+ премиум-блок) */}
+      {tab === "buyer-bonus" && <BuyerBonusPanel />}
+
+      {/* ЖАЛОБЫ — та же панель, что в кабинете покупателя */}
+      {tab === "buyer-complaints" && <BuyerComplaintsPanel />}
+
+      {/* ЗАКАЗЫ */}
+      {tab === "orders" && (
+        <div className="space-y-3 fade-up">
+          {myOrders.length === 0 && (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">📦</p>
+              <p className="font-bold text-[15px] text-ink">Заказов пока нет</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Здесь появятся заказы покупателей — вы сможете отправлять их и отслеживать статусы.</p>
+            </div>
+          )}
+          {myOrders.map((o) => (
+            <div key={o.id} className="bg-surface rounded-2xl shadow-card p-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="font-bold text-[15px] text-ink">Заказ {o.number}</p>
+                  <p className="text-[12.5px] text-ink-mute mt-0.5">{fmtDate(o.date)} · {o.payMethod} · {o.deliveryMethod}</p>
+                </div>
+                <Badge tone={o.status === "paid" ? "honey" : o.status === "shipped" ? "ai" : o.status === "delivered" ? "premium" : "success"}>
+                  {o.status === "paid" ? "Оплачен — ждёт отправки" : o.status === "shipped" ? "Отправлен" : o.status === "delivered" ? "Доставлен" : "Получен"}
+                </Badge>
+              </div>
+              <div className="mt-3 pt-3 border-t border-line-soft space-y-1.5">
+                {o.items.map((it) => {
+                  const prod = marketList.find((x) => x.id === it.productId);
+                  return (
+                    <div key={it.productId} className="flex justify-between gap-3 text-[13px]">
+                      <span className="text-ink-soft">{prod?.name || it.productId} × {it.qty}</span>
+                      <span className="font-semibold text-ink">{fmt(it.price * it.qty)}</span>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between gap-3 text-[13px] pt-1.5">
+                  <span className="text-ink-mute truncate">📍 {o.address}</span>
+                  <span className="font-bold text-ink whitespace-nowrap">Итого: {fmt(o.total)}</span>
+                </div>
+              </div>
+              {o.status !== "received" && (
+                <div className="mt-3.5">
+                  <Btn size="sm" onClick={() => {
+                    advanceStatus(o.id);
+                    if (o.status === "paid") {
+                      const sellerSum = o.items.filter((i) => i.productId.startsWith("sp-")).reduce((s2, i) => s2 + i.price * i.qty, 0);
+                      acc.recordSale({ orderId: o.number, productPrice: sellerSum, commissionAmount: Math.round(sellerSum * (commissionNow / 100)) });
+                    }
+                  }}>
+                    {o.status === "paid" ? " Отправить покупателю" : o.status === "shipped" ? "🚚 Отметить доставленным" : "✅ Подтвердить получение"}
+                  </Btn>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ФИНАНСЫ */}
+      {tab === "finance" && (
+        <div className="fade-up space-y-4">
+          <div className="bg-surface rounded-2xl shadow-card px-5 py-3 flex items-center justify-between">
+            <div>
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><Banknote size={17} className="text-accent-deep" /> Финансы</p>
+              <p className="text-[11.5px] text-ink-mute mt-0.5">Эскроу-модель: деньги покупателя под защитой платформы до выдачи СДЭК</p>
+            </div>
+            <Btn size="sm" disabled={available <= 0} onClick={() => setWithdrawOpen(true)}><Wallet size={14} /> Вывести</Btn>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div className="bg-surface rounded-2xl shadow-card p-5 border-l-4 border-[#4d7327]">
+              <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#4d7327]" />Доступно к выводу</p>
+              <p className="font-display font-extrabold text-[24px] text-ink mt-1.5">{fmt(available)}</p>
+              <p className="text-[11.5px] text-ink-mute mt-1">Заказы, выпущенные по выдаче СДЭК</p>
+            </div>
+            <div className="bg-surface rounded-2xl shadow-card p-5 border-l-4 border-accent-deep">
+              <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-accent-deep" />На защите</p>
+              <p className="font-display font-extrabold text-[24px] text-ink mt-1.5">{fmt(held)}</p>
+              <p className="text-[11.5px] text-ink-mute mt-1">Активные заказы в сейфе платформы</p>
+            </div>
+            <div className="bg-surface rounded-2xl shadow-card p-5 border-l-4 border-ai">
+              <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-ai" />В пути</p>
+              <p className="font-display font-extrabold text-[24px] text-ink mt-1.5">{fmt(inTransit)}</p>
+              <p className="text-[11.5px] text-ink-mute mt-1">Заявки на вывод, обработка ЮKassa</p>
+            </div>
+          </div>
+
+          <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
+            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><Package size={17} className="text-accent-deep" /> Заказы в сейфе</p>
+              {finance.methods.length > 0 && <span className="text-[11.5px] text-ink-mute">Способов вывода: {finance.methods.length}</span>}
+            </div>
+            {finance.holds.length === 0 ? (
+              <div className="px-6 pb-6 pt-2 text-center">
+                <p className="text-[30px] mb-1">🔒</p>
+                <p className="text-[13.5px] font-bold text-ink mb-1">В сейфе пока пусто</p>
+                <p className="text-[12.5px] text-ink-soft">Заказы покупателей появятся здесь автоматически и будут выпущены вам в момент «Выдан в ПВЗ СДЭК».</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-line-soft">
+                {finance.holds.map((h) => {
+                  const d = finance.deliveries.find((x) => x.orderId === h.orderId);
+                  const rate = COMMISSION_MATRIX[lt]?.[planId] ?? 15;
+                  const K = Math.round((h.amount * rate) / 100);
+                  const D = d ? d.cost : 0;
+                  const seller = h.amount - D - K;
+                  const statusLabel = h.status === "held" ? "Под защитой" : h.status === "frozen" ? "Заморожено (спор)" : h.status === "released" ? "Выпущено" : "Возвращено";
+                  const statusColor = h.status === "held" ? "bg-accent-deep/15 text-accent-deep" : h.status === "frozen" ? "bg-error/15 text-error" : h.status === "released" ? "bg-[#4d7327]/15 text-[#4d7327]" : "bg-ink-mute/15 text-ink-mute";
+                  return (
+                    <div key={h.orderId} className="px-6 py-4">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <p className="font-display font-bold text-[14px] text-ink">Заказ {h.orderId.slice(-6)}</p>
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-3 text-[12.5px] mb-2">
+                        <div><p className="text-ink-mute text-[10.5px]">Цена</p><p className="text-ink font-bold">{fmt(h.amount)}</p></div>
+                        <div><p className="text-ink-mute text-[10.5px]">СДЭК</p><p className="text-ink font-bold">{d ? `−${fmt(D)}` : "—"}</p></div>
+                        <div><p className="text-ink-mute text-[10.5px]">Комиссия {rate}%</p><p className="text-accent-deep font-bold">−{fmt(K)}</p></div>
+                        <div><p className="text-ink-mute text-[10.5px]">Вам</p><p className="text-[#4d7327] font-bold">{fmt(seller)}</p></div>
+                      </div>
+                      {d && (
+                        <div className="flex items-center gap-2 text-[11.5px] text-ink-soft pt-2 border-t border-line-soft">
+                          <Truck size={12} className="text-accent-deep shrink-0" />
+                          <span className="truncate">СДЭК <strong className="text-ink">{d.track}</strong> · {d.from || "—"} → {d.to || "—"} · {d.weight} кг · {d.status === "in_transit" ? "В пути" : d.status === "at_pvz" ? "В ПВЗ, ожидает покупателя" : "Выдан покупателю"}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-surface rounded-2xl shadow-card overflow-hidden">
+            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><ArrowDownUp size={17} className="text-accent-deep" /> Ledger · движение каждой копейки</p>
+              <button onClick={() => setMethodOpen(true)} className="text-[11.5px] font-bold text-accent-deep underline cursor-pointer">Способы вывода</button>
+            </div>
+            {finance.ledger.length === 0 ? (
+              <div className="px-6 pb-6 pt-2 text-center">
+                <p className="text-[12.5px] text-ink-soft">Операций пока нет — первая оплата покупателя запустит сейф.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-line-soft">
+                {finance.ledger.slice(0, 30).map((e) => {
+                  const pos = e.type === "release_seller" || e.type === "payout_paid";
+                  const neg = e.type === "payout_hold" || e.type === "release_platform" || e.type === "release_cdek";
+                  return (
+                    <div key={e.id} className="px-6 py-3 flex items-center justify-between gap-4 text-[12.5px]">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center ${pos ? "bg-[#4d7327]/15 text-[#4d7327]" : neg ? "bg-accent-deep/15 text-accent-deep" : "bg-cream text-ink-mute"}`}>
+                          {pos ? <Plus size={13} /> : neg ? <Minus size={13} /> : <Wallet size={12} />}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-ink font-semibold truncate">{e.comment}</p>
+                          <p className="text-ink-mute text-[11px]">{fmtDate(e.ts)}{e.orderId ? ` · заказ ${e.orderId.slice(-6)}` : ""}</p>
+                        </div>
+                      </div>
+                      <span className={`font-bold whitespace-nowrap ${pos ? "text-[#4d7327]" : neg ? "text-accent-deep" : "text-ink"}`}>{pos ? "+" : neg ? "−" : ""}{fmt(e.amount)}</span>
+                    </div>
+                  );
+                })}
+                {finance.ledger.length > 30 && <p className="px-6 py-3 text-[11.5px] text-ink-mute text-center">Показаны последние 30 операций из {finance.ledger.length}</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {tab === "analytics" && (() => {
+        const nowTs = Date.now();
+        const periodMs = anaPeriod * 864e5;
+        const curTx = acc.transactions.filter((t) => t.kind === "sale" && nowTs - new Date(t.date).getTime() <= periodMs);
+        const prevTx = acc.transactions.filter((t) => { const n = nowTs - new Date(t.date).getTime(); return n > periodMs && n <= periodMs * 2; });
+        const curRevenue = curTx.reduce((s, t) => s + (t.productPrice || 0), 0);
+        const prevRevenue = prevTx.reduce((s, t) => s + (t.productPrice || 0), 0);
+        const curOrders = curTx.length;
+        const prevOrders = prevTx.length;
+        const avgCheck = curOrders ? Math.round(curRevenue / curOrders) : 0;
+        const prevAvg = prevOrders ? Math.round(prevRevenue / prevOrders) : 0;
+        const conv = totalViews ? Math.round((curOrders / totalViews) * 1000) / 10 : 0;
+        const prevConv = totalViews ? Math.round((prevOrders / totalViews) * 1000) / 10 : 0;
+        const delta = (cur: number, prev: number) => {
+          if (!prev) return cur > 0 ? <span className="text-[#4d7327] text-[11px] font-bold">новое</span> : <span className="text-ink-mute text-[11px]">—</span>;
+          const d = Math.round(((cur - prev) / prev) * 100);
+          return <span className={`text-[11px] font-bold ${d >= 0 ? "text-[#4d7327]" : "text-error"}`}>{d >= 0 ? "+" : ""}{d}%</span>;
+        };
+        const chartData = [...Array(anaPeriod)].map((_, i) => {
+          const d = new Date(Date.now() - (anaPeriod - 1 - i) * 864e5);
+          const key = d.toISOString().slice(0, 10);
+          const sum = curTx.filter((t) => t.date.slice(0, 10) === key).reduce((s, t) => s + (t.productPrice || 0), 0);
+          return { day: `${d.getDate()}.${d.getMonth() + 1}`, sum };
+        });
+        const weekdayData = [0, 0, 0, 0, 0, 0, 0];
+        curTx.forEach((t) => { weekdayData[new Date(t.date).getDay()] += t.productPrice || 0; });
+        const wdNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+        const peakIdx = weekdayData.indexOf(Math.max(...weekdayData));
+        const peakDay = weekdayData[peakIdx] > 0 ? wdNames[peakIdx] : null;
+        const periodOrders = myOrders.filter((o) => nowTs - new Date(o.date).getTime() <= periodMs);
+        const catMap: Record<string, number> = {};
+        periodOrders.forEach((o) => o.items.forEach((it) => {
+          const pr = marketList.find((x) => x.id === it.productId);
+          const cat = (pr as any)?.category || "Прочее";
+          catMap[cat] = (catMap[cat] || 0) + ((pr?.price || 0) * it.qty);
+        }));
+        const catList = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+        const aiTips: { icon: string; title: string; text: string }[] = [];
+        const myGoods = marketList.filter((x) => x.id.startsWith("sp-") && (x as any).ownerId === user?.userId);
+        if (myGoods.length === 0) aiTips.push({ icon: "📦", title: "Запустите витрину", text: "На витрине нет ваших товаров — создайте первую карточку, чтобы аналитика и советы ожили." });
+        if (totalViews >= 20 && cartAdds === 0) aiTips.push({ icon: "👀", title: "Просмотры есть, корзин нет", text: `Карточки посмотрели ${totalViews} раз, но в корзину не добавили ни разу: улучшите главное фото и первое предложение цены.` });
+        if (cartAdds > 0 && curOrders / cartAdds < 0.3) aiTips.push({ icon: "🛒", title: "Корзины не доходят до заказа", text: `Только ${Math.round((curOrders / cartAdds) * 100)}% корзин становятся заказами: проверьте цену доставки и сроки отправки.` });
+        if (conv > 0 && conv < 1 && totalViews >= 30) aiTips.push({ icon: "📉", title: `Конверсия ${conv}% — ниже рынка`, text: "Средняя конверсия маркетплейса 2-4%. Добавьте фото в интерьере и короткое видео изделия." });
+        const avgMine = myGoods.length ? myGoods.reduce((a, b) => a + b.price, 0) / myGoods.length : 0;
+        const catGoods = marketList.filter((x) => x.categoryId === (myGoods[0]?.categoryId || ""));
+        const avgCat = catGoods.length ? catGoods.reduce((a, b) => a + b.price, 0) / catGoods.length : 0;
+        if (avgMine && avgCat) {
+          const diff = Math.round(((avgMine - avgCat) / avgCat) * 100);
+          if (diff > 10) aiTips.push({ icon: "💰", title: `Цена на ${diff}% выше рынка`, text: `Средняя цена категории ${fmt(Math.round(avgCat))}: снижение на 5-7% обычно даёт рост конверсии.` });
+          else if (diff < -10) aiTips.push({ icon: "📈", title: `Цена на ${-diff}% ниже рынка`, text: `Категория в среднем ${fmt(Math.round(avgCat))}: плавный рост цены на 5% часто проходит без потери заказов.` });
+          else aiTips.push({ icon: "✅", title: "Цена в рынке", text: `Ваши цены в коридоре ±10% от среднего категории (${fmt(Math.round(avgCat))}) — зона максимальной конверсии.` });
+        }
+        if (topItems.length > 0 && curRevenue > 0) {
+          const topProd = marketList.find((x) => x.id === topItems[0][0]);
+          const topShare = Math.round((((topProd?.price || 0) * topItems[0][1]) / curRevenue) * 100);
+          if (topShare >= 60) aiTips.push({ icon: "🎯", title: `Один товар = ${topShare}% выручки`, text: `«${topProd?.name || topItems[0][0]}» тянет почти всю выручку: развивайте соседние товары, чтобы снизить риск.` });
+        }
+        if (peakDay) aiTips.push({ icon: "📅", title: `Пиковый день — ${peakDay}`, text: "Публикуйте новинки и планируйте акции на этот день недели." });
+        if (forecast30 > 0) aiTips.push({ icon: "🔮", title: `Прогноз 30 дней ≈ ${fmt(forecast30)}`, text: `Экстраполяция фактической выручки (${activeDays} дн. активности): удержите темп — месяц закроется на этой цифре.` });
+        return (
+          <div className="fade-up space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-surface rounded-2xl shadow-card px-5 py-3">
+              <p className="font-display font-bold text-[16px] text-ink flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Аналитика продаж</p>
+              <div className="flex items-center gap-1 bg-cream rounded-xl p-1">
+                <Calendar size={13} className="text-ink-mute ml-2" />
+                {([7, 30, 90] as const).map((pp) => (
+                  <button key={pp} onClick={() => setAnaPeriod(pp)} className={`px-3 py-1.5 text-[12px] font-bold rounded-lg transition-colors cursor-pointer ${anaPeriod === pp ? "bg-accent text-ink" : "text-ink-soft hover:text-ink"}`}>{pp} дн.</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: "Выручка", value: fmt(curRevenue), cur: curRevenue, prev: prevRevenue, icon: Banknote },
+                { label: "Заказы", value: curOrders.toString(), cur: curOrders, prev: prevOrders, icon: Package },
+                { label: "Средний чек", value: fmt(avgCheck), cur: avgCheck, prev: prevAvg, icon: Receipt },
+                { label: "Конверсия", value: `${conv}%`, cur: conv, prev: prevConv, icon: TrendingUp },
+              ].map((k) => (
+                <div key={k.label} className="bg-surface rounded-2xl shadow-card p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11.5px] text-ink-mute font-semibold uppercase tracking-wide">{k.label}</p>
+                    <k.icon size={14} className="text-accent-deep" />
+                  </div>
+                  <p className="font-display font-extrabold text-[22px] text-ink">{k.value}</p>
+                  <div className="mt-1.5 text-ink-mute text-[11px]">vs прошлый период: {delta(k.cur, k.prev)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-surface rounded-2xl shadow-card p-6">
+              <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-accent-deep" /> Выручка по дням</p>
+              {curRevenue === 0 ? (
+                <p className="text-[13px] text-ink-soft text-center py-8">Нет продаж за выбранный период — график появится с первым заказом.</p>
+              ) : (
+                <div style={{ width: "100%", height: 220 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={chartData}>
+                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#8a8a8a" }} tickLine={false} axisLine={{ stroke: "#e5e5e5" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#8a8a8a" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}к`} />
+                      <RechartsTooltip formatter={(v: any) => [fmt(Number(v)), "Выручка"]} />
+                      <Line type="monotone" dataKey="sum" stroke="#4d7327" strokeWidth={2.5} dot={{ r: 3, fill: "#4d7327" }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Воронка продаж</p>
+                {funnel.map(([label, val, pct]) => (
+                  <div key={label as string} className="mb-3">
+                    <div className="flex justify-between text-[12px] mb-1"><span className="font-semibold text-ink">{label}</span><span className="text-ink-mute">{(val as number).toLocaleString("ru-RU")} · {pct}%</span></div>
+                    <div className="h-2.5 rounded-full bg-line-soft overflow-hidden"><div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><Package size={17} className="text-accent-deep" /> Топ товаров</p>
+                {topItems.length === 0 ? (
+                  <p className="text-[13.5px] text-ink-soft">Продаж пока нет — топ появится после первых заказов.</p>
+                ) : (
+                  topItems.map(([pid, qty], i) => {
+                    const prod = marketList.find((x) => x.id === pid);
+                    const revenue = (prod?.price || 0) * qty;
+                    return (
+                      <div key={pid} className="flex justify-between gap-3 py-2 border-b border-line-soft last:border-0 text-[13px]">
+                        <span className="text-ink-soft flex-1 min-w-0 truncate">{i + 1}. {prod?.name || pid}</span>
+                        <span className="text-ink-mute whitespace-nowrap">{(prod as any)?.views || 0} просм.</span>
+                        <span className="text-ink-mute whitespace-nowrap">{fmt(revenue)}</span>
+                        <span className="font-bold text-ink whitespace-nowrap">{qty} шт</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4 flex items-center gap-2"><BarChart3 size={17} className="text-accent-deep" /> Выручка по категориям</p>
+                {catList.length === 0 ? (
+                  <p className="text-[13px] text-ink-soft">Категории появятся с первыми продажами.</p>
+                ) : (
+                  catList.map(([cat, sum]) => {
+                    const pct = curRevenue ? Math.round((sum / curRevenue) * 100) : 0;
+                    return (
+                      <div key={cat} className="mb-3 last:mb-0">
+                        <div className="flex justify-between text-[12px] mb-1"><span className="font-semibold text-ink truncate">{cat}</span><span className="text-ink-mute whitespace-nowrap">{fmt(sum)} · {pct}%</span></div>
+                        <div className="h-2 rounded-full bg-line-soft overflow-hidden"><div className="h-full rounded-full bg-accent-deep" style={{ width: `${pct}%` }} /></div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="bg-surface rounded-2xl shadow-card p-6 border-2 border-ai/25">
+                <p className="font-display font-bold text-[16px] text-ink mb-1 flex items-center gap-2"><Sparkles size={17} className="text-ai" /> ИИ-аналитик</p>
+                <p className="text-[11.5px] text-ink-mute mb-4">Персональные рекомендации по вашим данным за выбранный период</p>
+                {!plan.forecasts ? (
+                  <div className="text-center py-4">
+                    <p className="text-[28px] mb-2">🔒</p>
+                    <p className="text-[13px] font-bold text-ink mb-1">ИИ-аналитик доступен с тарифа «Топ-мастер»</p>
+                    <p className="text-[12px] text-ink-mute">Умные советы по росту продаж на основе ваших данных. Кнопка «Сменить тариф» — в шапке кабинета.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {aiTips.length === 0 && <p className="text-[13px] text-ink-soft">Данных пока мало — советы появятся после первых просмотров и продаж.</p>}
+                    {aiTips.map((t, ti) => (
+                      <div key={ti} className="flex gap-2.5 rounded-xl bg-cream/70 border border-line-soft p-3">
+                        <span className="text-[15px] shrink-0">{t.icon}</span>
+                        <div>
+                          <p className="text-[12.5px] font-bold text-ink">{t.title}</p>
+                          <p className="text-[12px] text-ink-soft leading-relaxed">{t.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* КОМАНДА */}
+      {tab === "team" && (
+        <div className="fade-up">
+          {plan.team === 0 ? (
+            <div className="bg-surface rounded-2xl shadow-card p-10 text-center">
+              <p className="text-[40px] mb-2">🔒</p>
+              <p className="font-bold text-[15px] text-ink">Команда доступна с тарифа «Мастер»</p>
+              <p className="text-[12.5px] text-ink-mute mt-1">Приглашайте сотрудников: менеджеров, мастеров, кладовщиков.</p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-surface rounded-2xl shadow-card p-6 mb-4">
+                <p className="font-display font-bold text-[16px] text-ink mb-4">Сотрудники · {acc.team.length} из {fmtLimit(plan.team)}</p>
+                {acc.team.length === 0 && <p className="text-[13.5px] text-ink-soft mb-4">Добавьте сотрудников с ролями: менеджер, мастер, кладовщик.</p>}
+                <div className="space-y-2.5">
+                  {acc.team.map((mm) => (
+                    <div key={mm.id} className="flex items-center gap-3 rounded-xl border border-line p-3.5">
+                      <span className="w-9 h-9 rounded-full bg-cream flex items-center justify-center font-bold text-[14px] text-accent-deep shrink-0">{(mm.name[0] || "?").toUpperCase()}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-[14px] text-ink truncate">{mm.name}</p>
+                        <p className="text-[12px] text-ink-mute truncate">{mm.email || "email не указан"}</p>
+                      </div>
+                      <Badge tone={mm.role === "Менеджер" ? "ai" : mm.role === "Мастер" ? "success" : "honey"}>{mm.role}</Badge>
+                      <button onClick={() => acc.removeMember(mm.id)} aria-label="Удалить сотрудника" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-mute hover:text-error hover:bg-error/10 transition-colors cursor-pointer"><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-surface rounded-2xl shadow-card p-6">
+                <p className="font-display font-bold text-[16px] text-ink mb-4">Пригласить сотрудника</p>
+                <div className="grid sm:grid-cols-[1fr_1fr_auto_auto] gap-2.5 items-center">
+                  <input className="field" placeholder="Имя" value={teamMember.name} onChange={(e) => setTeamMember({ ...teamMember, name: e.target.value })} />
+                  <input className="field" placeholder="Email для приглашения" type="email" value={teamMember.email || ""} onChange={(e) => setTeamMember({ ...teamMember, email: e.target.value })} />
+                  <select className="field" value={teamMember.role} onChange={(e) => setTeamMember({ ...teamMember, role: e.target.value as typeof teamMember.role })}>
+                    <option>Менеджер</option><option>Мастер</option><option>Кладовщик</option>
+                  </select>
+                  <Btn disabled={!teamMember.name.trim() || acc.team.length >= plan.team} onClick={() => { const err = acc.addMember(teamMember); if (err) { setTeamErr(err); return; } setTeamErr(""); setTeamMember({ name: "", email: "", role: "Менеджер" }); }}>Добавить</Btn>
+                </div>
+                {teamErr && <p className="text-[12px] font-semibold text-error mt-2.5">{teamErr}</p>}
+                {acc.team.length >= plan.team && <p className="text-[12px] font-semibold text-error mt-2.5">Достигнут лимит команды для вашего тарифа.</p>}
+              </div>
+
+              {/* ЭТАП 5 §5.2–§5.6: премиум-функции кабинета продавца (видны платным тарифам;
+                  закрытые блоки показывают заглушку «Доступно на тарифе X») */}
+              <SellerPremiumBlocksLite />
+            </>
+          )}
+        
+
+            {/* === Блок интеграций с ИИ-моделями === */}
+            <div id="settings-models" className="mt-8 bg-surface-soft rounded-2xl p-6 border border-line-soft">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-9 h-9 rounded-xl bg-dark text-cream flex items-center justify-center">🔌</span>
+                <h3 className="font-display font-bold text-[18px] text-ink">Интеграции с ИИ-моделями</h3>
+              </div>
+              <p className="text-[12.5px] text-ink-soft mb-5">Подключите свои ключи для расширенного функционала Студии. Базовая модель включена во всех тарифах.</p>
+              {([
+                ["YandexGPT", "yagpt_key", "OAuth-токен Yandex Cloud", "Тексты, SEO, характеристики, описания"],
+                ["YandexART / Kandinsky", "kandinsky_key", "API-ключ генерации изображений", "ИИ-фотосессии, сцены, инфографика"],
+                ["GigaChat (Сбер)", "gigachat_key", "Ключ API GigaChat", "Альтернативная языковая модель"],
+                ["OpenAI / Claude", "openai_key", "Ваш API-ключ (на ваш счёт)", "Внешние модели по желанию"],
+              ] as [string, string, string, string][]).map(([name, key, hint, use]) => {
+                const v = localStorage.getItem("qf_model_" + key) || "";
+                return (
+                  <div key={key} className="mb-3 pb-3 border-b border-line-soft last:border-0 last:mb-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="font-display font-bold text-[13px] text-ink">{name}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v ? "bg-success text-cream" : "bg-line-soft text-ink-mute"}`}>{v ? "✅ ПОДКЛЮЧЕНО" : "не подключено"}</span>
+                    </div>
+                    <p className="text-[11px] text-ink-mute mb-1.5">{use}</p>
+                    <input className="field font-mono text-[12px]" type="password" value={v} placeholder={hint}
+                      onChange={(e) => localStorage.setItem("qf_model_" + key, e.target.value)} />
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-ink-mute mt-4 flex items-start gap-1.5">
+                <span>🔒</span>
+                <span>Ключи хранятся только в вашем браузере (localStorage) и не уходят на серверы платформы. При переезде в Yandex Cloud (следующий этап) ключи перенесутся в защищённое хранилище.</span>
+              </p>
+            </div></div>
+      )}
+
+      {/* ============================================================
+          ЦИФРОВЫЕ ТОВАРЫ — раздел продавца (ТЗ §9)
+          Дашборд метрик + список продуктов + мастер создания.
+          ============================================================ */}
+      {tab === "digital" && (
+        <div className="fade-up">
+          <div className="flex items-center gap-3 mb-5 flex-wrap">
+            <span className="w-11 h-11 rounded-2xl bg-dark text-cream flex items-center justify-center"><Sparkles size={20} /></span>
+            <div className="flex-1 min-w-[200px]">
+              <h2 className="font-display font-bold text-[24px] text-ink">Цифровые товары</h2>
+              <p className="text-[13px] text-ink-soft">Сайты и шаблоны, промты, скиллы, ИИ-агенты и подписки — с защитой файлов и автоматической выдачей доступа.</p>
+            </div>
+            <Btn variant="primary" onClick={() => { setDigitalEditId(null); setDigitalWizardOpen(true); }}>+ Создать цифровой товар</Btn>
+          </div>
+
+          {/* дашборд: 4 метрики (§9) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            {(() => {
+              const monthKey = new Date().toISOString().slice(0, 7);
+              const myPur = digitalPurchasesAll.filter((pu) => digitalProducts.some((d) => d.id === pu.productId));
+              const revenue = digitalProducts.reduce((a, d) => a + d.stats.revenue, 0);
+              const monthSales = myPur.filter((pu) => pu.purchasedAt.slice(0, 7) === monthKey).length;
+              const downloads = digitalProducts.reduce((a, d) => a + d.stats.downloads, 0);
+              const rated = digitalProducts.filter((d) => d.stats.rating > 0);
+              const avgRating = rated.length ? (rated.reduce((a, d) => a + d.stats.rating, 0) / rated.length) : 0;
+              const cards = [
+                ["Доход (всего)", fmt(revenue) + " ₽"],
+                ["Продажи за месяц", String(monthSales)],
+                ["Скачиваний", String(downloads)],
+                ["Средний рейтинг", avgRating ? avgRating.toFixed(1) + " ★" : "—"],
+              ];
+              return cards.map(([l, v]) => (
+                <div key={l} className="bg-surface border border-line-soft rounded-2xl shadow-card p-4">
+                  <p className="text-[11px] font-bold text-ink-mute uppercase mb-1">{l}</p>
+                  <p className="font-display font-bold text-[20px] text-ink">{v}</p>
+                </div>
+              ));
+            })()}
+          </div>
+
+          {digitalProducts.length === 0 ? (
+            <div className="bg-surface border border-dashed border-line rounded-2xl p-10 text-center">
+              <p className="text-[40px] mb-2">📦</p>
+              <p className="font-display font-bold text-[18px] text-ink mb-1">Пока нет цифровых продуктов</p>
+              <p className="text-[13px] text-ink-soft mb-5">Создайте первый продукт: файл хранится в защищённом хранилище и выдаётся покупателю только после оплаты.</p>
+              <Btn variant="primary" onClick={() => { setDigitalEditId(null); setDigitalWizardOpen(true); }}>Создать цифровой товар</Btn>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {digitalProducts.map((d) => {
+                const meta = DIGITAL_TYPE_META[d.type];
+                const buyers = digitalPurchasesAll.filter((pu) => pu.productId === d.id);
+                return (
+                  <div key={d.id} className={`bg-surface border rounded-2xl shadow-card p-4 flex gap-4 flex-wrap sm:flex-nowrap items-start ${d.status === "archived" ? "border-line opacity-70" : "border-line-soft"}`}>
+                    <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-line-soft flex items-center justify-center text-[26px]">
+                      {d.previewUrl ? <img src={d.previewUrl} alt="" className="w-full h-full object-cover" /> : meta.icon}
+                    </div>
+                    <div className="flex-1 min-w-[220px]">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full ${meta.accentClass}`}>{meta.icon} {meta.label}</span>
+                        <span className="text-[11px] text-ink-mute">v{d.version}</span>
+                        {d.status === "archived" && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-line-soft text-ink-mute">Снят с продажи</span>}
+                      </div>
+                      <p className="font-display font-bold text-[15px] text-ink leading-snug break-words">{d.title}</p>
+                      <p className="text-[12px] text-ink-mute mt-1">
+                        {fmt(d.price)} ₽ · продаж: {d.stats.salesCount} · скачиваний: {d.stats.downloads} · доход: {fmt(d.stats.revenue)} ₽{d.stats.rating ? ` · ${d.stats.rating.toFixed(1)}★` : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-wrap items-start w-full sm:w-auto">
+                      <Btn size="sm" variant="outline" onClick={() => { setDigitalEditId(d.id); setDigitalWizardOpen(true); }}>Редактировать</Btn>
+                      <Btn size="sm" variant="outline" onClick={() => { setDigitalEditId(d.id); setDigitalVersionOpen(true); }}>Новая версия</Btn>
+                      {d.status === "published" && (
+                        <Btn size="sm" variant="ghost" onClick={() => { if (confirm("Снять продукт с продажи? Покупатели сохранят доступ к уже купленным версиям.")) archiveDigitalProduct(d.id); }}>Снять с продажи</Btn>
+                      )}
+                      <Btn size="sm" variant="ghost" onClick={() => setDigitalAnalyticsId(d.id)}>Аналитика</Btn>
+                    </div>
+                    {buyers.length > 0 && (
+                      <div className="w-full border-t border-line-soft pt-2 text-[11px] text-ink-mute">
+                        Последние покупки: {buyers.slice(0, 3).map((b) => new Date(b.purchasedAt).toLocaleDateString("ru-RU")).join(", ")}{buyers.length > 3 ? ` и ещё ${buyers.length - 3}` : ""}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <DigitalProductWizard open={digitalWizardOpen} editId={digitalEditId}
+            onClose={(createdId) => {
+              setDigitalWizardOpen(false); setDigitalEditId(null);
+              if (createdId) { useNotifyStore.getState().push({ kind: "report", title: "Цифровой товар опубликован", text: "Продукт появился в каталоге «Цифровые товары».", deepLink: "#/catalog" }); }
+            }} />
+
+          {/* упрощённая форма новой версии (§9, §11) */}
+          {digitalVersionOpen && (() => {
+            const d = digitalProducts.find((x) => x.id === digitalEditId);
+            if (!d) return null;
+            return (
+              <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setDigitalVersionOpen(false)}>
+                <div className="bg-surface rounded-t-2xl sm:rounded-2xl shadow-lift w-full sm:max-w-[440px] p-6" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-display font-bold text-[18px] text-ink mb-1">Новая версия: {d.title}</h3>
+                  <p className="text-[12px] text-ink-mute mb-4">Текущая версия — {d.version}. Все покупатели получат уведомление и бесплатный доступ к обновлению.</p>
+                  <DigitalVersionForm product={d} onDone={() => { setDigitalVersionOpen(false); setDigitalEditId(null); }} />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* аналитика продукта + CSV (§9) */}
+          {digitalAnalyticsId && <DigitalAnalyticsModal productId={digitalAnalyticsId} onClose={() => setDigitalAnalyticsId(null)} />}
+        </div>
+      )}
+
+                <ProductWizard_v2 open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
+                                                  {tab === "settings" && (
+        <div className="fade-up space-y-4">
+          <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
+
+          <div className="mb-5"><SellerAvatar /></div>
+          {/* Профиль и юр. данные — доступны и редактируемы на любом тарифе */}
+          <SettingsSection title="Профиль и юридические данные" icon={<Settings size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
+            {/* юридические данные : статус проверки + смена формы */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px] mb-5">
+                <Field label="Продавец"><input className="field break-words" value={legalDraft.legalName} onChange={(e) => setLegalDraft({ ...legalDraft, legalName: e.target.value })} /></Field>
+                <Field label="Форма"><span className="font-semibold text-ink text-[13px]">{sellerTypeInfo(lt)?.short}</span></Field>
+                <Field label="ИНН">
+                  <input className="field" inputMode="numeric" value={legalDraft.inn} onChange={(e) => setLegalDraft({ ...legalDraft, inn: e.target.value.replace(/\D/g, "") })} placeholder="602709876543" />
+                  {lt !== "self_employed" && (
+                    <button type="button" disabled={legalFetching} onClick={async () => {
+                      const v = validateINN(legalDraft.inn); if (!v.valid) { setLegalErr(v.error || "Невалидный ИНН"); return; }
+                      setLegalFetching(true); setLegalErr("");
+                      try {
+                        const data = await fetchCompanyDataByINN(legalDraft.inn);
+                        if (!data) { setLegalErr("Автозаполнение по ИНН станет доступно после подключения справочника ФНС/DaData"); return; }
+                        setLegalDraft((d) => ({ ...d, legalName: data.legalName || d.legalName, ogrn: data.ogrn || d.ogrn, legalAddress: data.legalAddress || d.legalAddress, production_city: d.production_city || data.productionCity || "" }));
+                        setLegalSaved(false);
+                      } finally { setLegalFetching(false); }
+                    }} className="mt-1 text-[11.5px] font-semibold underline decoration-dotted underline-offset-2" style={{ color: "#2d5f4c" }}>
+                      {legalFetching ? "Запрос…" : "Подтянуть реквизиты по ИНН"}
+                    </button>
+                  )}
+                </Field>
+                <Field label="Город производства">
+                  <div className="space-y-1">
+                    <input className="field" list="rf-cities" value={legalDraft.production_city} onChange={(e) => setLegalDraft({ ...legalDraft, production_city: e.target.value })} placeholder="Например: Курск" />
+                    <datalist id="rf-cities">{CITIES.map((c) => <option key={c.name} value={c.name} />)}</datalist>
+                    {legalDraft.production_city && <p className="text-[11.5px] text-ink-mute">{safeDistrictLabel(legalDraft.production_city)}</p>}
+                  </div>
+                </Field>
+                {lt !== "self_employed" && (<>
+                  <Field label="ОГРН"><input className="field" inputMode="numeric" value={legalDraft.ogrn} onChange={(e) => setLegalDraft({ ...legalDraft, ogrn: e.target.value.replace(/\D/g, "") })} placeholder="15 цифр" /></Field>
+                  <Field label="Юридический адрес"><input className="field" value={legalDraft.legalAddress} onChange={(e) => setLegalDraft({ ...legalDraft, legalAddress: e.target.value })} placeholder="Индекс, регион, город, улица, дом, офис" /></Field>
+                </>)}
+              </div>
+              <div className="flex items-center gap-3 mb-5">
+                <Btn size="sm" onClick={() => { const v = validateINN(legalDraft.inn); if (!v.valid) { setLegalErr(v.error || "Невалидный ИНН"); setLegalSaved(false); return; } const patch: Partial<Pick<SellerProfile, "legalName" | "inn" | "production_city" | "ogrn" | "legalAddress">> = { legalName: legalDraft.legalName, inn: legalDraft.inn, production_city: legalDraft.production_city }; if (lt !== "self_employed") { const vg = validateOGRN(legalDraft.ogrn); if (!vg.valid) { setLegalErr(vg.error || "Невалидный ОГРН"); setLegalSaved(false); return; } patch.ogrn = legalDraft.ogrn; patch.legalAddress = legalDraft.legalAddress; } const res = s.updateLegalFields(sellerUid, patch, "Изменение реквизитов"); if (!res.ok) { setLegalErr(res.error || "Не удалось сохранить"); setLegalSaved(false); return; } setLegalErr(""); setLegalSaved(true); setTimeout(() => setLegalSaved(false), 2200); }}>Сохранить реквизиты</Btn>
+                {legalSaved && <span className="text-[12px] font-semibold" style={{ color: "#2d5f4c" }}>Сохранено — на проверке</span>}
+                {legalErr && <span className="text-[12px] font-semibold text-error">{legalErr}</span>}
+              </div>
+
+            <div className="flex items-center justify-between gap-2 mb-5">
+              <div className="flex items-center gap-2">
+                {verificationStatus === "verified" && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold text-white" style={{ background: "#2d5f4c" }}>Проверено</span>}
+                {verificationStatus === "pending" && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold text-white" style={{ background: "#c77e28" }}>На проверке</span>}
+                {verificationStatus === "rejected" && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold text-white" style={{ background: "#b3261e" }}>Отклонено модерацией</span>}
+              </div>
+              <Btn size="sm" variant="outline" onClick={() => { setLegalWizardOpen(true); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }}>Сменить правовую форму</Btn>
+            </div>
+            {/* контакты магазина — редактируемые */}
+            <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-2.5">Контакты магазина</p>
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
+              <Field label="Название магазина"><input className="field" value={sProf.shopName} onChange={(e) => setSProf({ ...sProf, shopName: e.target.value })} /></Field>
+              <Field label="Контактное лицо"><input className="field" value={sProf.contactName} onChange={(e) => setSProf({ ...sProf, contactName: e.target.value })} /></Field>
+              <Field label="Email"><input className="field" type="email" value={sProf.email} onChange={(e) => setSProf({ ...sProf, email: e.target.value })} /></Field>
+              <Field label="Телефон"><input className="field" value={sProf.phone} onChange={(e) => setSProf({ ...sProf, phone: e.target.value })} /></Field>
+              <Field label="Город"><input className="field" value={sProf.city} onChange={(e) => setSProf({ ...sProf, city: e.target.value })} /></Field>
+            </div>
+
+            {/* о мастере — редактируемое */}
+            <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mt-5 mb-2.5">О мастере</p>
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3.5">
+              <Field label="Имя мастера / бренд"><input className="field" value={sProf.masterName} onChange={(e) => setSProf({ ...sProf, masterName: e.target.value })} /></Field>
+              <Field label="Лет опыта"><input className="field" inputMode="numeric" value={sProf.yearsExperience} onChange={(e) => setSProf({ ...sProf, yearsExperience: e.target.value.replace(/\D/g, "") })} /></Field>
+              <div className="sm:col-span-2"><Field label="Достижения"><input className="field" value={sProf.achievements} onChange={(e) => setSProf({ ...sProf, achievements: e.target.value })} placeholder="Награды, публикации, выставки" /></Field></div>
+              <div className="sm:col-span-2"><Field label="История бизнеса"><textarea className="field" rows={3} value={sProf.businessStory} onChange={(e) => setSProf({ ...sProf, businessStory: e.target.value })} placeholder="Как начиналась мастерская, взлёты и падения" /></Field></div>
+              <MasterProfileBlock />
+            </div>
+
+              <PasswordChangeCard />
+            <Btn size="sm" className="mt-4" onClick={saveSProf}>
+              {sProfSaved ? <><Check size={15} /> Сохранено</> : "Сохранить изменения"}
+            </Btn>
+          </SettingsSection>
+
+          {/* Приватность и данные — доступно на всех тарифах */}
+          <SettingsSection title="Приватность и данные" icon={<Shield size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
+            <p className="text-[13px] text-ink-soft leading-relaxed mb-4">Управление видимостью профиля, экспорт данных и удаление аккаунта.</p>
+            
+            {/* Видимость профиля */}
+            <div className="flex items-center justify-between py-3 border-b border-line-soft">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">Видимость профиля</p>
+                <p className="text-[11px] text-ink-mute mt-0.5">Показывать магазин в каталоге мастеров</p>
+              </div>
+              <Switch 
+                checked={s.isMaster || false} 
+                onChange={(v) => s.setInfo({ isMaster: v })} 
+                label="Публичный профиль" 
+              />
+            </div>
+
+            {/* Экспорт данных */}
+            <div className="flex items-center justify-between py-3 border-b border-line-soft">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">Экспорт данных</p>
+                <p className="text-[11px] text-ink-mute mt-0.5">Скачать все ваши данные в формате JSON</p>
+              </div>
+              <Btn 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  const data = {
+                    profile: { shopName: s.shopName, email: s.email, inn: s.inn, city: s.city },
+                    products: acc.products.filter((p) => p.ownerId === user?.userId),
+                    exportedAt: new Date().toISOString()
+                  };
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `quantiform-data-${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Скачать данные
+              </Btn>
+            </div>
+
+            {/* Удаление аккаунта */}
+            <div className="pt-3">
+              <Btn 
+                size="sm" 
+                variant="ghost" 
+                className="!text-error"
+                onClick={() => {
+                  if (confirm('⚠️ Вы уверены, что хотите удалить аккаунт? Это действие необратимо. Все ваши товары и данные будут удалены.')) {
+                    if (confirm('Последнее предупреждение: удалить аккаунт без возможности восстановления?')) {
+                      useAppStore.getState().logout();
+                      useSellerReg.getState().resetFlow();
+                      window.location.href = '/';
+                    }
+                  }
+                }}
+              >
+                Удалить аккаунт
+              </Btn>
+            </div>
+          </SettingsSection>
+
+          {/* Уведомления — всем */}
+          <SettingsSection title="Уведомления" icon={<Bell size={15} />} minLevel={0} level={lvl} accent={lvlMeta.accent}>
+            <div className="space-y-3.5">
+              {([["orders", "Новые заказы и сообщения", "Мгновенно о каждом заказе и вопросе покупателя"], ["payouts", "Выплаты и финансы", "Статусы выплат и поступления средств"], ["promo", "Акции платформы", "Рекомендации и промо-инструменты"]] as const).map(([k, t, d]) => (
+                <div key={k} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold text-ink">{t}</p>
+                    <p className="text-[11.5px] text-ink-mute">{d}</p>
+                  </div>
+                  <Switch checked={sNotif[k]} onChange={(v) => setSNotif({ [k]: v })} label={t} />
+                </div>
+              ))}
+            </div>
+          </SettingsSection>
+
+          {/* Оформление витрины — со 2-го тарифа */}
+          <SettingsSection title="Оформление витрины" icon={<Palette size={15} />} minLevel={1} level={lvl} nextLabel="следующий тариф" accent={lvlMeta.accent}>
+            <div className="flex gap-2 flex-wrap">
+              {([["light", "Светлая"], ["dark", "Тёмная"], ["system", "Системная"]] as const).map(([id, label]) => (
+                <button key={id} onClick={() => setSTheme(id)}
+                  className={`px-4 h-10 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${sTheme === id ? "bg-dark text-cream" : "bg-line-soft text-ink-soft hover:bg-line"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[12px] text-ink-mute mt-2.5">Настройка баннера, обложки и цветов вашего магазина.</p>
+          </SettingsSection>
+
+          {/* Интеграции — топ-тариф */}
+          <SettingsSection title="Интеграции и API" icon={<Zap size={15} />} minLevel={3} level={lvl} nextLabel="топ-тариф" accent={lvlMeta.accent}>
+            <p className="text-[13px] text-ink-soft leading-relaxed">API для синхронизации товаров, вебхуки заказов и подключение внешних систем учёта.</p>
+          </SettingsSection>
+
+          <div className="bg-surface rounded-2xl shadow-card p-5">
+            <p className="text-[13px] font-semibold text-ink mb-1 flex items-center gap-2"><CreditCard size={16} className="text-accent-deep" /> Тариф: {sellerPlanById(lt, planId)?.name} ({fmt(sellerPlanById(lt, planId)?.price || 0)}/мес)</p>
+            <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Управлять подпиской</Link>
+          </div>
+        </div>
+      )}
+      <ProductWizard_v2 open={prodWizardOpen} editId={editProductId} onClose={() => { setProdWizardOpen(false); setEditProductId(null); }} />
+      <Modal open={legalWizardOpen} onClose={() => { setLegalWizardOpen(false); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }} title="Смена правовой формы">
+        {legalStep === 1 && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-soft">Выберите новую правовую форму. Текущая: {sellerTypeInfo(lt)?.short}.</p>
+            <div className="grid gap-2">
+              {SELLER_TYPES.filter((t) => t.type !== lt).map((t) => (
+                <button key={t.type} onClick={() => { setLegalTarget(t.type); setLegalPreview(previewLegalTypeChange(lt, planId, t.type)); }}
+                  className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${legalTarget === t.type ? "" : "border-line-soft"}`}
+                  style={legalTarget === t.type ? { borderColor: "#2d5f4c", background: "#eef4f0" } : undefined}>
+                  <p className="text-[13.5px] font-bold text-ink">{t.short} — {t.label}</p>
+                  <p className="text-[11.5px] text-ink-mute">Разовый сбор {t.fee} ₽ · базовая комиссия {t.commission}%</p>
+                </button>
+              ))}
+            </div>
+            {legalPreview && (
+              <div className="rounded-xl bg-line-soft p-3 space-y-1">
+                <p className="text-[12px] font-bold text-ink">Последствия перехода:</p>
+                {legalPreview.warnings.map((w, i) => <p key={i} className="text-[12px] text-ink-soft">• {w}</p>)}
+                <p className="text-[12px] text-ink-soft">• Рекомендуемый тариф: {legalPreview.newPlanName} ({legalPreview.newPrice} ₽/мес)</p>
+                <p className="text-[12px] text-ink-mute mt-1">Потребуется загрузить документы: {legalPreview.docsRequired.map((d) => d.name).join(", ")}</p>
+              </div>
+            )}
+            <Btn className="w-full" disabled={!legalTarget} onClick={() => setLegalStep(2)}>Далее</Btn>
+          </div>
+        )}
+        {legalStep === 2 && legalTarget && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-soft">Подтвердите смену формы: {sellerTypeInfo(lt)?.short} → {sellerTypeInfo(legalTarget)?.short}.</p>
+            <p className="text-[12px] text-ink-mute">После применения текущие документы будут сброшены, магазин получит статус «На проверке», и потребуется загрузить новые документы.</p>
+            {legalErr && <p className="text-[12px] font-semibold text-error">{legalErr}</p>}
+            <div className="flex gap-2">
+              <Btn variant="outline" className="flex-1" onClick={() => setLegalStep(1)}>Назад</Btn>
+              <Btn className="flex-1" onClick={() => { const res = s.changeLegalType(sellerUid, legalTarget, planId); if (!res.ok) { setLegalErr(res.error || "Не удалось сменить форму"); return; } setLegalErr(""); setLegalStep(3); }}>Применить форму</Btn>
+            </div>
+          </div>
+        )}
+        {legalStep === 3 && legalTarget && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-soft">Загрузите документы для формы «{sellerTypeInfo(legalTarget)?.short}».</p>
+            <div className="space-y-2">
+              {sellerTypeInfo(legalTarget)!.docs.map((d) => {
+                const doc = s.docs[d.key];
+                return (
+                  <div key={d.key} className="rounded-xl border border-line-soft p-3">
+                    <p className="text-[12.5px] font-semibold text-ink">{d.name}</p>
+                    <p className="text-[11px] text-ink-mute mb-1.5">{d.note}</p>
+                    <input type="file" className="text-[12px] text-ink-soft" onChange={(e) => { const f = e.target.files?.[0]; if (f) s.addDoc(d.key, f.name, f.size); }} />
+                    {doc && <p className="text-[11.5px] text-ink-mute mt-1.5">Загружено: {doc.fileName} · {(doc.size / 1024).toFixed(0)} КБ</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <Btn className="w-full" disabled={sellerTypeInfo(legalTarget)!.docs.some((d) => !s.docs[d.key])} onClick={() => { s.saveProfile(sellerUid); setLegalWizardOpen(false); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }}>
+              Сохранить документы и закрыть
+            </Btn>
+          </div>
+        )}
+      </Modal>
+
+      {/* вывод средств */}
+      <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Вывод средств">
+        <p className="text-[13px] text-ink-soft mb-4">Доступно: <strong className="text-ink">{fmt(available)}</strong>. Комиссия за вывод — 0 ₽ для мастера. Минимум — 100 ₽.</p>
+        {finance.methods.length === 0 ? (
+          <div className="bg-cream rounded-xl p-4 text-center mb-4">
+            <p className="text-[13px] font-bold text-ink mb-1">Добавьте способ вывода</p>
+            <p className="text-[12px] text-ink-soft">Карта РФ, СБП, ЮMoney или расчётный счёт самозанятого/ИП.</p>
+            <button onClick={() => { setWithdrawOpen(false); setMethodOpen(true); }} className="text-[12px] font-bold text-accent-deep underline mt-2 cursor-pointer">Добавить способ</button>
+          </div>
+        ) : (
+          <>
+            <p className="text-[11.5px] font-bold uppercase tracking-wide text-ink-mute mb-2">Куда вывести</p>
+            <div className="space-y-2 mb-4 max-h-[200px] overflow-y-auto">
+              {finance.methods.map((m) => (
+                <label key={m.id} className="flex items-center gap-3 rounded-xl border border-line p-3 hover:border-accent cursor-pointer">
+                  <input type="radio" name="wMethod" value={m.id} defaultChecked={m.id === finance.methods[0].id} className="accent-accent-deep" />
+                  <span className="text-[18px]">{PAYOUT_METHOD_META[m.type].icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-bold text-ink truncate">{PAYOUT_METHOD_META[m.type].title}</p>
+                    <p className="text-[11.5px] text-ink-soft truncate">{m.mask}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <Field label="Сумма, ₽" required>
+              <input className="field" inputMode="numeric" value={withdrawSum} onChange={(e) => setWithdrawSum(e.target.value.replace(/\D/g, ""))} placeholder={String(available)} />
+            </Field>
+            <Btn className="w-full mt-5" disabled={!+withdrawSum || +withdrawSum < 100 || +withdrawSum > available} onClick={() => {
+              const mid = (document.querySelector('input[name="wMethod"]:checked') as HTMLInputElement)?.value;
+              if (!mid) { useNotifyStore.getState().push({ kind: "alert", title: "Ошибка", text: "Выберите способ вывода" }); return; }
+              const err = finance.requestPayout(+withdrawSum, mid);
+              if (err) { useNotifyStore.getState().push({ kind: "alert", title: "Ошибка", text: String(err) }); return; }
+              setWithdrawSum(""); setWithdrawOpen(false);
+            }}>
+              <Wallet size={16} /> Отправить заявку в ЮKassa
+            </Btn>
+          </>
+        )}
+      </Modal>
+
+      <Modal open={methodOpen} onClose={() => setMethodOpen(false)} title="Способы вывода">
+        <p className="text-[12.5px] text-ink-soft mb-4">Сохранённые реквизиты для выплат. Добавьте удобный способ — деньги будут уходить туда при заявке.</p>
+        {finance.methods.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {finance.methods.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 rounded-xl border border-line p-3">
+                <span className="text-[18px]">{PAYOUT_METHOD_META[m.type].icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12.5px] font-bold text-ink truncate">{PAYOUT_METHOD_META[m.type].title}</p>
+                  <p className="text-[11.5px] text-ink-soft truncate">{m.mask}</p>
+                </div>
+                <button onClick={() => finance.removeMethod(m.id)} className="text-[11.5px] text-error font-bold cursor-pointer">Удалить</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="border-t border-line-soft pt-4">
+          <p className="text-[11.5px] font-bold uppercase tracking-wide text-ink-mute mb-2">Добавить способ</p>
+          <div className="grid xs:grid-cols-2 gap-2 mb-3">
+            {(Object.keys(PAYOUT_METHOD_META) as PayoutMethodType[]).map((t) => (
+              <button key={t} onClick={() => setNewMethodType(t)} className={`text-left rounded-lg border p-2.5 cursor-pointer transition-colors ${newMethodType === t ? "border-accent-deep bg-cream" : "border-line hover:border-accent"}`}>
+                <p className="text-[12px] font-bold text-ink flex items-center gap-1.5">{PAYOUT_METHOD_META[t].icon} {PAYOUT_METHOD_META[t].title}</p>
+                <p className="text-[10.5px] text-ink-mute">{PAYOUT_METHOD_META[t].hint}</p>
+              </button>
+            ))}
+          </div>
+          <Field label={newMethodType === "card" ? "Номер карты (последние 4 цифры)" : newMethodType === "sbp" ? "Номер телефона (+7...)" : newMethodType === "yoomoney" ? "Номер кошелька" : "Номер счёта (последние 6 цифр)"}>
+            <input className="field" value={newMethodMask} onChange={(e) => setNewMethodMask(e.target.value)} placeholder="Например: •••• 4521" />
+          </Field>
+          <Btn className="w-full mt-3" disabled={!newMethodMask.trim()} onClick={() => { finance.addMethod(newMethodType, newMethodMask.trim()); setNewMethodMask(""); }}>
+            <Plus size={14} /> Сохранить
+          </Btn>
+        </div>
+      </Modal>
+    </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   О нас — манифест маркетплейса нового поколения
+   ============================================================ */
+const aboutStats: [string, string][] = [
+  ["1 240", "мастеров и производств"],
+  ["16", "групп товаров, включая цифровые активы и фудкорт"],
+  ["41", "категория и сотни подкатегорий"],
+  ["74", "города доставки по России"],
+];
+
+const aboutCategories = [
+  ["🛋️", "Интерьерный декор и авторская мебель"],
+  ["👗", "Уникальная одежда и аксессуары"],
+  ["💍", "Ювелирные изделия и бижутерия"],
+  ["🏺", "Керамика, текстиль и искусство"],
+  ["🎁", "Персональные подарки и сувениры"],
+  ["🎨", "Товары для хобби и творчества"],
+];
+
+const aboutTech = [
+  { icon: Brain, title: "AI и Данные", text: "YandexGPT и Yandex Vision для анализа запросов и визуального поиска, векторные базы данных (pgvector) для сверхточного подбора товаров по стилю и настроению, машинное обучение для персонализации рекомендаций.", tags: ["YandexGPT", "Yandex Vision", "pgvector", "ML"] },
+  { icon: ShieldCheck, title: "Надежность", text: "Архитектура на базе Supabase (PostgreSQL) со строгими политиками безопасности (RLS), шифрованием чувствительных данных и ежедневным резервным копированием.", tags: ["Supabase", "PostgreSQL", "RLS", "AES-256"] },
+  { icon: Truck, title: "Скорость и удобство", text: "Интеграция с лучшими логистическими и платежными сервисами для бесшовного опыта от клика до доставки.", tags: ["СДЭК", "Boxberry", "Почта России", "ЮKassa"] },
+  { icon: Globe, title: "Масштабируемость", text: "Облачная инфраструктура, способная обслуживать миллионы пользователей, с автоматическим масштабированием и мониторингом 24/7.", tags: ["Cloud", "Auto-scaling", "24/7"] },
+];
+
+const aboutValues = [
+  ["Уникальность вместо массовости", "Мы ценим историю, стоящую за каждой вещью, и мастера, который её создал."],
+  ["Технологии с человеческим лицом", "AI должен помогать, а не усложнять. Наш тон общения — теплый, заботливый и экспертный."],
+  ["Прозрачность и честность", "Никаких скрытых условий, поддельных отзывов или недобросовестных продавцов. Каждая сделка защищена."],
+  ["Поддержка локального производства", "Мы развиваем культуру осознанного потребления, где качественные авторские вещи служат годами и передают свою ценность."],
+  ["Инновации без границ", "Мы постоянно внедряем новые технологии и функции, чтобы сделать ваш опыт покупки максимально удобным и вдохновляющим."],
+  ["Созидательное участие", "Технологии должны не заменять человеческое творчество, а усиливать его, делая каждого пользователя соавтором своего уникального пространства"],
+];
+
+export function AboutPage() {
+  return (
+    <div>
+      {/* ---------- открытие: манифест ---------- */}
+      <section className="relative overflow-hidden bg-dark text-cream">
+
+        <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20 sm:py-28">
+          <Reveal>
+            <p className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-accent mb-6">
+              <span className="w-6 h-px bg-accent" /> Quantiform — маркетплейс нового поколения
+            </p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h1 className="font-lux text-[clamp(42px,6.5vw,88px)] leading-[1.02] max-w-4xl">
+              Мы не маркетплейс.<br />
+              <span className="text-accent">Мы — новая категория.</span>
+            </h1>
+          </Reveal>
+          <Reveal delay={160}>
+            <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-8">
+              Quantiform создан с одной амбициозной целью: изменить то, как люди находят, создают и покупают уникальные вещи.
+              Мы наблюдали, как гиганты e-commerce превратили покупку товаров в безликий конвейер, где миллионы одинаковых
+              SKU теряются в алгоритмах. А соцсети дали вдохновение, но не дали инструмента для его реализации.
+            </p>
+          </Reveal>
+          <Reveal delay={240}>
+            <p className="text-cream/75 text-[16px] sm:text-[18px] leading-relaxed max-w-2xl mt-5">
+              Мы закрываем этот разрыв. Quantiform — это первая в России платформа созидательного потребления нового
+              поколения, где искусственный интеллект становится соавтором пользователя, помогая не просто купить вещь, а
+              создать целостное пространство или образ — от визуализации интерьера до индивидуального заказа. Здесь
+              передовые технологии встречаются с талантами мастеров со всей страны, превращая хаотичный поиск в
+              осмысленный процесс создания вашего идеального мира.
+            </p>
+          </Reveal>
+          <Reveal delay={320}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-6 mt-14 max-w-4xl">
+              {aboutStats.map(([n, l]) => (
+                <div key={l} className="border-l-2 border-accent/50 pl-4">
+                  <p className="font-display font-extrabold text-[30px] sm:text-[36px] text-cream leading-none">{n}</p>
+                  <p className="text-[12.5px] text-cream/60 mt-2 leading-snug">{l}</p>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- AI-дизайнер: центральная секция визуального соавторства ---------- */}
+      <section className="bg-dark/[0.03] border-y border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            <Reveal>
+              <p className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">
+                <Sparkles size={14} /> Фирменная технология
+              </p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">AI-дизайнер: ваше визуальное соавторство</h2>
+              <p className="text-[15px] leading-[1.75] text-ink-soft mt-5">
+                Quantiform меняет саму логику покупки: вы больше не ищете отдельную вещь — вы создаёте целостное
+                пространство или образ вместе с искусственным интеллектом. Механика проста:
+              </p>
+              <ul className="mt-5 space-y-3">
+                {[
+                  "Загрузите фото своей комнаты — или своё собственное фото, если речь об образе.",
+                  "Получите три концепции дизайна или образа с уже подобранными товарами из каталога Quantiform.",
+                  "Сравните варианты бок о бок и купите всё понравившееся решение в один клик.",
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-accent-soft text-accent-deep flex items-center justify-center shrink-0 mt-0.5"><CheckCircle2 size={14} /></span>
+                    <p className="text-[14.5px] leading-relaxed text-ink-soft">{t}</p>
+                  </li>
+                ))}
+              </ul>
+              <Link to="/ai-designer" className="inline-flex items-center gap-2 mt-7 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                Попробовать AI-дизайнер <ArrowRight size={16} />
+              </Link>
+            </Reveal>
+            {/* мок интерфейса AI-дизайнера */}
+            <Reveal delay={100}>
+              <div className="bg-surface rounded-2xl shadow-lift p-5 sm:p-6 border border-line-soft max-w-md lg:ml-auto w-full">
+                <div className="flex items-center gap-2.5 pb-4 border-b border-line-soft">
+                  <span className="w-9 h-9 rounded-full bg-ai-soft text-ai flex items-center justify-center"><Sparkles size={17} /></span>
+                  <div>
+                    <p className="text-[13.5px] font-bold text-ink">AI-дизайнер Quantiform</p>
+                    <p className="text-[11px] text-ink-mute">интерьер гостиной · 18 м²</p>
+                  </div>
+                </div>
+                <div className="py-4">
+                  <div className="rounded-xl border border-dashed border-accent/60 bg-cream/40 flex flex-col items-center justify-center gap-2 py-6">
+                    <span className="w-11 h-11 rounded-full bg-accent-soft text-accent-deep flex items-center justify-center"><Upload size={19} /></span>
+                    <p className="text-[12.5px] font-semibold text-ink-soft">Перетащите фото комнаты или вашего образа</p>
+                  </div>
+                </div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-ink-mute mb-2.5">Три концепции готовы</p>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[["🛋️", "Сканди"], ["🏺", "Бохо"], ["✨", "Минимал"]].map(([e, l]) => (
+                    <div key={l} className="rounded-xl bg-cream border border-line-soft p-2.5 text-center hover:border-accent transition-colors cursor-default">
+                      <span className="block h-12 rounded-lg bg-gradient-to-br from-accent/15 to-ai/15 flex items-center justify-center text-[22px]">{e}</span>
+                      <p className="text-[11px] font-bold text-ink mt-1.5">{l}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                  <span className="text-[12px] text-ink-mute">Подобрано товаров: 12</span>
+                  <button type="button" className="inline-flex items-center gap-1.5 h-9 px-4 rounded-[10px] bg-dark text-cream text-[12.5px] font-bold hover:bg-dark-deep transition-colors">
+                    <ShoppingBag size={14} /> В корзину
+                  </button>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- миссия ---------- */}
+      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+        <div className="grid md:grid-cols-[280px_1fr] gap-10 items-start">
+          <Reveal>
+            <div className="md:sticky md:top-24">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Наша миссия</p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">Делать уникальное — доступным</h2>
+            </div>
+          </Reveal>
+          <Reveal delay={100}>
+            <p className="font-quote text-[clamp(22px,2.6vw,30px)] leading-[1.45] text-ink">
+              Делать уникальные, качественные и осмысленные вещи доступными для каждого, поддерживая при этом таланты
+              мастеров и производителей со всей России.
+            </p>
+            <p className="text-[15.5px] leading-[1.75] text-ink-soft mt-6 max-w-2xl">
+              Мы верим, что технологии должны не заменять человеческое творчество, а усиливать его, делая процесс поиска,
+              заказа и покупки интуитивным, безопасным и вдохновляющим.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- 6 столпов превосходства ---------- */}
+      <section className="bg-surface/60 border-y border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <div className="max-w-3xl mb-14">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Почему Quantiform</p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">Это будущее e-commerce нового поколения</h2>
+              <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
+                Мы проанализировали лучшие мировые практики (от Etsy и Westwing до Houzz и Pinterest) и создали решение,
+                которое объединяет их сильные стороны, устраняя фундаментальные недостатки. Наши 6 столпов превосходства:
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="space-y-14">
+            {/* 1. AI-помощник */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <PillarNum n="01" icon={Brain} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Интеллектуальный AI-помощник <span className="text-accent-deep">(Agentic AI)</span></h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Наш AI-агент — это не простой чат-бот. Это ваш персональный эксперт, который понимает естественный язык,
+                    помнит ваши предпочтения, стиль и историю покупок. Он не просто ищет товары по ключевым словам — он
+                    анализирует ваши запросы, генерирует визуальные концепции и подбирает идеальные варианты из широкого
+                    каталога, будь то интерьерный декор, авторская одежда, уникальные подарки или предметы искусства.
+                  </p>
+                  <Link to="/ai-assistant" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Попробовать AI-ассистента <ArrowRight size={16} />
+                  </Link>
+                </div>
+                {/* мок чата AI */}
+                <div className="bg-surface rounded-2xl shadow-lift p-5 max-w-md lg:ml-auto border border-line-soft">
+                  <div className="flex items-center gap-2.5 pb-4 border-b border-line-soft">
+                    <span className="w-9 h-9 rounded-full bg-ai-soft text-ai flex items-center justify-center"><Sparkles size={17} /></span>
+                    <div>
+                      <p className="text-[13.5px] font-bold text-ink">AI-ассистент Quantiform</p>
+                      <p className="text-[11px] text-success flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" /> помнит ваш стиль</p>
+                    </div>
+                  </div>
+                  <div className="py-4 space-y-3">
+                    <div className="bg-dark text-cream rounded-2xl rounded-tr-sm px-4 py-2.5 text-[13px] max-w-[85%] ml-auto w-fit">Подбери тёплый декор для гостиной в сканди</div>
+                    <div className="bg-ai-soft text-ink rounded-2xl rounded-tl-sm px-4 py-2.5 text-[13px] w-fit flex items-center gap-1.5">
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai inline-block" />
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai inline-block" />
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-ai inline-block" />
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {["Свечи", "Плед", "Керамика"].map((c) => (
+                        <span key={c} className="px-3 py-1.5 rounded-full bg-cream border border-line-soft text-[11.5px] font-semibold text-ink-soft">{c}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 2. AI-дизайнер */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                {/* мок концепций AI-дизайнера */}
+                <div className="bg-surface rounded-2xl shadow-lift p-5 max-w-md border border-line-soft lg:order-1 order-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[12px] font-bold uppercase tracking-wide text-accent-deep">Концепции от AI-дизайнера</p>
+                    <Badge tone="honey">3 варианта</Badge>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[["🛋️", "Сканди"], ["🌿", "Бохо"], ["🖤", "Лофт"]].map(([e, l]) => (
+                      <div key={l} className="rounded-xl bg-cream border border-line-soft p-2 text-center">
+                        <span className="block h-12 rounded-lg bg-gradient-to-br from-accent/15 to-ai/15 flex items-center justify-center text-[20px]">{e}</span>
+                        <p className="text-[10.5px] font-bold text-ink mt-1.5">{l}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                    <span className="text-[12px] text-ink-mute">Shoppable: 12 товаров</span>
+                    <span className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[10px] bg-dark text-cream text-[12px] font-bold"><ShoppingBag size={13} /> В корзину</span>
+                  </div>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="02" icon={Sparkles} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">AI-дизайнер: визуальное соавторство</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Уникальная фича, которой нет ни на одной площадке в России: загрузите фото комнаты или своё фото — и
+                    получите три готовые концепции интерьера или образа. Каждая концепция shoppable: все подобранные товары
+                    уже найдены в каталоге Quantiform, сравнивайте варианты и покупайте целостное решение в один клик.
+                  </p>
+                  <Link to="/ai-designer" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Попробовать AI-дизайнер <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 2.5 Индивидуальные заказы мастерам */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                {/* мок заказа */}
+                <div className="bg-surface rounded-2xl shadow-lift p-5 max-w-md border border-dashed border-accent/60 lg:order-1 order-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[12px] font-bold uppercase tracking-wide text-accent-deep">Индивидуальный заказ</p>
+                    <Badge tone="honey">3 отклика</Badge>
+                  </div>
+                  <div className="flex gap-3.5">
+                    <span className="w-16 h-16 rounded-xl bg-cream border border-line-soft flex items-center justify-center text-[26px] shrink-0"><Camera size={22} className="text-ink-mute" /></span>
+                    <div>
+                      <p className="text-[14px] font-bold text-ink">Дубовый стол с эпоксидной рекой</p>
+                      <p className="text-[12px] text-ink-soft mt-1 leading-snug">140×70 см, фото-референс приложен, доставка в Казань</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-line-soft">
+                    <span className="text-[12px] text-ink-mute">Бюджет</span>
+                    <span className="font-display font-bold text-[17px] text-ink">до 60 000 ₽</span>
+                  </div>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink">Индивидуальные заказы мастерам</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Уникальная функция, которой нет ни у одного маркетплейса в России. Вы можете разместить индивидуальный
+                    заказ с детальным описанием, эскизами или фото-референсами, и мастера со всей страны откликнутся на ваш
+                    запрос. От авторской мебели до уникальных украшений, от кастомной одежды до персональных подарков — вы
+                    получаете доступ к тысячам талантов, готовых создать вещь специально для вас.
+                  </p>
+                  <Link to="/market" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Разместить заказ <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 3. Широкий ассортимент */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <PillarNum n="03" icon={Boxes} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Широкий ассортимент уникальных товаров</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Quantiform — это экосистема из 16 групп товаров: от интерьерного декора и авторской мебели до медицины,
+                    уникальной одежды и аксессуаров ручной работы, ювелирных изделий, керамики, текстиля и предметов
+                    искусства — вплоть до цифровых активов (ИИ-агенты, промты, 3D-модели) и локального фудкорта. Всё это —
+                    от проверенных мастеров и небольших производств.
+                  </p>
+                  <Link to="/catalog" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Смотреть каталог <ArrowRight size={16} />
+                  </Link>
+                </div>
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md lg:ml-auto border border-line-soft">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-4">Что вы найдёте</p>
+                  <div className="flex flex-wrap gap-2">
+                    {aboutCategories.map(([e, l]) => (
+                      <span key={l} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-cream border border-line-soft text-[12.5px] font-semibold text-ink hover:border-accent hover:text-accent-deep transition-colors cursor-default">
+                        <span>{e}</span> {l}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[12px] text-ink-mute mt-4 flex items-center gap-1.5"><Sparkles size={13} className="text-accent" /> И многое другое от проверенных мастеров</p>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 4. Кураторский отбор */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md border border-line-soft lg:order-1 order-2">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-4">Каждый продавец проходит</p>
+                  <div className="space-y-3">
+                    {["Верификацию документов (ИНН, ОГРН, выписки)", "Ручную и автоматическую премодерацию товаров", "Проверку: реальный мастер, а не перекупщик"].map((t) => (
+                      <div key={t} className="flex items-start gap-3">
+                        <span className="w-6 h-6 rounded-full bg-success-soft text-[#4d7327] flex items-center justify-center shrink-0 mt-0.5"><CheckCircle2 size={14} /></span>
+                        <p className="text-[13.5px] font-semibold text-ink leading-snug">{t}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="04" icon={ShieldCheck} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Бескомпромиссный кураторский отбор</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Мы не гонимся за миллионами SKU. Каждый продавец на Quantiform проходит строгую верификацию (ИНН, ОГРН,
+                    выписки), а каждый товар — ручную и автоматическую премодерацию. Мы гарантируем, что за каждым лотом
+                    стоит реальный мастер, дизайнер или небольшое производство, а не перекупщик с масс-маркета.
+                  </p>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 5. Безопасная сделка */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <PillarNum n="05" icon={CreditCard} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Абсолютная безопасность и прозрачность</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Модель «Безопасной сделки» означает, что ваши средства хранятся на защищенном транзитном счете платформы
+                    и перечисляются продавцу только после подтверждения отправки товара. Мы строго соблюдаем 152-ФЗ и 54-ФЗ,
+                    а все финансовые операции проходят через проверенные шлюзы (ЮKassa) с автоматической выдачей чеков.
+                  </p>
+                </div>
+                {/* мок безопасной сделки */}
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md lg:ml-auto border border-line-soft">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-5">Как работает безопасная сделка</p>
+                  <div className="flex items-center justify-between">
+                    {[["Покупатель", "🧑"], ["Транзитный счёт", "🔒"], ["Продавец", "🧑‍🎨"]].map(([l, e], i) => (
+                      <div key={l} className="flex items-center">
+                        <div className="text-center w-[86px]">
+                          <span className="block w-14 h-14 mx-auto rounded-full bg-cream border border-line-soft flex items-center justify-center text-[24px]">{e}</span>
+                          <p className="text-[11px] font-bold text-ink mt-2 leading-tight">{l}</p>
+                        </div>
+                        {i < 2 && <ArrowRight size={16} className="text-accent mx-1 shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[12px] text-ink-soft mt-5 leading-relaxed">Деньги уходят мастеру только после подтверждения отправки товара.</p>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* 6. Премиум-экосистема */}
+            <Reveal>
+              <div className="grid lg:grid-cols-2 gap-10 items-center">
+                {/* мок премиум-возможностей */}
+                <div className="bg-surface rounded-2xl shadow-lift p-6 max-w-md border border-line-soft lg:order-1 order-2">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-4">Премиум-возможности</p>
+                  <div className="space-y-3">
+                    {[["🛍️", "Дропы −20% каждую неделю"], ["⏱️", "Куратор отвечает за 30 минут"], ["📈", "Авто-отчёт агента еженедельно"], ["🏷️", "White-label со своим доменом"]].map(([e, t]) => (
+                      <div key={t} className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-lg bg-premium-soft flex items-center justify-center text-[15px] shrink-0">{e}</span>
+                        <p className="text-[13px] font-semibold text-ink leading-snug">{t}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Link to="/plans" className="inline-flex items-center gap-2 mt-5 pt-4 border-t border-line-soft w-full text-[13px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Сравнить тарифы <ArrowRight size={15} />
+                  </Link>
+                </div>
+                <div className="lg:order-2 order-1">
+                  <PillarNum n="06" icon={Crown} />
+                  <h3 className="font-display font-bold text-[22px] sm:text-[26px] text-ink mt-4">Премиум-экосистема</h3>
+                  <p className="text-[15px] leading-[1.75] text-ink-soft mt-4">
+                    Подписка Quantiform — это реальные инструменты роста для обеих сторон. Покупателям: закрытые еженедельные
+                    дропы со скидкой 20%, кураторская линия с ответом за 30 минут и VIP-бейджи. Продавцам: еженедельные
+                    авто-отчёты AI-агента, A/B-тестирование карточек товаров, white-label витрина с кастомным доменом,
+                    импорт товаров из CSV и персональный менеджер с гарантированным SLA.
+                  </p>
+                  <Link to="/plans" className="inline-flex items-center gap-2 mt-5 text-[14px] font-bold text-accent-deep hover:text-accent transition-colors">
+                    Возможности Premium <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- для кого ---------- */}
+      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+        <Reveal>
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Для кого</p>
+          <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight mb-12 max-w-2xl">Мы создаем эту экосистему для трех аудиторий</h2>
+        </Reveal>
+        <div className="space-y-5">
+          <Reveal>
+            <AudienceBand icon={Gift} tone="accent" title="Для ценителей уникальности"
+              text="Анна загрузила фото гостиной, AI предложил три варианта в скандинавском стиле, и она собрала весь интерьер из каталога за один вечер. Так работает созидательное потребление: вы не ищете вещи по отдельности — вы создаёте целостное пространство."
+              link={{ to: "/catalog", label: "Исследовать каталог" }} />
+          </Reveal>
+          <Reveal delay={80}>
+            <AudienceBand icon={Wrench} tone="ai" title="Для мастеров и творцов"
+              text="Мастерская использует A/B-тесты обложек, получает еженедельный прогноз продаж от AI-агента и управляет бренд-витриной, увеличивая конверсию. Технологический арсенал крупного бренда — теперь в распоряжении каждого мастера."
+              link={{ to: "/seller/register", label: "Открыть мастерскую" }} />
+          </Reveal>
+          <Reveal delay={160}>
+            <AudienceBand icon={Palette} tone="premium" title="Для дизайнеров и профессионалов"
+              text="Используйте AI-дизайнер для быстрой визуализации идей клиента, подбирайте товары через B2B-портал и получайте прозрачное вознаграждение за рекомендации. От концепции до реализации проекта — в рамках одной платформы."
+              link={{ to: "/ai-designer", label: "AI-инструменты" }} />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- почему это лучше традиционного подхода ---------- */}
+      <section className="bg-surface/60 border-y border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Сравнение подходов</p>
+            <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight max-w-2xl">Почему это лучше традиционного подхода</h2>
+            <p className="text-[15px] leading-relaxed text-ink-soft mt-4 max-w-2xl">
+              Классический дизайн интерьера — это месяцы работы и большие бюджеты. Quantiform AI сжимает этот путь до
+              нескольких минут, не жертвуя качеством результата.
+            </p>
+          </Reveal>
+          <div className="grid md:grid-cols-2 gap-5 mt-12">
+            <Reveal>
+              <div className="bg-surface rounded-2xl border border-line-soft p-6 sm:p-7 h-full">
+                <div className="flex items-center gap-3 mb-5">
+                  <span className="w-11 h-11 rounded-xl bg-cream border border-line-soft flex items-center justify-center text-ink-mute"><Clock size={21} /></span>
+                  <h3 className="font-display font-bold text-[20px] text-ink">Традиционный дизайн</h3>
+                </div>
+                <ul className="space-y-3.5">
+                  {[
+                    "Недели поиска идей, мастеров и подходящих товаров по разным площадкам",
+                    "Высокие чеки за консультацию и визуализацию проекта",
+                    "Разрозненная покупка мебели: сроки, стили и бюджеты не сходятся",
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-cream border border-line-soft text-ink-mute flex items-center justify-center shrink-0 mt-0.5"><X size={13} /></span>
+                      <p className="text-[14.5px] leading-relaxed text-ink-soft">{t}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+            <Reveal delay={100}>
+              <div className="bg-dark text-cream rounded-2xl shadow-lift p-6 sm:p-7 h-full relative overflow-hidden">
+                <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 85% 10%, rgba(217,142,50,0.22) 0, transparent 45%)" }} />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-5">
+                    <span className="w-11 h-11 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Zap size={21} /></span>
+                    <h3 className="font-display font-bold text-[20px]">Quantiform AI</h3>
+                  </div>
+                  <ul className="space-y-3.5">
+                    {[
+                      "Три варианта интерьера или образа за считанные минуты",
+                      "Бесплатная генерация концепций с уже подобранными товарами из каталога",
+                      "Мгновенная покупка всего решения в один клик с гарантией безопасной сделки",
+                    ].map((t) => (
+                      <li key={t} className="flex items-start gap-3">
+                        <span className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center shrink-0 mt-0.5"><CheckCircle2 size={14} /></span>
+                        <p className="text-[14.5px] leading-relaxed text-cream/85">{t}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/ai-designer" className="inline-flex items-center gap-2 mt-7 text-[14px] font-bold text-accent hover:text-cream transition-colors">
+                    Попробовать AI-дизайнер <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- технологии ---------- */}
+      <section className="relative overflow-hidden bg-dark text-cream">
+        <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 80% 15%, rgba(217,142,50,0.18) 0, transparent 45%), radial-gradient(circle at 15% 85%, rgba(45,95,76,0.45) 0, transparent 50%)" }} />
+        <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent mb-3">Технологии</p>
+            <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] leading-tight max-w-2xl">Которым можно доверять</h2>
+            <p className="text-cream/70 text-[15px] leading-relaxed max-w-2xl mt-4">
+              За эстетикой и простотой нашего интерфейса стоит мощная инженерная машина. Мы используем современный
+              российский и открытый технологический стек.
+            </p>
+          </Reveal>
+          <div className="grid md:grid-cols-2 gap-5 mt-12">
+            {aboutTech.map((t, i) => (
+              <Reveal key={t.title} delay={(i % 2) * 80}>
+                <div className="bg-white/[0.05] border border-white/10 rounded-2xl p-6 h-full hover:bg-white/[0.08] hover:border-accent/40 transition-all duration-300">
+                  <div className="flex items-center gap-3.5 mb-4">
+                    <span className="w-11 h-11 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><t.icon size={21} /></span>
+                    <h3 className="font-display font-bold text-[17px]">{t.title}</h3>
+                  </div>
+                  <p className="text-[13.5px] leading-relaxed text-cream/70">{t.text}</p>
+                  <div className="flex flex-wrap gap-1.5 mt-4">
+                    {t.tags.map((tag) => (
+                      <span key={tag} className="px-2.5 py-1 rounded-full bg-white/[0.07] border border-white/10 text-[11px] font-semibold text-cream/70">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- ценности ---------- */}
+      <section className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+        <Reveal>
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Наши ценности</p>
+          <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight mb-12 max-w-2xl">Принципы, которые не обсуждаются</h2>
+        </Reveal>
+        <div className="space-y-0">
+          {aboutValues.map(([t, d], i) => (
+            <Reveal key={t} delay={i * 60}>
+              <div className="grid md:grid-cols-[80px_1fr_2fr] gap-4 md:gap-8 items-baseline py-6 border-b border-line-soft group hover:bg-surface/60 transition-colors px-2 md:px-4 -mx-2 md:-mx-4 rounded-xl">
+                <span className="font-lux text-[30px] text-accent/60 group-hover:text-accent transition-colors leading-none">{String(i + 1).padStart(2, "0")}</span>
+                <h3 className="font-display font-bold text-[17px] text-ink leading-snug">{t}</h3>
+                <p className="text-[14.5px] leading-relaxed text-ink-soft">{d}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ---------- присоединяйтесь ---------- */}
+      <section className="bg-surface/60 border-t border-line-soft">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-20">
+          <Reveal>
+            <div className="max-w-3xl mb-12">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep mb-3">Присоединяйтесь</p>
+              <h2 className="font-display font-bold text-[clamp(26px,3.4vw,40px)] text-ink leading-tight">К эволюции покупок</h2>
+              <p className="text-[15px] leading-relaxed text-ink-soft mt-4">
+                Quantiform — это больше, чем маркетплейс. Это экосистема, где технологии встречаются с творчеством, а каждый
+                покупатель становится соавтором своего уникального мира.
+              </p>
+            </div>
+          </Reveal>
+          <div className="grid md:grid-cols-3 gap-5">
+            <Reveal>
+              <JoinCard tone="accent" emoji="🛍️" role="Если вы покупатель"
+                text="Начните диалог с AI-дизайнером прямо сейчас: загрузите фото комнаты и соберите целостный интерьер из каталога за один вечер. Или разместите индивидуальный заказ мастеру — технологии и таланты уже ждут вас."
+                link={{ to: "/ai-designer", label: "Начать с AI-дизайнером" }} />
+            </Reveal>
+            <Reveal delay={80}>
+              <JoinCard tone="ai" emoji="🛠️" role="Если вы мастер или производитель"
+                text="Подайте заявку на верификацию и откройте цифровую мастерскую с белым ярлыком (white-label) на своём домене для тысяч ценителей качественных вещей по всей России. Получайте не только стандартные заказы, но и индивидуальные проекты от клиентов, которые ценят ваш талант."
+                link={{ to: "/seller/register", label: "Стать продавцом" }} />
+            </Reveal>
+            <Reveal delay={160}>
+              <JoinCard tone="premium" emoji="✏️" role="Если вы дизайнер или профессионал"
+                text="Используйте наши B2B-инструменты для работы с клиентами, получайте вознаграждение за рекомендации и создавайте проекты вместе с проверенными мастерами. Сравните тарифы и выберите силу своего аккаунта."
+                link={{ to: "/plans", label: "B2B-возможности" }} />
+            </Reveal>
+          </div>
+
+          <Reveal delay={200}>
+            <p className="font-lux text-[clamp(26px,4vw,46px)] leading-[1.2] text-ink text-center mt-20 max-w-3xl mx-auto">
+              Quantiform. Где технологии встречаются с <span className="text-accent-deep">искусством создания уникального</span>.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------- вспомогательные блоки страницы «О нас» ---------- */
+function PillarNum({ n, icon: Icon }: { n: string; icon: React.ElementType }) {
+  return (
+    <div className="flex items-center gap-3.5">
+      <span className="font-lux text-[40px] leading-none text-accent/70">{n}</span>
+      <span className="w-11 h-11 rounded-xl bg-dark text-accent flex items-center justify-center"><Icon size={21} /></span>
+    </div>
+  );
+}
+
+function AudienceBand({ icon: Icon, tone, title, text, link }: {
+  icon: React.ElementType;
+  tone: "accent" | "ai" | "premium";
+  title: string; text: string; link: { to: string; label: string };
+}) {
+  const toneMap = {
+    accent: { bar: "bg-accent", chip: "bg-accent-soft text-accent-deep" },
+    ai: { bar: "bg-ai", chip: "bg-ai-soft text-ai" },
+    premium: { bar: "bg-premium", chip: "bg-premium-soft text-[#a67c4e]" },
+  }[tone];
+  return (
+    <div className="bg-surface rounded-2xl shadow-card border border-line-soft overflow-hidden flex flex-col md:flex-row hover:shadow-lift transition-shadow duration-300">
+      <div className={`w-full md:w-1.5 ${toneMap.bar} shrink-0`} />
+      <div className="p-6 sm:p-7 flex-1">
+        <div className="flex items-center gap-3.5 mb-3">
+          <span className={`w-11 h-11 rounded-xl flex items-center justify-center ${toneMap.chip}`}><Icon size={21} /></span>
+          <h3 className="font-display font-bold text-[19px] text-ink">{title}</h3>
+        </div>
+        <p className="text-[14.5px] leading-[1.7] text-ink-soft max-w-3xl">{text}</p>
+        <Link to={link.to} className="inline-flex items-center gap-2 mt-4 text-[13.5px] font-bold text-accent-deep hover:text-accent transition-colors">
+          {link.label} <ArrowRight size={15} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function JoinCard({ tone, emoji, role, text, link }: {
+  tone: "accent" | "ai" | "premium"; emoji: string; role: string; text: string; link: { to: string; label: string };
+}) {
+  const btnMap = {
+    accent: "bg-dark text-cream hover:bg-dark-deep",
+    ai: "bg-ai text-cream hover:bg-dark",
+    premium: "bg-premium text-ink hover:bg-accent",
+  }[tone];
+  return (
+    <div className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 flex flex-col h-full hover:shadow-lift hover:-translate-y-1 transition-all duration-300">
+      <span className="text-[34px] mb-4">{emoji}</span>
+      <p className="font-display font-bold text-[16px] text-ink mb-3">{role}</p>
+      <p className="text-[13.5px] leading-relaxed text-ink-soft flex-1">{text}</p>
+      <Link to={link.to} className={`inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13.5px] font-bold mt-6 transition-colors ${btnMap}`}>
+        {link.label} <ArrowRight size={15} />
+      </Link>
+    </div>
+  );
+}
+
+/* ============================================================
+   Правовая информация — индекс документов (/legal)
+   ============================================================ */
+const printDoc = (title: string, content: string) => {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(`<html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:Georgia,serif;max-width:800px;margin:2rem auto;line-height:1.6;white-space:pre-wrap">${content}</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+};
+
+export function LegalIndexPage() {
+  const activeDocs = LEGAL_DOCUMENTS.filter((d) => !d.archived);
+  const archivedDocs = LEGAL_DOCUMENTS.filter((d) => d.archived);
+  const goodsRules = legalDoc("goods_rules");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+
+  return (
+    <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-10">
+      <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Документы</h1>
+      <p className="text-[14px] text-ink-soft mb-8">Правовой пакет платформы Quantiform версии 2026-10: одиннадцать документов, архив редакций и действующие правила.</p>
+
+      {/* Правовой статус платформы */}
+      <Reveal>
+        <section className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck size={18} className="text-accent-deep" />
+            <p className="font-display font-bold text-[17px] text-ink">Правовой статус платформы</p>
+          </div>
+          <p className="text-[14px] leading-relaxed text-ink-soft">
+            Quantiform является владельцем агрегатора информации о товарах и услугах по статье 12 Закона о защите прав потребителей,
+            информационным посредником по статье 1253.1 Гражданского кодекса и посреднической цифровой платформой по Федеральному закону
+            от 31 июля 2025 года номер 289-ФЗ. Платформа не является продавцом, изготовителем, эскроу-агентом или платёжным агентом.
+          </p>
+        </section>
+      </Reveal>
+
+      {/* Согласия и их версии */}
+      <Reveal delay={80}>
+        <section className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText size={18} className="text-accent-deep" />
+            <p className="font-display font-bold text-[17px] text-ink">Согласия и их версии</p>
+          </div>
+          <ul className="space-y-2">
+            {[
+              "Оферта для покупателя версии 3.0 принимается при регистрации.",
+              "Политика обработки персональных данных версии 4.0 принимается при регистрации.",
+              "Согласия на AI-профилирование и на использование изображения принимаются при использовании соответствующих сервисов.",
+              "Перечень и версии согласий определяются офертой и политикой персональных данных.",
+            ].map((t) => (
+              <li key={t} className="flex gap-3 text-[14px] leading-relaxed text-ink-soft">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 mt-2" />
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </Reveal>
+
+      {/* Запрещённые и ограниченные к обороту товары */}
+      <Reveal delay={160}>
+        <section className="bg-surface rounded-2xl shadow-card border border-line-soft p-7 mb-10">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={18} className="text-accent-deep" />
+            <p className="font-display font-bold text-[17px] text-ink">Запрещённые и ограниченные к обороту товары</p>
+          </div>
+          <p className="text-[14px] leading-relaxed text-ink-soft">
+            К размещению на платформе не допускаются лекарственные средства, алкогольная и спиртосодержащая продукция, табак и
+            никотинсодержащая продукция, оружие и его основные части, а также иные товары, оборот которых ограничен или запрещён
+            законодательством Российской Федерации. Медицинские изделия размещаются только при наличии регистрационных удостоверений,
+            категория «Медицина» не включает лекарственные средства.
+          </p>
+          {goodsRules && (
+            <Link to={`/legal/${goodsRules.doc_type}`} className="inline-flex items-center gap-1.5 mt-4 text-[13px] font-bold text-accent-deep hover:text-ink transition-colors">
+              Правила оборота товаров на платформе <ArrowRight size={15} />
+            </Link>
+          )}
+        </section>
+      </Reveal>
+
+      {/* Сетка активных документов */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {activeDocs.map((d, i) => (
+          <Reveal key={d.doc_type} delay={Math.min(i * 60, 300)}>
+            <div className="bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col h-full">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <p className="font-display font-bold text-[16px] text-ink leading-snug">{d.title}</p>
+                <Badge tone="honey" className="shrink-0">v{d.version}</Badge>
+              </div>
+              {d.effectiveDate && (
+                <p className="text-[12px] text-ink-mute mb-3">Действует с {fmtDate(d.effectiveDate)}</p>
+              )}
+              <p className="text-[13px] text-ink-soft leading-relaxed mb-3">{d.summary}</p>
+              {(d.keyPoints ?? []).slice(0, 3).length > 0 && (
+                <ul className="space-y-1.5 mb-4">
+                  {(d.keyPoints ?? []).slice(0, 3).map((kp) => (
+                    <li key={kp} className="flex gap-2 text-[12.5px] leading-snug text-ink-soft">
+                      <CheckCircle2 size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span>{kp}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-auto pt-2 flex items-center gap-2">
+                <Link to={`/legal/${d.doc_type}`}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-[10px] text-[13px] font-bold bg-dark text-cream hover:bg-dark-deep transition-colors">
+                  Читать <ArrowRight size={14} />
+                </Link>
+                <Btn variant="outline" size="sm" title="Печать и сохранение" onClick={() => printDoc(d.title, d.content)}>
+                  Печать и сохранение
+                </Btn>
+              </div>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+
+      {/* Архив редакций */}
+      {archivedDocs.length > 0 && (
+        <div className="mt-10 bg-surface rounded-2xl shadow-card border border-line-soft overflow-hidden">
+          <button type="button" onClick={() => setArchiveOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-2 p-5 text-left cursor-pointer hover:bg-cream transition-colors">
+            <span className="font-display font-bold text-[15px] text-ink">Архив редакций</span>
+            {archiveOpen ? <Minus size={16} className="text-ink-mute" /> : <Plus size={16} className="text-ink-mute" />}
+          </button>
+          {archiveOpen && (
+            <div className="px-5 pb-5 space-y-3">
+              {archivedDocs.map((d) => {
+                const replacement = d.supersededBy ? legalDoc(d.supersededBy) : undefined;
+                return (
+                  <div key={d.doc_type} className="rounded-xl border border-line-soft bg-cream p-4">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <p className="font-bold text-[14px] text-ink">{d.title}</p>
+                      <Badge tone="neutral">v{d.version}</Badge>
+                      <Badge tone="warning">объединён</Badge>
+                    </div>
+                    <p className="text-[12.5px] text-ink-soft leading-relaxed">{d.summary}</p>
+                    {replacement && (
+                      <Link to={`/legal/${replacement.doc_type}`}
+                        className="inline-flex items-center gap-1.5 mt-2 text-[12.5px] font-bold text-accent-deep hover:text-ink transition-colors">
+                        Действующая редакция: {replacement.title} v{replacement.version} <ArrowRight size={14} />
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-[12px] text-ink-mute mt-8">Оператор платформы: {OPERATOR.name} · ИНН {OPERATOR.inn} · {OPERATOR.legalEmail}</p>
+    </div>
+  );
+}
+
+/* ============================================================
+   Юридические документы
+   ============================================================ */
+export function LegalPage() {
+  const { type = "buyer_tos" } = useParams();
+  const doc = legalDoc(type);
+
+  return (
+    <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-10">
+      <div className="grid md:grid-cols-[240px_1fr] gap-8 items-start">
+        <nav className="bg-surface rounded-2xl shadow-card p-4 md:sticky md:top-24">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink-mute px-2 pb-2">Документы</p>
+          {LEGAL_DOCUMENTS.map((d) => (
+            <Link key={d.doc_type} to={`/legal/${d.doc_type}`}
+              className={`block px-3 py-2.5 rounded-[10px] text-[13px] font-semibold transition-colors ${d.doc_type === type ? "bg-dark text-cream" : "text-ink-soft hover:bg-cream hover:text-ink"}`}>
+              {d.title}{d.archived ? " (архив)" : ""}
+            </Link>
+          ))}
+        </nav>
+        {doc ? (
+          <div className="bg-surface rounded-2xl shadow-card p-7 sm:p-9">
+            <div className="flex items-center gap-3 flex-wrap mb-2">
+              <h1 className="font-display font-bold text-[clamp(22px,3vw,30px)] text-ink">{doc.title}</h1>
+              <Badge tone="ai">v{doc.version}</Badge>
+              {doc.archived && <Badge tone="warning">архив</Badge>}
+            </div>
+            <div className="flex items-center gap-3 flex-wrap mb-6">
+              {doc.effectiveDate && (
+                <p className="text-[13px] text-ink-mute inline-flex items-center gap-1.5">
+                  <Calendar size={13} /> Дата вступления в силу: {fmtDate(doc.effectiveDate)}
+                </p>
+              )}
+              <Btn variant="outline" size="sm" title="Печать и сохранение" onClick={() => printDoc(doc.title, doc.content)}>
+                Печать
+              </Btn>
+            </div>
+            {doc.archived ? (
+              <div className="rounded-xl border border-line-soft bg-cream p-6">
+                <Markdown text={doc.content} />
+                {doc.supersededBy && (() => {
+                  const replacement = legalDoc(doc.supersededBy!);
+                  return replacement ? (
+                    <Link to={`/legal/${replacement.doc_type}`}
+                      className="mt-5 inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13.5px] font-bold bg-dark text-cream hover:bg-dark-deep transition-colors">
+                      Перейти к действующей редакции: {replacement.title} v{replacement.version} <ArrowRight size={15} />
+                    </Link>
+                  ) : null;
+                })()}
+              </div>
+            ) : (
+              <>
+                <p className="text-[13px] text-ink-mute mb-6">{doc.summary}</p>
+                <Markdown text={doc.content} />
+                {(doc.keyPoints ?? []).length > 0 && (
+                  <section className="mt-8 pt-6 border-t border-line-soft">
+                    <p className="font-display font-bold text-[18px] text-ink mb-3">Ключевые положения</p>
+                    <ul className="space-y-2">
+                      {(doc.keyPoints ?? []).map((kp) => (
+                        <li key={kp} className="flex gap-3 text-[14px] leading-relaxed text-ink-soft">
+                          <CheckCircle2 size={15} className="text-accent shrink-0 mt-1" />
+                          <span>{kp}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </>
+            )}
+            <Link to="/legal" className="inline-flex items-center gap-1.5 mt-8 text-[13px] font-bold text-accent-deep hover:text-ink transition-colors">
+              Ко всем документам <ArrowRight size={15} />
+            </Link>
+            <p className="text-[12px] text-ink-mute mt-8 pt-6 border-t border-line-soft">Оператор: {OPERATOR.name} · ИНН {OPERATOR.inn} · {OPERATOR.legalEmail}</p>
+          </div>
+        ) : (
+          <p className="text-[14px] text-ink-soft">Документ не найден.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Контакты: 3 сценария поддержки + FAQ + форма
+   ============================================================ */
+export function ContactsPage() {
+  const user = useAppStore((s) => s.session);
+  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", topic: "Вопрос по заказу", message: "" });
+  const [sent, setSent] = useState(false);
+  const [faqOpen, setFaqOpen] = useState<number | null>(null);
+
+  const FAQ = [
+    { q: "Как вернуть товар?", a: "В течение 7 дней с момента получения — через «Оформить возврат» в личном кабинете. Товары на заказ (custom-made) возврату не подлежат." },
+    { q: "Когда мастер получит деньги?", a: "После отправки товара и ввода трек-номера — в рамках «Безопасной сделки». До этого деньги зарезервированы на транзитном счёте." },
+    { q: "Как пожаловаться на продавца?", a: "На странице магазина есть кнопка «Пожаловаться». Жалоба уходит в арбитраж платформы, рассмотрение — 5 рабочих дней." },
+    { q: "Есть ли доставка в мой регион?", a: "Декор доставляется по всей России. Крупногабарит — от мастеров вашего округа: каталог сам скрывает тех, кто не доставляет к вам." },
+    { q: "Что делать, если AI-подбор не подошёл?", a: "Уточните запрос, добавьте стиль или бюджет. AI-подбор — экспериментальный инструмент и не является профессиональной рекомендацией." },
+  ];
+
+  return (
+    <div className="max-w-[980px] mx-auto px-4 sm:px-6 py-10">
+      <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Контакты</h1>
+      <p className="text-[14px] text-ink-soft mb-8">Мы отвечаем в течение рабочего дня.</p>
+
+      <div className="grid sm:grid-cols-3 gap-4 mb-10">
+        {[["Покупателям", "Вопросы по заказам, возврату и доставке", OPERATOR.supportEmail, "🛒"], ["Продавцам", "Витрина, выплаты, верификация", "info@starttechpro.ru", "🏪"], ["Партнёрам и юр. вопросы", "Договоры, интеграции, СМИ", OPERATOR.legalEmail, "🤝"]].map(([t, d, e, ic]) => (
+          <div key={t} className="bg-surface rounded-2xl shadow-card p-6">
+            <p className="text-[28px] mb-3">{ic}</p>
+            <p className="font-bold text-[15px] text-ink">{t}</p>
+            <p className="text-[12.5px] text-ink-soft mt-1 mb-3">{d}</p>
+            <a href={`mailto:${e}`} className="text-[13px] font-bold text-accent-deep hover:text-accent break-all">{e}</a>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6 items-start">
+        <div className="bg-surface rounded-2xl shadow-card p-6">
+          <h2 className="font-display font-bold text-[18px] text-ink mb-4">Написать нам</h2>
+          {sent ? (
+            <p className="flex items-center gap-2 text-[14px] text-[#4d7327] font-semibold"><CheckCircle2 size={18} /> Сообщение отправлено — ответим на {form.email}.</p>
+          ) : (
+            <div className="space-y-3.5">
+              <Field label="Имя" required><input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+              <Field label="Email" required><input className="field" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+              <Field label="Тема">
+                <select className="field" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}>
+                  {["Вопрос по заказу", "Возврат", "Стать продавцом", "Жалоба", "Другое"].map((t) => <option key={t}>{t}</option>)}
+                </select>
+              </Field>
+              <Field label="Сообщение" required><textarea className="field" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} /></Field>
+              <Btn className="w-full" disabled={!form.name.trim() || !form.email.includes("@") || form.message.trim().length < 5} onClick={() => setSent(true)}><Send size={16} /> Отправить</Btn>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-surface rounded-2xl shadow-card p-6">
+          <h2 className="font-display font-bold text-[18px] text-ink mb-4">Частые вопросы</h2>
+          <div className="space-y-2">
+            {FAQ.map((f, i) => (
+              <div key={i} className="border border-line-soft rounded-[10px] overflow-hidden">
+                <button onClick={() => setFaqOpen(faqOpen === i ? null : i)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left cursor-pointer hover:bg-cream transition-colors">
+                  <span className="text-[13.5px] font-semibold text-ink flex items-center gap-2"><HelpCircle size={15} className="text-accent-deep shrink-0" /> {f.q}</span>
+                  <span className={`text-ink-mute transition-transform ${faqOpen === i ? "rotate-180" : ""}`}>▾</span>
+                </button>
+                {faqOpen === i && <p className="px-4 pb-3.5 text-[13px] text-ink-soft leading-relaxed fade-up">{f.a}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   404
+   ============================================================ */
+export function NotFoundPage() {
+  return (
+    <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
+      <p className="font-display font-extrabold text-[80px] text-line leading-none">404</p>
+      <h1 className="font-display font-bold text-[26px] text-ink mt-4 mb-2">Такой страницы нет</h1>
+      <p className="text-[14px] text-ink-soft mb-8">Возможно, она переехала или никогда не существовала.</p>
+      <div className="flex gap-3 justify-center flex-wrap">
+        <Link to="/" className="h-[52px] px-7 rounded-[10px] bg-dark text-cream text-[15px] font-semibold hover:bg-dark-deep transition-colors flex items-center">На главную</Link>
+        <Link to="/catalog" className="h-[52px] px-7 rounded-[10px] border border-line bg-surface text-[15px] font-semibold hover:bg-cream transition-colors flex items-center">В каталог</Link>
+      </div>
+    </div>
+  );
+}
+
+
+export function MasterProfileBlock() {
+  const s = useSellerReg();
+  return (
+              <div className="md:col-span-2 mt-5 rounded-2xl border border-line p-5 bg-cream">
+                <p className="font-display font-bold text-[16px] text-ink mb-1">Мастер-профиль</p>
+                <p className="text-[12px] text-ink-mute mb-4">Эти данные формируют вашу карточку на странице «Мастера» и мини-сайт мастерской.</p>
+                <label className="flex items-center gap-2.5 text-[13px] font-semibold text-ink cursor-pointer mb-3">
+                  <input type="checkbox" checked={!!s.isMaster} onChange={(e) => s.setInfo({ isMaster: e.target.checked })} />
+                  Я мастер-производитель — показывать мастерскую на странице «Мастера»
+                </label>
+                <label className="flex items-center gap-2.5 text-[13px] font-semibold text-ink cursor-pointer mb-4">
+                  <input type="checkbox" checked={!!s.acceptsCustomOrders} onChange={(e) => s.setInfo({ acceptsCustomOrders: e.target.checked })} />
+                  Принимаю индивидуальные заказы
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина <span className="text-[10.5px] text-ink-mute font-normal">— лицо бренда: карточки товаров, чеки, шапка кабинета</span></p>
+                    <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: "Максимум 1.5 МБ" }); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />
+                    {s.shopLogo && <img src={s.shopLogo} alt="Логотип" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
+                  </div>
+                  <div>
+                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Аватар мастера <span className="text-[10.5px] text-ink-mute font-normal">— лицо человека: страница «Мастера» и панель «О продавце»</span></p>
+                    <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { alert("Файл до 1.5 МБ"); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ masterAvatar: r.result as string }); r.readAsDataURL(f); }} />
+                    {s.masterAvatar && <img src={s.masterAvatar} alt="Аватар" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">Фотовитрина производства (до 6 фото, каждое до 1.5 МБ)</p>
+                  <input type="file" accept="image/*" multiple className="field" onChange={(e) => { Array.from(e.target.files || []).slice(0, 6).forEach((f) => { if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл пропущен", text: f.name + ": больше 1.5 МБ" }); return; } const r = new FileReader(); r.onload = () => { const cur = useSellerReg.getState().productionGallery; s.setInfo({ productionGallery: [...cur, r.result as string] }); }; r.readAsDataURL(f); }); e.target.value = ""; }} />
+                  {s.productionGallery.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {s.productionGallery.map((g, i) => (
+                        <span key={i} className="relative inline-block">
+                          <img src={g} alt={"Фото " + (i + 1)} className="w-16 h-16 rounded-[10px] object-cover" />
+                          <button onClick={() => s.setInfo({ productionGallery: s.productionGallery.filter((_, j) => j !== i) })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-error text-cream text-[11px] font-bold cursor-pointer">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4">
+                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">
+                    {s.isMaster ? "🎬 Видео-экскурсия по мастерской" : "🎬 Видео о себе — презентация компании или услуг"}
+                    <span className="text-[11px] text-ink-mute font-normal"> (mp4/webm, до 8 МБ)</span>
+                  </p>
+                  {s.videoTourUrl && (
+                    <div className="mb-2">
+                      <div className="relative rounded-xl overflow-hidden bg-black border border-line-soft">
+                        <video src={s.videoTourUrl} className="w-full max-h-56" controls playsInline />
+                      </div>
+                      <button type="button" onClick={() => s.setInfo({ videoTourUrl: "" })}
+                        className="mt-2 text-[11.5px] font-bold text-error hover:underline cursor-pointer">✕ Удалить видео</button>
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    <label className="h-10 rounded-[8px] border-2 border-dashed border-line bg-surface text-ink-mute text-[12px] font-bold flex items-center justify-center gap-1.5 hover:border-accent hover:text-accent-deep cursor-pointer transition-colors">
+                      📁 Загрузить файл
+                      <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (f.size > 8000000) {
+                          useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: f.name + ": максимум 8 МБ" });
+                          e.target.value = "";
+                          return;
+                        }
+                        const r = new FileReader();
+                        r.onload = () => s.setInfo({ videoTourUrl: r.result as string });
+                        r.readAsDataURL(f);
+                      }} />
+                    </label>
+                    <input className="field" value={s.videoTourUrl} onChange={(e) => s.setInfo({ videoTourUrl: e.target.value })} placeholder="или ссылка https://…/video.mp4" />
+                  </div>
+                  <p className="text-[10.5px] text-ink-mute mt-1.5">💡 Мастерам — тур по мастерской, продавцам и услугам — презентация или примеры работ. Видео появится <strong>первым блоком</strong> в панели «О продавце».</p>
+                </div>
+              </div>
+  );
+}
+
+
+function PasswordChangeCard() {
+  const email = useAppStore((s) => s.session?.email || "");
+  const [cur, setCur] = useState("");
+  const [np, setNp] = useState("");
+  const [np2, setNp2] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const save = () => {
+    const key = email.trim().toLowerCase();
+    const vault = JSON.parse(localStorage.getItem("qf-demo-pass") || "{}");
+    if (vault[key] !== cur) { setMsg({ ok: false, text: "Текущий пароль неверный" }); return; }
+    if (np.length < 8) { setMsg({ ok: false, text: "Новый пароль должен быть не короче 8 символов" }); return; }
+    if (np !== np2) { setMsg({ ok: false, text: "Новые пароли не совпадают" }); return; }
+    vault[key] = np;
+    localStorage.setItem("qf-demo-pass", JSON.stringify(vault));
+    setCur(""); setNp(""); setNp2("");
+    setMsg({ ok: true, text: "✓ Пароль изменён! Используйте новый при следующем входе." });
+  };
+  return (
+    <div className="mt-6 p-5 rounded-2xl border border-line-soft bg-surface">
+      <h3 className="font-display font-bold text-[16px] text-ink mb-1">🔑 Смена пароля</h3>
+      <p className="text-[11.5px] text-ink-mute mb-3">Новый пароль будет использоваться для входа в аккаунт.</p>
+      <div className="grid sm:grid-cols-3 gap-2">
+        <PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} placeholder="Текущий пароль" />
+        <PasswordInput value={np} onChange={(e) => setNp(e.target.value)} placeholder="Новый (мин. 8 символов)" />
+        <PasswordInput value={np2} onChange={(e) => setNp2(e.target.value)} placeholder="Повторите новый" />
+      </div>
+      {msg && <p className={"text-[12px] font-bold mt-2 " + (msg.ok ? "text-success" : "text-error")}>{msg.text}</p>}
+      <Btn size="sm" className="mt-3" onClick={save}>Сменить пароль</Btn>
+    </div>
+  );
+}
