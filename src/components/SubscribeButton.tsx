@@ -1,5 +1,21 @@
+/* ============================================================
+   Кнопка подписки (ЗАДАЧА завершения, п.1): полностью на TanStack
+   Query — состояние читается из кэша /api/subscriptions, запись
+   идёт через useMutation (POST /api/subscriptions / DELETE), кэш
+   обновляется автоматически, при ошибке показывается понятное
+   сообщение: продавец не найден / лимит исчерпан / сеть недоступна
+   / сервер ошибся (п.22 ЗАДАЧИ 4).
+   ============================================================ */
 import { useState } from 'react';
-import { subscribeOnServer, unsubscribeOnServer, useUserSubscriptions } from '../lib/userFeed';
+import { marketProducts } from '../lib/market';
+import { canonicalSellerId } from '../lib/userFeed';
+import { useSubscriptions } from '../hooks/useSubscriptions';
+import {
+  useSubscribeMutation,
+  useUnsubscribeMutation,
+  subscriptionErrorMessage,
+} from '../hooks/useSubscriptionMutations';
+import { useToast } from './a11y';
 
 interface SubscribeButtonProps {
   targetType: string;
@@ -8,61 +24,74 @@ interface SubscribeButtonProps {
 }
 
 export function SubscribeButton({ targetType, targetId, variant = 'default' }: SubscribeButtonProps) {
-  /* ИСПРАВЛЕНИЕ: состояние кнопки читается из того же единого серверного
-     источника истины (/api/subscriptions), что и раздел «Мои подписки» в
-     кабинете — через общий хук useUserSubscriptions (с кэшем и корректным
-     id покупателя). Ранее кнопка ходила на сервер сама, читая несуществующий
-     ключ localStorage "userId", — из-за этого «Вы подписаны» и реальный
-     список подписок могли расходиться. */
-  const { subscriptions } = useUserSubscriptions();
+  /* Единый серверный источник истины: список подписок из TanStack Query
+     (кэш автоматически инвалидируется мутациями subscribe/unsubscribe). */
+  const { data: subs = [], isLoading } = useSubscriptions({ limit: 100 });
   const isSubscribed =
     !!targetId &&
-    subscriptions.some(
-      (s) => s.targetType === targetType && String(s.targetId) === String(targetId)
-    );
-  const [loading, setLoading] = useState(false);
+    subs.some((s) => s.target_type === targetType && String(s.target_id) === String(targetId));
 
-  const handleToggle = async () => {
+  const subscribe = useSubscribeMutation();
+  const unsubscribe = useUnsubscribeMutation();
+  const pending = subscribe.isPending || unsubscribe.isPending;
+  const { toast } = useToast();
+
+  /* ИСПРАВЛЕНИЕ (сохранено из прежней реализации): канонизация цели.
+     Если цель — демо-вендор seed-каталога (id вида "vendor-*"), находим
+     реального владельца витрины по товару этого вендора; иначе кабинет
+     «Мои подписки» не смог бы резолвить магазин. */
+  const resolveTargetId = (): string => {
+    if (targetType === 'shop' && /^vendor-/.test(String(targetId))) {
+      const own = marketProducts().find((x: any) => String(x.vendorId || '') === String(targetId));
+      const real = own ? canonicalSellerId(own as any) : '';
+      return real || String(targetId);
+    }
+    return String(targetId);
+  };
+
+  const handleToggle = () => {
     if (!targetId) return; /* цель ещё не резолвлена — не пишем пустую подписку */
-    setLoading(true);
-    try {
-      /* Подписка/отписка на сервере; после успешного ответа общий кэш
-         подписок инвалидируется и перечитывается — состояние кнопки
-         («Вы подписаны») и раздел «Мои подписки» обновляются из одного
-         источника истины одновременно. */
-      if (isSubscribed) {
-        await unsubscribeOnServer(targetType, targetId);
-      } else {
-        await subscribeOnServer(targetType, targetId);
-      }
-    } catch (err) {
-      console.error('Ошибка подписки:', err);
-    } finally {
-      setLoading(false);
+    const id = resolveTargetId();
+    if (isSubscribed) {
+      unsubscribe.mutate(
+        { targetType, targetId: id },
+        {
+          onSuccess: () => toast('success', 'Вы отписаны'),
+          onError: (e) => toast('error', subscriptionErrorMessage(e)),
+        }
+      );
+    } else {
+      subscribe.mutate(
+        { targetType, targetId: id },
+        {
+          onSuccess: (d: any) => {
+            /* «Уже подписаны» (дубликат через уникальный индекс) — инфо */
+            if (d && typeof d.message === 'string' && d.message) toast('info', d.message);
+            else toast('success', 'Вы подписаны на обновления');
+          },
+          onError: (e) => toast('error', subscriptionErrorMessage(e)),
+        }
+      );
     }
   };
 
-  const sizeClass = variant === 'small' ? 'px-2.5 py-1.5 text-xs' : 'px-4 py-2 text-sm';
+  const sizeClass = variant === 'small' ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm';
+  /* Тач-цель минимум 44x44 (доступность, п.21) */
+  const minTouch = 'min-h-[44px] min-w-[44px]';
 
   return (
     <button
-      onClick={handleToggle}
-      disabled={loading}
-      className={`inline-flex items-center rounded-lg font-medium transition-all ${sizeClass} ${
-        isSubscribed
-          ? 'bg-accent-deep text-white hover:bg-accent-deep/90'
-          : 'bg-surface border border-line text-ink hover:border-accent-deep hover:text-accent-deep'
-      } ${loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-      {isSubscribed ? (
-        <>
-          <span>Вы подписаны</span>
-        </>
-      ) : (
-        <>
-          <span>Подписаться</span>
-        </>
-      )}
-    </button>
+        onClick={handleToggle}
+        disabled={pending || isLoading}
+        aria-pressed={isSubscribed}
+        aria-label={isSubscribed ? 'Отписаться от продавца' : 'Подписаться на продавца'}
+        className={`inline-flex items-center justify-center rounded-lg font-medium transition-all ${sizeClass} ${minTouch} ${
+          isSubscribed
+            ? 'bg-accent-deep text-white hover:bg-accent-deep/90'
+            : 'bg-surface border border-line text-ink hover:border-accent-deep hover:text-accent-deep'
+        } ${pending || isLoading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        {isLoading ? '…' : isSubscribed ? <span>Вы подписаны</span> : <span>Подписаться</span>}
+      </button>
   );
 }

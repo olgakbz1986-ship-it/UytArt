@@ -41,6 +41,8 @@ module.exports = function feedRouter(app, ctx, repo) {
         limit: req.query.limit,
         cursor: req.query.cursor,
         targetType: req.query.target_type,
+        /* mark_seen=false — прочитать ленту без сброса счётчика новинок */
+        markSeen: String(req.query.mark_seen || 'true') !== 'false',
       });
       res.json({ ok: true, feed: items, next_cursor });
     } catch (e) {
@@ -99,12 +101,15 @@ module.exports = function feedRouter(app, ctx, repo) {
   app.get('/api/sellers/:id/feed', async (req, res) => {
     try {
       const sellerId = String(req.params.id);
-      const seller = await R.getSellerById(sellerId);
+      /* dev-контракт: :id может быть id продавца ИЛИ user_id владельца —
+         нормализуем через резолвер цели подписки. */
+      const seller = await R.resolveSellerTarget(sellerId);
       if (!seller) return res.status(404).json({ ok: false, error: 'Продавец не найден' });
+      const canonicalId = String(seller.id || sellerId);
       const userId = resolveUser(req);
       /* п.12: last_seen_at подписки обновляется только для подписанного
          пользователя и только после того, как лента получена. */
-      const { items, next_cursor, seen } = await R.getSellerFeed(sellerId, {
+      const { items, next_cursor, seen } = await R.getSellerFeed(canonicalId, {
         limit: req.query.limit,
         cursor: req.query.cursor,
         userId: userId || undefined,

@@ -99,19 +99,20 @@ const DEMO_PASSWORD = "demo1234";
     }
 
     /* ---------- Подписки ---------- */
+    /* ЗАДАЧА ФИНАЛЬНОЙ ПРАВКИ, п.1–п.2: все тестовые подписки — типа 'shop'
+       (подписка на магазин/витрину продавца), target_id — id существующего
+       продавца из таблицы sellers. Подписки типа 'product' возвращают
+       target_name=null по спецификации и не демонстрируют витрины магазинов. */
     const subsSpec = [
-      { user: "buyer1@uyart.test", target_type: "seller",  target: "anna-masterova" },
-      { user: "buyer1@uyart.test", target_type: "product", targetProduct: "Кружка «Закат»" },
-      { user: "buyer2@uyart.test", target_type: "seller",  target: "boris-rezchikov" },
+      { user: "buyer1@uyart.test", target_type: "shop", target: "anna-masterova" },
+      { user: "buyer1@uyart.test", target_type: "shop", target: "boris-rezchikov" },
+      { user: "buyer2@uyart.test", target_type: "shop", target: "anna-masterova" },
     ];
     for (const s of subsSpec) {
-      let targetId;
-      if (s.target_type === "seller") targetId = sellerIds[s.target];
-      else {
-        const pr = await client.query("SELECT id FROM products WHERE name = $1 LIMIT 1", [s.targetProduct]);
-        if (!pr.rowCount) continue;
-        targetId = pr.rows[0].id;
-      }
+      /* target_id — id существующего продавца из sellers (slug -> sellerIds),
+         иначе подписка не резолвится в target_name и сид пропускается. */
+      const targetId = sellerIds[s.target];
+      if (!targetId) { console.warn(`! seller not found for slug: ${s.target}`); continue; }
       await client.query(
         `INSERT INTO subscriptions (user_id, target_type, target_id, last_seen_at)
          VALUES ($1,$2,$3,now())

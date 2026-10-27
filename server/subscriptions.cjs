@@ -139,12 +139,16 @@ module.exports = function subscriptionsRouter(app, ctx, repo) {
     targetType = String(targetType);
     targetId = String(targetId);
 
-    /* п.5: валидация существования цели — для shop/master/author цель
-       обязана существовать в таблице sellers (через репозиторный слой). */
+    /* п.5: валидация существования цели — для shop/seller/master/author цель
+       обязана существовать в sellers (через репозиторный слой). Цель может быть
+       передана как id продавца ИЛИ как user_id владельца витрины (dev-контракт
+       /api/shops: id карточки = id аккаунта) — нормализуем в canonical seller id,
+       иначе подписка не обогатится target_name и не попадёт в ленту. */
     const { SHOP_TARGET_TYPES } = require('./repo.cjs');
     if (SHOP_TARGET_TYPES.includes(targetType)) {
-      const exists = await R.sellerExists(targetId);
-      if (!exists) return res.status(400).json({ ok: false, error: 'Продавец не найден' });
+      const seller = await R.resolveSellerTarget(targetId);
+      if (!seller) return res.status(400).json({ ok: false, error: 'Продавец не найден' });
+      targetId = String(seller.id || seller.userId || targetId);
     }
 
     try {
