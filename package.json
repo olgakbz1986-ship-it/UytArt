@@ -5,10 +5,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "migrate": "node server/db/migrate.cjs",
     "migrate:down": "node server/db/migrate-down.cjs",
-    "seed": "node server/db/seed.cjs"
+    "seed": "node server/db/seed.cjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --ext .ts,.tsx,.js,.cjs",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.cjs --fix",
+    "format": "prettier --write \"{src,server,shared,tests}/**/*.{ts,tsx,js,cjs,json}\"",
+    "prepare": "husky"
   },
   "dependencies": {
     "@playwright/test": "^1.64.1",
