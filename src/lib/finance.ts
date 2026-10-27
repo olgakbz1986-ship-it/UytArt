@@ -71,6 +71,8 @@ export function premiumDeliveryForOrder(opts: {
   weight: number;
 }): { price: number; subsidy: number; free: boolean } {
   const full = cdekRate(opts.fromCity, opts.toCity, opts.weight);
+  /* Город не определён — тариф неизвестен, бесплатная доставка не применяется */
+  if (!full) return { price: 0, subsidy: 0, free: false };
   let plan: string = "free";
   try { plan = useSubStore.getState().getBuyerPlan(opts.accountId); } catch { /* noop */ }
   if (plan !== "premium") return { price: full, subsidy: 0, free: false };
@@ -207,14 +209,17 @@ export const useFinance = create<FinanceState>()(
       })),
 
       resolveDispute: (orderId, refund) => set((s) => {
-        const holds = s.holds.map((h) => {
-          if (h.orderId !== orderId || h.status !== "frozen") return h;
-          if (refund) return { ...h, status: "refunded" as const, releasedAt: new Date().toISOString(), trigger: "dispute_refund" };
-          return { ...h, status: "released" as const, releasedAt: new Date().toISOString(), trigger: "dispute_release" };
-        });
+        const nowIso = new Date().toISOString();
+        /* Индекс до разрешения — по исходному массиву: в изменённом hold
+           статус уже переведён из "frozen" и поиск не сработает */
         const h = s.holds.find((x) => x.orderId === orderId);
+        const holds = s.holds.map((x) => {
+          if (x.orderId !== orderId || x.status !== "frozen") return x;
+          if (refund) return { ...x, status: "refunded" as const, releasedAt: nowIso, trigger: "dispute_refund" };
+          return { ...x, status: "released" as const, releasedAt: nowIso, trigger: "dispute_release" };
+        });
         const ledger = h && refund
-          ? [{ id: uid("l"), ts: new Date().toISOString(), type: "refund" as const, amount: h.amount, orderId, comment: "Возврат покупателю по спору" }, ...s.ledger]
+          ? [{ id: uid("l"), ts: nowIso, type: "refund" as const, amount: h.amount, orderId, comment: "Возврат покупателю по спору" }, ...s.ledger]
           : s.ledger;
         return { holds, ledger, disputes: s.disputes.map((d) => (d.orderId === orderId && d.status === "open" ? { ...d, status: refund ? ("resolved_refund" as const) : ("resolved_release" as const) } : d)) };
       }),

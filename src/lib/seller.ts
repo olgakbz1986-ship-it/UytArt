@@ -5,6 +5,9 @@ import { api } from "./api";
 /* БЛОК 3 §3.1: токен платёжного метода ЮKassa (виджет-iframe на клиенте) */
 import { getPaymentMethodToken, clearPaymentMethodToken } from "./yookassa";
 import { useTariffStore, applyServerTariff } from "./tariff";
+/* Единое тарифное ядро (shared/tariffs/core.js) — единственный источник
+   истинных числовых таблиц комиссий/цен/взносов для клиента и сервера. */
+import * as core from "../../shared/tariffs/core.js";
 
 /* ============================================================
    Раздельные регистрации продавцов: самозанятый / ИП / ООО
@@ -24,7 +27,7 @@ export interface SellerTypeInfo {
 
 export const SELLER_TYPES: SellerTypeInfo[] = [
   {
-    type: "self_employed", short: "Самозанятый", label: "Самозанятые (НПД)", fee: 5000, commission: 10,
+    type: "self_employed", short: "Самозанятый", label: "Самозанятые (НПД)", fee: core.REGISTRATION_FEES.self_employed, commission: core.COMMISSION_MATRIX.self_employed.free,
     docs: [
       { key: "passport", name: "Паспорт РФ", note: "Основная страница и прописка, JPG/PNG/PDF до 5 МБ" },
       { key: "nalog", name: "Справка о постановке на учёт", note: "Из приложения «Мой налог» или налогового органа" },
@@ -32,7 +35,7 @@ export const SELLER_TYPES: SellerTypeInfo[] = [
     ],
   },
   {
-    type: "ip", short: "ИП", label: "Индивидуальные предприниматели", fee: 10000, commission: 12,
+    type: "ip", short: "ИП", label: "Индивидуальные предприниматели", fee: core.REGISTRATION_FEES.ip, commission: core.COMMISSION_MATRIX.ip.free,
     docs: [
       { key: "passport", name: "Паспорт РФ", note: "Основная страница и прописка" },
       { key: "egrip", name: "Выписка из ЕГРИП", note: "Не старше 30 дней" },
@@ -41,7 +44,7 @@ export const SELLER_TYPES: SellerTypeInfo[] = [
     ],
   },
   {
-    type: "ooo", short: "ООО", label: "Общества с ограниченной ответственностью", fee: 15000, commission: 15,
+    type: "ooo", short: "ООО", label: "Общества с ограниченной ответственностью", fee: core.REGISTRATION_FEES.ooo, commission: core.COMMISSION_MATRIX.ooo.free,
     docs: [
       { key: "passport", name: "Паспорт руководителя", note: "Или уполномоченного лица с доверенностью" },
       { key: "egrul", name: "Выписка из ЕГРЮЛ", note: "Не старше 30 дней" },
@@ -59,8 +62,9 @@ export const sellerTypeInfo = (t: SellerLegalType | null) => SELLER_TYPES.find((
    §3.1: тексты фич приведены в соответствие таблице лимитов
    (SELLER_LIMITS в subscriptions.ts) — противоречий больше нет. */
 export interface SellerPlan { id: string; name: string; price: number; legacyPrice?: number; features: string[]; }
-export const YEAR_DISCOUNT = 0.8; /* коэффициент годовой цены: −20% скидка */
-export const yearPriceOf = (monthly: number) => (monthly === 0 ? 0 : Math.round(monthly * 12 * YEAR_DISCOUNT / 10) * 10);
+/* §3.2/§4.2: единая формула годовой цены −20% — из тарифного ядра */
+export const YEAR_DISCOUNT = 1 - core.YEAR_DISCOUNT; /* коэффициент годовой цены: −20% скидка */
+export const yearPriceOf = core.yearPriceOf as (monthly: number) => number;
 
 /* ============================================================
    ЭТАП 4 (§4.1–§4.3): РЕВИЗИЯ ЦЕН
@@ -159,38 +163,34 @@ export function downgradeAccessUntil(periodEndIso: string): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/* ---------- ЭТАП 4 (§4.5): ПАКЕТЫ СВЕРХ ЛИМИТОВ ---------- */
+/* ---------- ЭТАП 4 (§4.5): ПАКЕТЫ СВЕРХ ЛИМИТОВ ----------
+   Числа (slots/price) — из единого тарифного ядра; UI-названия — локально. */
+const CORE_PACKS = core.OVERLIMIT_PACKS;
 export const OVERLIMIT_PACKS = {
-  product_slots: { packId: "plus-products-50", action: "product_slots", slots: 50, price: 300, title: "+50 слотов товаров", unit: "мес" },
-  ai_gens: { packId: "plus-ai-gens-50", action: "ai_gen_packs", slots: 50, price: 500, title: "+50 AI-генераций", unit: "мес" },
+  product_slots: { packId: "plus-products-50", action: "product_slots", slots: CORE_PACKS["plus-products-50"].slots, price: CORE_PACKS["plus-products-50"].price, title: "+50 слотов товаров", unit: "мес" },
+  ai_gens: { packId: "plus-ai-gens-50", action: "ai_gen_packs", slots: CORE_PACKS["plus-ai-gens-50"].slots, price: CORE_PACKS["plus-ai-gens-50"].price, title: "+50 AI-генераций", unit: "мес" },
 } as const;
-/** Что предложить в момент отказа по лимиту (§4.5). */
+/** Что предложить в момент отказа по лимиту (§4.5) — маппинг из ядра. */
 export function overlimitOfferFor(action: string): { packId: string; title: string; price: number; slots: number } | null {
-  if (action === "product_create") return { packId: "plus-products-50", title: "Пакет +50 слотов товаров", price: 300, slots: 50 };
-  if (action === "ai_card_gen" || action === "ai_gen" || action === "interior_project") return { packId: "plus-ai-gens-50", title: "Пакет +50 AI-генераций", price: 500, slots: 50 };
-  return null;
+  const id = core.packForAction(action);
+  if (!id) return null;
+  const p = CORE_PACKS[id];
+  if (!p) return null;
+  return { packId: id, title: `Пакет ${p.title.replace(" на месяц", "")}`, price: p.price, slots: p.slots };
 }
 export const sellerPlanById = (t: SellerLegalType, id: string) => (SELLER_PLANS[t] || []).find((p) => p.id === id);
 
-/* ---------- матрица комиссий по типу юрлица и тарифу ---------- */
-export const COMMISSION_MATRIX: Record<SellerLegalType, Record<string, number>> = {
-  self_employed: { free: 10, master: 9, profi: 8, top: 7 },
-  ip: { free: 12, business: 11, "business-pro": 10, "business-premium": 9 },
-  ooo: { free: 15, corp: 14, "corp-pro": 13, "corp-premium": 11 },
-};
+/* ---------- матрица комиссий по типу юрлица и тарифу ----------
+   Единый источник истины — shared/tariffs/core.js (та же таблица,
+   что использует сервер server/tariffs.cjs; рассинхрон устранён). */
+export const COMMISSION_MATRIX: Record<SellerLegalType, Record<string, number>> = core.COMMISSION_MATRIX;
 
 /* §1.1: 15% — резерв ТОЛЬКО при полном отсутствии данных о тарифе
    (нет типа юрлица / нет строки матрицы). Штатный вызов getCommissionRate
    всегда возвращает ставку ИЗ МАТРИЦЫ по идентификатору аккаунта и типу
    юрлица; базовая ставка типа не хранится «навсегда» (§1.2). */
 export function getCommissionRate(type: SellerLegalType | null | undefined, planId: string): number {
-  if (!type) return 15;
-  const row = COMMISSION_MATRIX[type];
-  if (!row) return 15;
-  if (row[planId] != null) return row[planId];
-  const LEVEL: Record<string, number> = { free: 0, master: 1, business: 1, corp: 1, "master-pro": 2, "business-pro": 2, "corp-pro": 2, profi: 2, "master-premium": 3, "business-premium": 3, "corp-premium": 3, top: 3 };
-  const keys = Object.keys(row);
-  return row[keys[Math.min(LEVEL[planId] ?? 0, keys.length - 1)]] ?? 15;
+  return core.commissionRateOf(type ?? "", planId) ?? 15;
 }
 
 /* §3.1: унификация бейджей — самозанятым «Проверенный мастер»,

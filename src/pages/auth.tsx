@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PasswordInput } from "../components/PasswordInput";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Smartphone, Mail, CheckCircle2, Info, Sparkles, Store } from "lucide-react";
-import { useAppStore, type ConsentRecord } from "../lib/store";
+import { useAppStore, type ConsentRecord, type UserRole } from "../lib/store";
 import { Btn, Field } from "../components/ui";
 import { SellerRegWizard } from "./extras";
 import { LEGAL_VERSIONS } from "../data/seed";
@@ -171,9 +171,12 @@ export function AuthPage() {
       return;
     }
     // АВТО-ВХОД: если подтверждение не требуется (демо-режим), сразу входим в систему
-    if (r.userId && !r.needConfirm) {
-      login({ id: r.userId, name: r.name, email: r.email, role: r.role || "buyer" });
-      nav("/profile");
+    /* Сервер возвращает name/email/role опционально — берём значения из формы,
+       роль приводим к UserRole (сервер может вернуть произвольную строку). */
+    if (r.ok && r.userId && !r.needConfirm) {
+      const role: UserRole = r.role === "seller" ? "seller" : "buyer";
+      login({ id: r.userId, name: r.name || reg.name.trim(), email: r.email || reg.email.trim(), role });
+      nav(role === "seller" ? "/seller/dashboard" : "/profile");
       return;
     }
     

@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { SellerLegalType } from "./seller";
+/* Единое тарифное ядро (shared/tariffs/core.js) — единственный источник
+   истинных числовых таблиц. Клиент обязан использовать ТОЛЬКО его:
+   локальные дубли BUYER_PLANS / SELLER_LIMITS удалены (риск рассинхрона
+   с сервером устранён). Маркер безлимита «∞» резолвится в Infinity. */
+import * as core from "../../shared/tariffs/core.js";
 
 /* ============================================================
    Подписки: покупатели (4 тарифа) + лимиты продавцов по юрлицу
@@ -17,11 +22,20 @@ export interface BuyerLimits {
   curator: boolean;        /* персональный куратор */
   vip: boolean;
 }
+/* Числовые лимиты — из единого ядра; булевы/процентные флаги фич
+   (совпадают с серверной BUYER_FEATURES в tariffs.cjs) дополняют locally. */
+const BUYER_FEATURE_FLAGS: Record<BuyerPlanId, Pick<BuyerLimits, "qualityFilters" | "discountPct" | "earlyAccess" | "curator" | "vip">> = {
+  free:     { qualityFilters: false, discountPct: 0, earlyAccess: false, curator: false, vip: false },
+  start:    { qualityFilters: true,  discountPct: 3, earlyAccess: false, curator: false, vip: false },
+  designer: { qualityFilters: true,  discountPct: 5, earlyAccess: true,  curator: false, vip: false },
+  premium:  { qualityFilters: true,  discountPct: 7, earlyAccess: true,  curator: true,  vip: true },
+};
+const BUYER_NUM_LIMITS = core.resolveLimits(core.BUYER_PLANS_RAW) as Record<BuyerPlanId, Pick<BuyerLimits, "aiGens" | "marketOrders" | "priceWatches">>;
 export const BUYER_PLANS: Record<BuyerPlanId, BuyerLimits> = {
-  free: { aiGens: 2, marketOrders: 1, priceWatches: 0, qualityFilters: false, discountPct: 0, earlyAccess: false, curator: false, vip: false },
-  start: { aiGens: 15, marketOrders: 3, priceWatches: 10, qualityFilters: true, discountPct: 3, earlyAccess: false, curator: false, vip: false },
-  designer: { aiGens: 50, marketOrders: 10, priceWatches: Infinity, qualityFilters: true, discountPct: 5, earlyAccess: true, curator: false, vip: false },
-  premium: { aiGens: Infinity, marketOrders: Infinity, priceWatches: Infinity, qualityFilters: true, discountPct: 7, earlyAccess: true, curator: true, vip: true },
+  free:     { ...BUYER_NUM_LIMITS.free,     ...BUYER_FEATURE_FLAGS.free },
+  start:    { ...BUYER_NUM_LIMITS.start,    ...BUYER_FEATURE_FLAGS.start },
+  designer: { ...BUYER_NUM_LIMITS.designer, ...BUYER_FEATURE_FLAGS.designer },
+  premium:  { ...BUYER_NUM_LIMITS.premium,  ...BUYER_FEATURE_FLAGS.premium },
 };
 export const buyerLimits = (plan: BuyerPlanId): BuyerLimits => BUYER_PLANS[plan] || BUYER_PLANS.free;
 
@@ -43,7 +57,10 @@ export const currentMonth = () => {
    юридические лица (ИП/ООО) — «Официальный бренд».
    ============================================================ */
 
-/* ---------- лимиты продавцов по юрлицу и тарифу ---------- */
+/* ---------- лимиты продавцов по юрлицу и тарифу ----------
+   Числовые ядра (maxProducts / aiCardGens) — из единого тарифного ядра;
+   расширенные UI-флаги (analytics/team/…) дополняются локально и
+   соответствуют серверной сетке SELLER_FEATURES_BASE (§5.1–§5.6). */
 export interface SellerLimits {
   maxProducts: number;
   aiCardGens: number;
@@ -62,42 +79,42 @@ export interface SellerLimits {
   whiteLabel: boolean;
   badge?: string;
 }
-const UNLIM = Infinity;
-export const SELLER_LIMITS: Record<SellerLegalType, Record<string, SellerLimits>> = {
-  self_employed: {
-    free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    /* §3.1: самозанятые — верхний бейдж «Проверенный мастер» */
-    master: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    "master-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
-    "master-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Проверенный мастер" },
-  },
-  ip: {
-    free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    business: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    "business-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
-    "business-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
-  },
-  ooo: {
-    free: { maxProducts: 50, aiCardGens: 0, analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    corp: { maxProducts: 500, aiCardGens: 100, analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
-    "corp-pro": { maxProducts: 2000, aiCardGens: UNLIM, analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
-    "corp-premium": { maxProducts: UNLIM, aiCardGens: UNLIM, analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: UNLIM, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true, badge: "Официальный бренд" },
-  },
-};
+type SellerUiFlags = Omit<SellerLimits, "maxProducts" | "aiCardGens">;
+/* Флаги по УРОВНЮ тарифа (0..3), одинаковые для всех трёх линеек. */
+const SELLER_UI_BY_LEVEL: SellerUiFlags[] = [
+  /* lvl 0 — free */
+  { analytics: "basic", marketPriority: 0, massEdit: false, bundles: false, team: 0, importFile: false, brandStore: false, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+  /* lvl 1 — master / business / corp */
+  { analytics: "extended", marketPriority: 1, massEdit: false, bundles: false, team: 5, importFile: true, brandStore: true, abTest: false, b2b: false, forecasts: false, segmentation: false, manager: false, whiteLabel: false },
+  /* lvl 2 — *-pro / profi */
+  { analytics: "advanced", marketPriority: 3, massEdit: true, bundles: true, team: 15, importFile: true, brandStore: true, abTest: false, b2b: true, forecasts: true, segmentation: true, manager: false, whiteLabel: false },
+  /* lvl 3 — *-premium / top */
+  { analytics: "full", marketPriority: 3, massEdit: true, bundles: true, team: Infinity, importFile: true, brandStore: true, abTest: true, b2b: true, forecasts: true, segmentation: true, manager: true, whiteLabel: true },
+];
+const BADGE_BY_LEGAL_LEVEL3: Record<string, string> = { self_employed: "Проверенный мастер", ip: "Официальный бренд", ooo: "Официальный бренд" };
+
+const SELLER_LIMITS: Record<SellerLegalType, Record<string, SellerLimits>> = (() => {
+  const numeric = core.resolveLimits(core.SELLER_LIMITS_RAW as any) as unknown as Record<
+    string,
+    Record<string, Pick<SellerLimits, "maxProducts" | "aiCardGens">>
+  >;
+  const out: Record<string, Record<string, SellerLimits>> = {};
+  for (const legalType of Object.keys(numeric)) {
+    const rows: Record<string, SellerLimits> = {};
+    const planIds = Object.keys(numeric[legalType]);
+    planIds.forEach((planId, idx) => {
+      const flags: SellerUiFlags = { ...SELLER_UI_BY_LEVEL[Math.min(idx, 3)] };
+      if (idx === 3) flags.badge = BADGE_BY_LEGAL_LEVEL3[legalType];
+      rows[planId] = { ...numeric[legalType][planId], ...flags };
+    });
+    out[legalType] = rows;
+  }
+  return out as Record<SellerLegalType, Record<string, SellerLimits>>;
+})();
+
 /* Уровень тарифа по любому имени (top/profi из комиссионной матрицы и master-pro и т.д.) */
-const PLAN_LEVEL: Record<string, number> = {
-  free: 0,
-  master: 1, business: 1, corp: 1,
-  "master-pro": 2, "business-pro": 2, "corp-pro": 2, profi: 2,
-  "master-premium": 3, "business-premium": 3, "corp-premium": 3, top: 3,
-};
-export const sellerLimits = (t: SellerLegalType, planId: string): SellerLimits => {
-  const table = SELLER_LIMITS[t] || SELLER_LIMITS.self_employed;
-  if (table[planId]) return table[planId];
-  const lvl = PLAN_LEVEL[planId] ?? 0;
-  const keys = Object.keys(table); /* порядок: free, средний, про, премиум */
-  return table[keys[Math.min(lvl, keys.length - 1)]] || table.free;
-};
+export const sellerLimits = (t: SellerLegalType, planId: string): SellerLimits =>
+  core.sellerLimitsOf(SELLER_LIMITS, t, planId);
 
 /* ---------- состояние подписок покупателя ---------- */
 export interface Concept { id: string; style: string; roomName: string; image?: string; createdAt: string; }

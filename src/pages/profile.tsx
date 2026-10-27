@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot, Store, Wrench, BookOpen} from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
-import { useAppStore, NEXT_STATUS, type Order } from "../lib/store";
+import { useAppStore, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
@@ -20,6 +20,7 @@ import { BuyerPremiumSection } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
 import { BuyerSubscriptionsPanel } from "../components/BuyerSubscriptionsPanel";
 import { BuyerOrdersPanel } from "../components/BuyerOrdersPanel";
+import { BuyerCustomOrdersPanel } from "../components/BuyerCustomOrdersPanel";
 import { BuyerFavoritesPanel, BuyerAddressesPanel, BuyerBonusPanel, BuyerComplaintsPanel } from "../components/BuyerPanels";
 import {
   useUserSubscriptions,

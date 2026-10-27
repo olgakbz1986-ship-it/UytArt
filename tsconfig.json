@@ -10,7 +10,9 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false
   },
-  "include": ["src"]
+  "include": ["src", "shared"]
 }

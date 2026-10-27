@@ -21,42 +21,16 @@ const vld = require("./validators.cjs");
 /* БЛОК 5, Пункт 5.1: структурированное логирование security-событий */
 const log = require("./logger.cjs");
 
-/* ---------- матрицы (полные копии клиентских, сервер — истина) ---------- */
-const COMMISSION_MATRIX = {
-  self_employed: { free: 10, master: 9, profi: 8, top: 7 },
-  ip: { free: 12, business: 11, "business-pro": 10, "business-premium": 9 },
-  ooo: { free: 15, corp: 14, "corp-pro": 13, "corp-premium": 11 },
-};
+/* ---------- матрицы: единое тарифное ядро shared/tariffs/core.js ----------
+   Единственный источник истины для клиента (subscriptions.ts / seller.ts)
+   и сервера. Локальные дубли таблиц удалены — рассинхрон невозможен. */
+const CORE = require("../shared/tariffs/core.js");
 
-const SELLER_LIMITS = {
-  self_employed: {
-    free: { maxProducts: 50, aiCardGens: 0 },
-    master: { maxProducts: 500, aiCardGens: 100 },
-    "master-pro": { maxProducts: 2000, aiCardGens: Infinity },
-    "master-premium": { maxProducts: Infinity, aiCardGens: Infinity },
-  },
-  ip: {
-    free: { maxProducts: 50, aiCardGens: 0 },
-    business: { maxProducts: 500, aiCardGens: 100 },
-    "business-pro": { maxProducts: 2000, aiCardGens: Infinity },
-    "business-premium": { maxProducts: Infinity, aiCardGens: Infinity },
-  },
-  ooo: {
-    free: { maxProducts: 50, aiCardGens: 0 },
-    corp: { maxProducts: 500, aiCardGens: 100 },
-    "corp-pro": { maxProducts: 2000, aiCardGens: Infinity },
-    "corp-premium": { maxProducts: Infinity, aiCardGens: Infinity },
-  },
-};
+const COMMISSION_MATRIX = CORE.COMMISSION_MATRIX;
 
-/* §3.5: безлимит отслеживания цен — явный признак Infinity,
-   заглушка 999 удалена (совпадает с клиентской таблицей subscriptions.ts) */
-const BUYER_PLANS = {
-  free: { aiGens: 2, marketOrders: 1, priceWatches: 0 },
-  start: { aiGens: 15, marketOrders: 3, priceWatches: 10 },
-  designer: { aiGens: 50, marketOrders: 10, priceWatches: Infinity },
-  premium: { aiGens: Infinity, marketOrders: Infinity, priceWatches: Infinity },
-};
+/* §3.5: безлимит отслеживания цен — маркер "∞" из ядра резолвится в Infinity */
+const SELLER_LIMITS = CORE.resolveLimits(CORE.SELLER_LIMITS_RAW);
+const BUYER_PLANS = CORE.resolveLimits(CORE.BUYER_PLANS_RAW);
 
 /* ============================================================
    ЭТАП 5 (§5.1–§5.6): ФУНКЦИИ ПРЕМИАЛЬНЫХ УРОВНЕЙ
@@ -118,8 +92,8 @@ const BUYER_FEATURES = {
   premium:  { premiumSales: true, curator: true, vipBadge: true, freeDeliveryZone: true, earlyAccess: true, qualityFilters: true, discountPct: 7 },
 };
 
-/* Разовые регистрационные взносы по типу юрлица: 5 / 10 / 15 тыс. ₽ */
-const REGISTRATION_FEES = { self_employed: 5000, ip: 10000, ooo: 15000 };
+/* Разовые регистрационные взносы по типу юрлица: 5 / 10 / 15 тыс. ₽ (из ядра) */
+const REGISTRATION_FEES = CORE.REGISTRATION_FEES;
 
 /* ============================================================
    ЭТАП 4 (§4.1–§4.6): РЕВИЗИЯ ЦЕН И ПОЛИТИКА МОНЕТИЗАЦИИ
@@ -129,34 +103,16 @@ const REGISTRATION_FEES = { self_employed: 5000, ip: 10000, ooo: 15000 };
      дедушкиной оговорки (ИП — 3 мес., ООО — 6 мес., §4.3).
    · Самозанятые (0/300/600/1200) и покупатели (0/500/1000/1500)
      не изменяются (§4.6).
+   Все числовые таблицы — из единого тарифного ядра shared/tariffs/core.js.
    ============================================================ */
-const YEAR_DISCOUNT = 0.2; /* единая формула годовой цены: −20% (§3.2/§4.2) */
-const yearPriceOf = (monthly) => (monthly === 0 ? 0 : Math.round((monthly * 12 * (1 - YEAR_DISCOUNT)) / 10) * 10);
+const YEAR_DISCOUNT = CORE.YEAR_DISCOUNT; /* единая формула годовой цены: −20% (§3.2/§4.2) */
+const yearPriceOf = CORE.yearPriceOf;
 
-const SELLER_PLAN_PRICES = {
-  self_employed: [
-    { id: "free", price: 0 },
-    { id: "master", price: 300 },
-    { id: "profi", price: 600 },
-    { id: "top", price: 1200 },
-  ],
-  ip: [
-    { id: "free", price: 0 },
-    { id: "business", price: 999, legacyPrice: 800 },
-    { id: "business-pro", price: 1999, legacyPrice: 1800 },
-    { id: "business-premium", price: 4999, legacyPrice: 4000 },
-  ],
-  ooo: [
-    { id: "free", price: 0 },
-    { id: "corp", price: 4999, legacyPrice: 2500 },
-    { id: "corp-pro", price: 14999, legacyPrice: 6000 },
-    { id: "corp-premium", price: 49999, legacyPrice: 15000 },
-  ],
-};
-const BUYER_PLAN_PRICES = { free: 0, start: 500, designer: 1000, premium: 1500 }; /* §4.6 — без изменений */
-const GRANDFATHER_MONTHS = { ip: 3, ooo: 6 }; /* §4.3 */
-const PRICE_REVISION_NOTICE_DAYS = 30;        /* §4.3: уведомление за 30 дней */
-const PRICE_REVISION_EFFECTIVE_AT = process.env.QF_PRICE_REVISION_AT || "2026-10-18T00:00:00.000Z"; /* дата ревизии */
+const SELLER_PLAN_PRICES = CORE.SELLER_PLAN_PRICES;
+const BUYER_PLAN_PRICES = CORE.BUYER_PLAN_PRICES;
+const GRANDFATHER_MONTHS = CORE.GRANDFATHER_MONTHS; /* §4.3 */
+const PRICE_REVISION_NOTICE_DAYS = CORE.PRICE_REVISION_NOTICE_DAYS; /* §4.3: уведомление за 30 дней */
+const PRICE_REVISION_EFFECTIVE_AT = process.env.QF_PRICE_REVISION_AT || CORE.PRICE_REVISION_EFFECTIVE_AT_DEFAULT; /* дата ревизии */
 
 /* Пакеты сверх лимитов (§4.5): +50 слотов товаров за 300 ₽/мес,
    +50 AI-генераций за 500 ₽/мес. */

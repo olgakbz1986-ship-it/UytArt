@@ -436,6 +436,9 @@ export function ProductPage() {
     [market, p]
   );
   const sellerProducts = useSellerAccount((st) => st.products);
+  /* Реактивная подписка на топ-слоты (бейдж «Реклама», 38-ФЗ): обновляется
+     сразу после reserve()/release(), без getState() внутри render. */
+  const topSlotsByOwner = useTopSlots((s) => s.slots);
   const sellerItem = useMemo(() => {
     if (!p || !p.id.startsWith("sp-")) return undefined;
     return sellerProducts.find((x) => x.id === p.id.slice(3));
@@ -533,7 +536,9 @@ export function ProductPage() {
             {/* Пункт Г (38-ФЗ): бейдж «Реклама» для категорий с занятым топ-слотом;
                 атрибут title и мелкий текст содержат идентификатор размещения adToken. */}
             {(() => {
-              const allSlots = Object.values(useTopSlots.getState().slots).flat();
+              /* Реактивная подписка: бейдж «Реклама» появляется сразу после
+                 бронирования топ-слота, без перезагрузки страницы. */
+              const allSlots = Object.values(topSlotsByOwner).flat();
               const slot = allSlots.find((s) => s.category === (cat?.name || p.categoryId));
               if (!slot) return null;
               return (

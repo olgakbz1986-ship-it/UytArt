@@ -40,7 +40,9 @@ export const useReviewStore = create<ReviewState>()(
       reviews: [],
 
       submitReview: (r) => {
-        const id = "rv-" + Date.now();
+        /* суффикс random: два отзыва, отправленные в один миллисекунд,
+           не должны получить одинаковый id (иначе setTimeout одобрит оба) */
+        const id = "rv-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         set((s) => ({
           reviews: [{ ...r, id, status: "pending", createdAt: new Date().toISOString() }, ...s.reviews],
         }));
@@ -78,9 +80,9 @@ export const approvedReviews = (reviews: UserReview[], productId: string) =>
   reviews.filter((r) => r.productId === productId && r.status === "approved");
 
 
-/* Живой рейтинг и счётчик отзывов товара */
+/* Живой рейтинг и счётчик отзывов товара (включает новые отзывы без перезагрузки) */
 export const productRating = (productId: string): { avg: number; count: number } => {
-  const approved = useReviewStore.getState().reviews.filter((r) => r.productId === productId && r.status === "approved");
+  const approved = useReviewStore((s) => s.reviews).filter((r) => r.productId === productId && r.status === "approved");
   if (approved.length === 0) return { avg: 0, count: 0 };
   const sum = approved.reduce((acc, r) => acc + r.rating, 0);
   return { avg: sum / approved.length, count: approved.length };
