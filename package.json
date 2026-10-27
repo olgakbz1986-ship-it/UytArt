@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "node server/db/migrate.cjs",
+    "migrate:down": "node server/db/migrate-down.cjs",
+    "seed": "node server/db/seed.cjs"
   },
   "dependencies": {
     "@playwright/test": "^1.64.1",
