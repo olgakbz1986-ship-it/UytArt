@@ -94,8 +94,8 @@ interface AppState {
 
   login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
-  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string; userId?: string; name?: string; email?: string; role?: string }>;
-  authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string; role?: string }>;
+  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string; message?: string; userId?: string; name?: string; email?: string; role?: string; legal_type?: string }>;
+  authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string; message?: string; role?: string }>;
   restoreSession: () => Promise<void>;
   setActiveAccount: (email: string, role: UserRole, sellerType?: SellerType) => void;
   updateUser: (patch: Partial<User>) => void;
@@ -185,25 +185,40 @@ export const useAppStore = create<AppState>()(
       authRegister: async (p) => api.register(p),
       authLogin: async (email, password) => {
         const r = await api.login(email, password);
-        if (!r.ok || !r.profile) return { ok: false, error: r.error };
+        if (!r.ok || !r.profile) return { ok: false, error: r.error, message: r.message };
         const pr = r.profile;
         applyServerTariff(r.tariff);
-        useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
-        /* ИСПРАВЛЕНИЕ «Мои подписки продавца показывают чужие подписки»:
-           authLogin всегда создавал запись с ролью из серверного профиля ("buyer"),
-           перетирая локальную роль seller. Сессия после входа становилась
-           покупательской, а id — новым серверным UUID, под которым в
-           /api/subscriptions числились подписки покупателя (или демо-fallback).
-           Теперь при существовании seller-аккаунта с тем же email активный
-           аккаунт переключается на него (роль и id сохраняются). */
+        /* ИСПРАВЛЕНИЕ «ВЫШЕЛ → ВШЕЛ ПО ТЕМ ЖЕ ДАННЫМ — НЕ ПУСКАЕТ / СБРОС РОЛИ»:
+           активный аккаунт выбирается по СЕРВЕРНЫМ данным (role + legal_type),
+           а не по угадыванию из локального кэша. sellerType синхронизируется с
+           серверным legal_type — самозанятый/ИП/ООО сохраняются после выхода и
+           повторного входа. */
+        const serverRole: UserRole = pr.role === "seller" ? "seller" : "buyer";
+        const serverLegal: SellerType | undefined = (pr.legal_type === "self_employed" || pr.legal_type === "ip" || pr.legal_type === "ooo") ? pr.legal_type : undefined;
         const loginEmailKey = String(pr.email || "").toLowerCase();
-        const sellerList = (useAppStore.getState().accounts[loginEmailKey] || []).filter((a) => a.role === "seller");
-        if (sellerList.length) {
-          const sameId = sellerList.find((a) => a.id === pr.id) || sellerList[0];
-          useAppStore.getState().setActiveAccount(loginEmailKey, "seller", sameId.sellerType);
-          return { ok: true, role: "seller" } as { ok: true; role: string };
-        }
-        return { ok: true, role: (pr.role as UserRole) || "buyer" } as { ok: true; role: string };
+        const localList = useAppStore.getState().accounts[loginEmailKey] || [];
+        /* локальная запись с тем же id — richest source имени/аватара/города */
+        const sameIdLocal = localList.find((a) => a.id === pr.id);
+        const fallbackName = pr.name || pr.email.split("@")[0];
+        const user: User = {
+          id: pr.id,
+          name: sameIdLocal?.name || fallbackName,
+          email: pr.email,
+          phone: pr.phone || sameIdLocal?.phone || "",
+          role: serverRole,
+          sellerType: serverRole === "seller" ? (serverLegal || sameIdLocal?.sellerType) : undefined,
+          avatar: sameIdLocal?.avatar ?? undefined,
+          city: sameIdLocal?.city,
+          birth: sameIdLocal?.birth,
+          about: sameIdLocal?.about,
+          region: sameIdLocal?.region,
+          tariff: sameIdLocal?.tariff,
+        } as User;
+        /* нормализуем хранилище под единым серверным id (чистим дубликаты
+           вида "seller-<timestamp>" без password_hash, накопленные старыми
+           версиями мастера регистрации) и сразу делаем аккаунт активным. */
+        useAppStore.getState().login(user, true);
+        return { ok: true, role: serverRole } as { ok: true; role: string };
       },
       restoreSession: async () => {
         try {
@@ -211,16 +226,26 @@ export const useAppStore = create<AppState>()(
           if (r.ok && r.profile) {
             const pr = r.profile;
             applyServerTariff(r.tariff);
-            useAppStore.getState().login({ id: pr.id, name: pr.name || pr.email.split("@")[0], email: pr.email, phone: pr.phone || "", role: (pr.role as UserRole) || "buyer", tier: pr.tier } as User);
-            /* ИСПРАВЛЕНИЕ РОЛИ ПРИ RESTORE: серверный профиль всегда "buyer" —
-               без этого шага продавец после перезагрузки страницы терял роль и
-               его «Мои подписки» читались как покупательские. */
+            /* те же правила, что и в authLogin: роль и юридический статус —
+               с сервера; локальные поля дообогащают профиль. */
+            const serverRole: UserRole = pr.role === "seller" ? "seller" : "buyer";
+            const serverLegal: SellerType | undefined = (pr.legal_type === "self_employed" || pr.legal_type === "ip" || pr.legal_type === "ooo") ? pr.legal_type : undefined;
             const rsEmailKey = String(pr.email || "").toLowerCase();
-            const rsSellerList = (useAppStore.getState().accounts[rsEmailKey] || []).filter((a) => a.role === "seller");
-            if (rsSellerList.length) {
-              const rsSameId = rsSellerList.find((a) => a.id === pr.id) || rsSellerList[0];
-              useAppStore.getState().setActiveAccount(rsEmailKey, "seller", rsSameId.sellerType);
-            }
+            const rsLocal = (useAppStore.getState().accounts[rsEmailKey] || []).find((a) => a.id === pr.id);
+            useAppStore.getState().login({
+              id: pr.id,
+              name: rsLocal?.name || pr.name || pr.email.split("@")[0],
+              email: pr.email,
+              phone: pr.phone || rsLocal?.phone || "",
+              role: serverRole,
+              sellerType: serverRole === "seller" ? (serverLegal || rsLocal?.sellerType) : undefined,
+              avatar: rsLocal?.avatar ?? undefined,
+              city: rsLocal?.city,
+              birth: rsLocal?.birth,
+              about: rsLocal?.about,
+              region: rsLocal?.region,
+              tariff: rsLocal?.tariff,
+            } as User, true);
           }
         } catch { /* сервер недоступен */ }
         try {

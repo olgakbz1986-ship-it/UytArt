@@ -370,14 +370,28 @@ app.post("/api/auth/register", async (req, res) => {
       newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role, legal_type: legalType, tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
     }
     const dev = await sendConfirm(email, name, token);
-    res.json({ 
-      ok: true, 
+    /* ИСПРАВЛЕНИЕ «РЕГИСТРАЦИЯ ПРОШЛА — НЕ ПУСКАЕТ»: регистрация сразу
+       выдаёт полноценную сессию (обе httpOnly-куки), как и /auth/login.
+       Ранее клиент после успешной регистрации жил только на локальном
+       состоянии; любой следующий серверный запрос давал 401 и молча
+       выбрасывал пользователя обратно на страницу входа/регистрации.
+       В postgres-режиме (email ещё не подтверждён) сессия НЕ выдаётся —
+       модель безопасности (§1.3, вход только после подтверждения) сохранена. */
+    let regPair = null;
+    if (!db.mode.startsWith("postgres")) {
+      regPair = issueTokens(res, newUser.id);
+      log.security("login_success", { ip: req.ip, userId: newUser.id, email, via: "register" });
+    }
+    res.json({
+      ok: true,
       userId: newUser.id,
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
-      needConfirm: db.mode.startsWith("postgres"), 
-      devConfirmUrl: dev || undefined 
+      legal_type: newUser.legal_type || "",
+      needConfirm: db.mode.startsWith("postgres"),
+      devConfirmUrl: dev || undefined,
+      ...(regPair ? { accessToken: regPair.access, tokenType: "Bearer", expiresIn: regPair.expiresIn, accessExpiresAt: regPair.accessExpiresAt } : {})
     });
   } catch (e) { console.error(e); res.status(500).json({ error: "server" }); }
 });

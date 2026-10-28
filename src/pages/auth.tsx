@@ -109,34 +109,40 @@ export function AuthPage() {
     if (!emailForm.email.includes("@")) { setError("Проверьте email"); return; }
     /* служебный email кабинета: сервер распознаёт адрес и переводит вход в шаг кода */
     if (await startAdminOtp()) return;
-    if (emailForm.password.length < 8) { setError("Введите пароль (минимум 6 символов)"); return; }
+    if (emailForm.password.length < 8) { setError("Введите пароль (минимум 8 символов)"); return; }
     setError("");
     setBusy(true);
     const r = await authLogin(emailForm.email.trim(), emailForm.password);
     if (!r.ok) {
-      const emailKey0 = emailForm.email.trim().toLowerCase();
-      const vault = JSON.parse(localStorage.getItem("qf-demo-pass") || "{}");
-      const localAcc = Object.values(useAppStore.getState().accounts).flat().find((a) => a.email.toLowerCase() === emailKey0);
-      if (vault[emailKey0] === emailForm.password && localAcc) {
-        setBusy(false);
-        if (localAcc.role === "seller") { useAppStore.getState().setActiveAccount(localAcc.email, "seller", localAcc.sellerType); nav("/seller/dashboard"); }
-        else { useAppStore.getState().login(localAcc); nav("/profile"); }
+      setBusy(false);
+      /* ИСПРАВЛЕНИЕ «МОЛЧАЛИВОГО ВЫБРАСЫВАНИЯ»: локальный фолбэк (демо-хранилище
+         qf-demo-pass) срабатывает ТОЛЬКО когда сервер недоступен (error === "server").
+         При genuine bad_credentials показываем понятную ошибку — раньше рассинхрон
+         локального хранилища и сервера давал ложные входы/выходы в никуда. */
+      if (r.error === "server") {
+        const emailKey0 = emailForm.email.trim().toLowerCase();
+        const vault = JSON.parse(localStorage.getItem("qf-demo-pass") || "{}");
+        const localAcc = Object.values(useAppStore.getState().accounts).flat().find((a) => a.email.toLowerCase() === emailKey0);
+        if (vault[emailKey0] === emailForm.password && localAcc) {
+          useAppStore.getState().login(localAcc, true);
+          nav(localAcc.role === "seller" ? "/seller/dashboard" : "/profile");
+          return;
+        }
+        setError("Сервер недоступен. Попробуйте позже.");
         return;
       }
-    }
-    setBusy(false);
-    if (!r.ok) {
-      setError(r.error === "need_confirm" ? "Email не подтверждён. Проверьте письмо (в dev-режиме ссылка в консоли сервера)." : r.error === "bad_credentials" ? "Неверный email или пароль" : "Ошибка входа, попробуйте ещё раз");
+      setError(
+        r.message ||
+        (r.error === "need_confirm" ? "Email не подтверждён. Проверьте письмо (в dev-режиме ссылка в консоли сервера)."
+          : r.error === "bad_credentials" ? "Неверный email или пароль"
+          : r.error === "rate_limited" ? "Слишком много попыток входа — подождите немного и попробуйте снова."
+          : "Ошибка входа, попробуйте ещё раз"));
       return;
     }
-    const emailKey = emailForm.email.trim().toLowerCase();
-    const sellerAcc = Object.values(useAppStore.getState().accounts).flat().find((a) => a.email.toLowerCase() === emailKey && a.role === "seller");
-    if (sellerAcc) {
-      useAppStore.getState().setActiveAccount(sellerAcc.email, "seller", sellerAcc.sellerType);
-      nav("/seller/dashboard");
-    } else {
-      nav("/profile");
-    }
+    setBusy(false);
+    /* Роль определяется СЕРВЕРНЫМ профилем (authLogin уже активировал нужный
+       аккаунт с sellerType из legal_type) — без угадывания по локальному кэшу. */
+    nav(r.role === "seller" ? "/seller/dashboard" : "/profile");
   };
 
   const STYLES8 = ["Сканди", "Лофт", "Джапанди", "Неоклассика", "Бохо", "Минимализм", "Прованс", "Эко"];
