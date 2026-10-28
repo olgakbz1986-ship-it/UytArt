@@ -141,6 +141,17 @@ const paymentsLimiter = rateLimit({ windowMs: 60 * 1000, limit: 3, standardHeade
 const aiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("ai") });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/refresh", authLimiter);
+/* ИСПРАВЛЕНИЕ «МОЛЧАЛИВОГО ОТКАЗА» ПРИ РЕГИСТРАЦИИ: жёсткий anti-credential-
+   stuffing лимит (5 неуспешных с IP за 15 минут) настраивается ТОЛЬКО на
+   login/refresh. Раньше он монтировался app.use-ом на префикс /api/auth и
+   незаметно накрывал register/resend/confirm: после серии легитимных ошибок
+   ввода сервер начинал отвечать 429 в формате { error:"rate_limited" },
+   который клиентские маппинги не распознавали → регистрация «молча»
+   отбрасывала пользователя назад без объяснения причин. */
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("register") });
+const resendLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false, handler: () => rlHandler("resend") });
+app.use("/api/auth/register", registerLimiter);
+app.use("/api/auth/resend", resendLimiter);
 app.use("/api/payments", paymentsLimiter);
 app.use("/api/ai", aiLimiter);
 app.use("/api/agent", aiLimiter);
@@ -179,13 +190,21 @@ if (db.mode.startsWith("postgres")) {
 function cookieOpts(maxAgeMs, path) {
   return { httpOnly: true, sameSite: SAME_SITE, secure: SECURE_COOKIES, path: path || "/", maxAge: maxAgeMs };
 }
-/** Выдаёт пару токенов: access — в теле ответа (память клиента),
- *  refresh — исключительно в httpOnly-куке (никогда не в теле и не в localStorage). */
+/** Выдаёт пару токенов: access — в httpOnly-куке qf_session (Path=/) И в теле
+ *  ответа (для клиентов с явным Authorization: Bearer), refresh — исключительно
+ *  в httpOnly-куке qf_refresh (никогда не в теле и не в localStorage).
+ *  ИСПРАВЛЕНИЕ СИСТЕМНОЙ ОШИБКИ 401: ранее qf_session нигде не устанавливался
+ *  (только очищался при logout), поэтому сразу после входа все защищённые
+ *  маршруты (/api/feed, /api/products, /api/subscriptions, /api/notifications…)
+ *  получали запросы без каких-либо креденшелов (qf_refresh живёт только на
+ *  пути /api/auth) и отвечали 401 «no_session». Кука ставится на весь путь /,
+ *  что соответствует модели guard/softGuard; httpOnly+SameSite сохраняются. */
 function issueTokens(res, userId) {
   const nowSec = Math.floor(Date.now() / 1000);
   const access = jwt.sign({ sub: userId, scope: "user", typ: "access" }, JWT_SECRET, { expiresIn: ACCESS_TTL_SEC });
   const jti = crypto.randomUUID();
   const refresh = jwt.sign({ sub: userId, scope: "user", typ: "refresh", jti }, JWT_SECRET, { expiresIn: REFRESH_TTL_SEC });
+  res.cookie(COOKIE, access, cookieOpts(ACCESS_TTL_SEC * 1000, "/"));
   res.cookie(REF_COOKIE, refresh, cookieOpts(REFRESH_TTL_SEC * 1000, "/api/auth"));
   return { access, accessExpiresAt: new Date((nowSec + ACCESS_TTL_SEC) * 1000).toISOString(), expiresIn: ACCESS_TTL_SEC };
 }
@@ -220,7 +239,7 @@ const tariffsCtx = { guard: null, db: null, cfg };
 const profileOf = (r) => ({ id: r.id, email: r.email, name: r.name, phone: r.phone, role: r.role, legal_type: r.legal_type, tier: r.tier, avatar_url: r.avatar_url });
 async function guard(req, res, next) {
   const uid = await resolveSession(req, res);
-  if (!uid) return res.status(401).json({ error: "no_session" });
+  if (!uid) return res.status(401).json({ error: "no_session", message: "Сессия не найдена или истекла. Войдите заново." });
   req.userId = uid;
   next();
 }
@@ -316,7 +335,17 @@ app.post("/api/auth/register", async (req, res) => {
        а добираем запись паролем и ролью. Это чинит поток «вышел → зашёл по
        email+паролю → не пускает». */
     const existingU = await db.byEmail(email);
-    if (existingU && existingU.password_hash) return res.status(409).json({ error: "exists" });
+    if (existingU && existingU.password_hash) return res.status(409).json({ error: "exists", message: "Такой email уже зарегистрирован — войдите с паролем." });
+    /* Валидация роли/юр. статуса (аудит регистрации): допускаются ТОЛЬКО
+       значения, используемые клиентом — role: buyer|seller; legal_type:
+       self_employed|ip|ooo (для покупателя — пусто). Ранее произвольная
+       строка записывалась как есть и «самозанятый» мог прилететь в разных
+       написаниях — скрытые отказы на ролевых маршрутах. */
+    const reqRole = String(req.body.role || "buyer");
+    const role = reqRole === "seller" ? "seller" : "buyer";
+    const reqLegal = String(req.body.legalType || "");
+    const LEGAL_OK = ["self_employed", "ip", "ooo"];
+    const legalType = role === "seller" ? (LEGAL_OK.includes(reqLegal) ? reqLegal : "self_employed") : "";
     const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
     /* Итерация два, Пункт А: реестр согласий с фиксацией версий. Клиент передаёт
@@ -332,13 +361,13 @@ app.post("/api/auth/register", async (req, res) => {
       newUser = await db.update(existingU.id, {
         password_hash: await bcrypt.hash(password, 10),
         name: existingU.name || name,
-        role: String(req.body.role || existingU.role || "buyer"),
-        legal_type: String(req.body.legalType || existingU.legal_type || ""),
+        role,
+        legal_type: legalType || existingU.legal_type || "",
         confirm_token: token,
         confirm_expires: exp,
       }) || existingU;
     } else {
-      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role: String(req.body.role || "buyer"), legal_type: String(req.body.legalType || ""), tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
+      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role, legal_type: legalType, tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
     }
     const dev = await sendConfirm(email, name, token);
     res.json({ 
