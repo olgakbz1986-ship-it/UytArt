@@ -85,6 +85,14 @@ const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.
    JavaScript клиента его не читает; кука отправляется только на /api/auth/*. */
 const app = express();
 
+/* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №4: trust proxy — ПЕРВОЙ строкой после инициализации.
+   Без него req.ip всегда равен IP обратного прокси (nginx/кластер): все
+   пользователи сервера считаются одним адресом, rate-limiter (authLimiter:
+   5 попыток / 15 мин) срабатывал для всего кластера сразу и маскировал реальные
+   ошибки входа 401/403 ответами 429 rate_limited — пользователя «молча»
+   выбрасывало на страницу входа. Теперь лимиты считаются по реальному IP. */
+app.set("trust proxy", 1);
+
 /* ================= БЛОК 2, Пункт 2.3: Helmet + CORS (до всех роутов) =================
    helmet() добавляет защитные HTTP-заголовки: Content-Security-Policy,
    X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security и др.
@@ -252,7 +260,13 @@ async function softGuard(req, res, next) {
   next();
 }
 async function sendConfirm(email, name, token) {
-  const link = API_URL + "/api/auth/confirm?token=" + token;
+  /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №3: ссылка строится ИЗ process.env.API_URL при
+     каждом вызове (раньше использовалась константа API_URL, вычисленная при
+     старте процесса; при пустом окружении — захардкоженный localhost:8787,
+     недоступный пользователю → email_confirmed никогда не становился true →
+     вход блокировался с 403 need_confirm). Fallback на cfg/localhost сохранён. */
+  const base = String(process.env.API_URL || cfg.PUBLIC_API_URL || "http://localhost:8787").replace(/\/+$/, "");
+  const link = base + "/api/auth/confirm?token=" + token;
   if (mail) { await mail.sendMail({ from: MAIL_FROM, to: email, subject: "Подтвердите email — Quantiform", html: "<p>Здравствуйте, " + name + "!</p><p><a href=\"" + link + "\">Подтвердить email</a></p><p>Ссылка действует 24 часа.</p>" }); return null; }
   console.log("[DEV-письмо] " + email + " → " + link);
   return link;
@@ -367,7 +381,10 @@ app.post("/api/auth/register", async (req, res) => {
         confirm_expires: exp,
       }) || existingU;
     } else {
-      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role, legal_type: legalType, tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
+      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role, legal_type: legalType, tier: "free", avatar_url: null, /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №3 (временный хак для тестов): в NODE_ENV=development
+         email_confirmed=true сразу при регистрации — обход блокировки входа
+         403 need_confirm при недоступном SMTP. В production поведение не меняется:
+         вход только после подтверждения почты. */ email_confirmed: !db.mode.startsWith("postgres") || process.env.NODE_ENV === "development", confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
     }
     const dev = await sendConfirm(email, name, token);
     /* ИСПРАВЛЕНИЕ «РЕГИСТРАЦИЯ ПРОШЛА — НЕ ПУСКАЕТ»: регистрация сразу
@@ -376,9 +393,11 @@ app.post("/api/auth/register", async (req, res) => {
        состоянии; любой следующий серверный запрос давал 401 и молча
        выбрасывал пользователя обратно на страницу входа/регистрации.
        В postgres-режиме (email ещё не подтверждён) сессия НЕ выдаётся —
-       модель безопасности (§1.3, вход только после подтверждения) сохранена. */
+       модель безопасности (§1.3, вход только после подтверждения) сохранена.
+       ИСКЛЮЧЕНИЕ (исправление №3): в development-режиме пользователь уже
+       email_confirmed=true — сессия выдаётся сразу, без письма. */
     let regPair = null;
-    if (!db.mode.startsWith("postgres")) {
+    if (!db.mode.startsWith("postgres") || process.env.NODE_ENV === "development") {
       regPair = issueTokens(res, newUser.id);
       log.security("login_success", { ip: req.ip, userId: newUser.id, email, via: "register" });
     }

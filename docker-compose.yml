@@ -29,6 +29,12 @@ services:
       PORT: 8787
       DATABASE_URL: postgres://uyart:uyart_dev_pass@db:5432/uyart
       JWT_SECRET: dev-insecure-secret-change-me
+      # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №3: явный публичный базовый URL для ссылок
+      # подтверждения email. Без него генерировался http://localhost:8787,
+      # недоступный пользователю → email_confirmed оставался false →
+      # вход блокировался 403 need_confirm. Значение берётся из окружения хоста
+      # (по умолчанию — http://localhost:8787 для локального docker-compose).
+      API_URL: ${API_URL:-http://localhost:8787}
       ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
       SMTP_HOST: ""
     ports:

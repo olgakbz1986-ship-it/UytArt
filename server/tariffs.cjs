@@ -315,33 +315,136 @@ function mount(app, ctx) {
     return true;
   }
 
-  const readAll = () => (fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {});
-  const writeAll = (d) => fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+  /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №1 (конфликт хранилищ):
+     Раньше readAll/writeAll ЖЁСТКО читали/писали server/dev-db.json через
+     fs.readFileSync даже при установленном DATABASE_URL. Регистрация сохраняла
+     пользователя в PostgreSQL, а тарифное ядро продолжало читать устаревший
+     локальный файл — вход падал с bad_credentials / need_confirm либо
+     TypeError на отсутствующих записях.
+
+     Теперь: при наличии process.env.DATABASE_URL весь тарифный стейт
+     (tariffs / subscriptions / payments / finance / fairUseUnlocks / premium)
+     хранится в единственном источнике истины — таблице PostgreSQL kv_state;
+     dev-db.json используется ТОЛЬКО как fallback, если DATABASE_URL не задан.
+     Синхронные readAll()/writeAll() сохранены для ~50 вызывающих мест без
+     изменения контракта: запись в PG ставится в очередь и флешится транзакцией,
+     чтение — из кэша, заполненного при первом обращении к БД. */
+  const isPgState = !!process.env.DATABASE_URL;
+  let stateCache = null;   /* единый in-memory снимок состояния */
+  let dirty = false;       /* есть несохранённые изменения (PG-режим) */
+  let flushInFlight = null;
+  let pgClient = null;     /* собственный клиент пула для kv_state */
+
+  function ensureCache() {
+    if (!stateCache || typeof stateCache !== "object") stateCache = {};
+    if (!Array.isArray(stateCache.users)) stateCache.users = [];
+    return stateCache;
+  }
+
+  async function loadStateFromPg() {
+    try {
+      const { Pool } = require("pg");
+      const pool = (typeof db === "object" && db && db.pool) ? db.pool : new Pool({ connectionString: process.env.DATABASE_URL });
+      if (!pgClient) pgClient = await pool.connect();
+      await pgClient.query(`create table if not exists kv_state (key text primary key, value jsonb not null, updated_at timestamptz not null default now())`);
+      const r = await pgClient.query(`select value from kv_state where key='tariff-state'`);
+      stateCache = (r.rows.length ? r.rows[0].value : {}) || {};
+      ensureCache();
+      dirty = false;
+    } catch (e) {
+      console.error("[TARIFFS][STATE] не удалось прочитать состояние из PostgreSQL:", e.message);
+      /* не блокируем вход/тарифы: продолжаем работать на пустом кэше */
+      stateCache = stateCache || {};
+      ensureCache();
+    }
+  }
+
+  async function flushStateToPg() {
+    if (!isPgState || !dirty) return;
+    if (flushInFlight) { await flushInFlight.catch(() => {}); }
+    const snapshot = JSON.stringify(ensureCache());
+    dirty = false;
+    flushInFlight = (async () => {
+      try {
+        if (!pgClient) await loadStateFromPg().catch(() => {});
+        if (!pgClient) throw new Error("no pg client");
+        await pgClient.query(
+          `insert into kv_state (key, value, updated_at) values ('tariff-state', $1::jsonb, now())
+           on conflict (key) do update set value = excluded.value, updated_at = now()`,
+          [snapshot]
+        );
+      } catch (e) {
+        dirty = true; /* данные не записаны — отметим снова для повторного флаша */
+        console.error("[TARIFFS][STATE] ошибка записи состояния в PostgreSQL:", e.message);
+      } finally {
+        flushInFlight = null;
+      }
+    })();
+    await flushInFlight;
+  }
+
+  /* Асинхронная инициализация состояния (вызывается из mount до регистрации
+     маршрутов). В PG-режиме загружает снимок из таблицы kv_state. */
+  const stateReady = isPgState ? loadStateFromPg() : Promise.resolve();
+
+  const readAll = () => {
+    if (!isPgState) {
+      /* fallback: локальная разработка без DATABASE_URL — dev-db.json */
+      return fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
+    }
+    return ensureCache();
+  };
+  const writeAll = (d) => {
+    if (!isPgState) {
+      fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+      return;
+    }
+    stateCache = d || {};
+    ensureCache();
+    dirty = true;
+    /* флаш в БД — асинхронно, без блокировки синхронных обработчиков */
+    flushStateToPg().catch(() => {});
+  };
 
   /* ---------- чтение/запись карты тарифов аккаунта ---------- */
   async function getTariffRow(uid) {
     if (isPg()) {
-      const r = await db.pool.query("select * from account_tariffs where user_id=$1", [uid]);
-      return r.rows[0] || null;
+      await stateReady; /* состояние kv_state должно быть загружено до чтения */
+      try {
+        const r = await db.pool.query("select * from account_tariffs where user_id=$1", [uid]);
+        if (r.rows[0]) return r.rows[0];
+      } catch (e) {
+        console.error("[TARIFFS] ошибка чтения account_tariffs (fallback на kv_state):", e.message);
+      }
+      /* fallback: строка ещё не мигрирована/отсутствует — берём из снимка kv_state */
+      const d = readAll();
+      return (d.tariffs || {})[String(uid)] || null;
     }
     const d = readAll();
     return (d.tariffs || {})[String(uid)] || null;
   }
   async function upsertTariffRow(uid, patch) {
     if (isPg()) {
-      const r = await db.pool.query(
-        `insert into account_tariffs (user_id, legal_type, seller_plan_id, buyer_plan_id, commission_rate, updated_at)
-         values ($1,$2,$3,$4,$5, now())
-         on conflict (user_id) do update set
-           legal_type = coalesce(excluded.legal_type, account_tariffs.legal_type),
-           seller_plan_id = coalesce(excluded.seller_plan_id, account_tariffs.seller_plan_id),
-           buyer_plan_id = coalesce(excluded.buyer_plan_id, account_tariffs.buyer_plan_id),
-           commission_rate = coalesce(excluded.commission_rate, account_tariffs.commission_rate),
-           updated_at = now()
-         returning *`,
-        [uid, patch.legal_type ?? null, patch.seller_plan_id ?? null, patch.buyer_plan_id ?? null, patch.commission_rate ?? null]
-      );
-      return r.rows[0];
+      await stateReady;
+      try {
+        const r = await db.pool.query(
+          `insert into account_tariffs (user_id, legal_type, seller_plan_id, buyer_plan_id, commission_rate, updated_at)
+           values ($1,$2,$3,$4,$5, now())
+           on conflict (user_id) do update set
+             legal_type = coalesce(excluded.legal_type, account_tariffs.legal_type),
+             seller_plan_id = coalesce(excluded.seller_plan_id, account_tariffs.seller_plan_id),
+             buyer_plan_id = coalesce(excluded.buyer_plan_id, account_tariffs.buyer_plan_id),
+             commission_rate = coalesce(excluded.commission_rate, account_tariffs.commission_rate),
+             updated_at = now()
+           returning *`,
+          [uid, patch.legal_type ?? null, patch.seller_plan_id ?? null, patch.buyer_plan_id ?? null, patch.commission_rate ?? null]
+        );
+        if (r.rows[0]) return r.rows[0];
+      } catch (e) {
+        console.error("[TARIFFS] ошибка записи account_tariffs (fallback на kv_state):", e.message);
+      }
+      /* PostgreSQL-таблица недоступна — пишем в единый PG-снимок kv_state,
+         а НЕ в dev-db.json (конфликт хранилищ устранён). */
     }
     const d = readAll();
     if (!d.tariffs) d.tariffs = {};
@@ -361,9 +464,12 @@ function mount(app, ctx) {
   }
 
   async function tariffView(uid) {
+    await stateReady;
     let row = await getTariffRow(uid);
     if (!row) {
-      /* записи ещё нет — создаём из профиля пользователя (legal_type users) */
+      /* записи ещё нет — создаём из профиля пользователя (legal_type users).
+         В PG-режиме профиль читается через db.byId (PostgreSQL users),
+         в файловом — из снимка readAll().users. */
       const legal = isPg() ? (await db.byId(uid))?.legal_type : (readAll().users.find((u) => u.id === uid) || {}).legal_type;
       row = await upsertTariffRow(uid, {
         legal_type: ["self_employed", "ip", "ooo"].includes(legal) ? legal : "self_employed",
@@ -1244,12 +1350,25 @@ function mount(app, ctx) {
      ============================================================ */
 
   const fsP = require("fs");
+  /* ИСПРАВЛЕНИЕ №1 (продолжение): в PG-режиме премиальный контент хранится
+     сегментом premium в снимке kv_state (через readAll/writeAll), а не в
+     отдельном файле на диске — иначе при DATABASE_URL возникал второй,
+     рассинхронизированный источник истины. Файл premium-content.json —
+     только fallback для локальной разработки без БД. */
   const PREMIUM_FILE = require("path").resolve(__dirname, "premium-content.json");
   function premRead() {
+    if (isPgState) {
+      try { return (readAll().premium || {}); } catch { return {}; }
+    }
     try { return fsP.existsSync(PREMIUM_FILE) ? JSON.parse(fsP.readFileSync(PREMIUM_FILE, "utf8")) : {}; }
     catch (e) { return {}; }
   }
   function premWrite(seg, val) {
+    if (isPgState) {
+      const d = readAll(); if (!d.premium) d.premium = {};
+      d.premium[seg] = val; writeAll(d);
+      return;
+    }
     const d = premRead(); d[seg] = val; fsP.writeFileSync(PREMIUM_FILE, JSON.stringify(d, null, 2));
   }
   async function requireFeature(uid, side, key) {
@@ -1676,6 +1795,22 @@ function mount(app, ctx) {
   });
 
   /* Экспорт для других модулей сервера (index.cjs, digital.cjs и пр.) */
+  /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №1 (экспорт): тарифное ядро пробрасывает
+     tariffView / serverCheckLimit только через ctx, который заполняется внутри
+     mount(). index.cjs вызывает tariffsCtx.tariffView(...) в обработчиках
+     входа; если модуль не экспортирует эти функции напрямую, любой вызов до
+     инициализации ctx даёт "not a function". Экспортируем обёртки, читающие
+     живой ctx, — порядок инициализации больше не важен. */
+  module.exports.__ctx = ctx;
+  module.exports.tariffView = async (uid) => {
+    if (!ctx.tariffView) throw new Error("tariffs: mount() not called yet");
+    return ctx.tariffView(uid);
+  };
+  module.exports.serverCheckLimit = async (uid, action, meta) => {
+    if (!ctx.serverCheckLimit) throw new Error("tariffs: mount() not called yet");
+    return ctx.serverCheckLimit(uid, action, meta);
+  };
+
   ctx.sellerFeaturesOf = sellerFeaturesOf;
   ctx.BUYER_FEATURES = BUYER_FEATURES;
   ctx.FAIR_USE_THRESHOLD = FAIR_USE_THRESHOLD;

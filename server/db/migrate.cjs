@@ -49,16 +49,40 @@ const u = require("./migrate-utils.cjs");
       } catch (e) {
         await client.query("ROLLBACK").catch(() => {});
         console.error(`✗ ошибка миграции ${version}: ${e.message}`);
-        process.exitCode = 1;
-        break;
+        /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №2: процесс обязан завершиться с кодом 1.
+           Раньше здесь был только process.exitCode = 1 — асинхронный IIFE
+           «дозаканчивался», docker-compose запускал `node server/index.cjs`
+           НЕЗАВИСИМО от результата (`&&` по shell-коду, который не дожил до
+           проверки), и сервер стартовал с битой схемой (например, без таблицы
+           account_tariffs). process.exit(1) гарантирует обрыв && -цепочки. */
+        console.error("Migration failed:", e);
+        process.exit(1);
       }
     }
     console.log(ran ? `Готово. Применено миграций: ${ran}.` : "Все миграции уже применены.");
+
+    /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №2 (проверка целостности схемы): после применения
+       всех миграций убеждаемся, что ключевые таблицы авторизации/тарифов
+       реально существуют. Неполная схема = сервер НЕ должен стартовать. */
+    const REQUIRED_TABLES = ["users", "account_tariffs"];
+    const check = await client.query(
+      `select table_name from information_schema.tables
+       where table_schema = 'public' and table_name = any($1)`,
+      [REQUIRED_TABLES]
+    );
+    const missing = REQUIRED_TABLES.filter((t) => !check.rows.some((r) => r.table_name === t));
+    if (missing.length) {
+      console.error("Migration failed: неполная схема БД, отсутствуют таблицы:", missing.join(", "));
+      process.exit(1);
+    }
   } finally {
     client.release();
     await pool.end();
   }
 })().catch((e) => {
-  console.error("Миграция завершилась с ошибкой:", e.message);
+  /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №2: любая ошибка (в т.ч. на connect()/ensureMigrationsTable)
+     обязана завершить процесс с кодом 1 — иначе compose-команда `migrate && index`
+     продолжит запуск сервера с битой схемой. */
+  console.error("Migration failed:", e);
   process.exit(1);
 });

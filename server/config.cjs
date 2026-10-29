@@ -72,6 +72,10 @@ const webhookIps = envList("QF_WEBHOOK_IP_ALLOWLIST").concat(envList("YOOKASSA_W
 
 module.exports = {
   IS_PROD,
+  /* КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ №3: публичный базовый URL для ссылок подтверждения
+     email. Единственный источник — process.env.API_URL (см. .env.example и
+     docker-compose.yml). */
+  PUBLIC_API_URL: readSecret("API_URL", null) || "http://localhost:8787",
   JWT_SECRET: readSecret("JWT_SECRET", DEV_JWT_STUB),
   JWT_SECRET_IS_DEV_STUB: !readSecret("JWT_SECRET", null),
   ACCESS_TTL_SEC,
