@@ -1,10 +1,10 @@
 /* ============================================================
    ЗАДАЧА 5, п.7: модульные тесты buyerLimitsOf (server/tariffs.cjs)
    — лимиты тарифных планов покупателя. Значения берутся из
-   единого тарифного ядра shared/tariffs/core.cjs.
+   единого тарифного ядра shared/tariffs/core.mjs.
    ============================================================ */
 import { describe, it, expect } from "vitest";
-/* ЗАДАЧА 5: тарифное ядро shared/tariffs/core.cjs — CommonJS-исходник без
+/* ЗАДАЧА 5: тарифное ядро shared/tariffs/core.mjs — CommonJS-исходник без
    расширения .cjs (историческое решение проекта); серверный модуль
    server/tariffs.cjs требует его через нативный require. В ESM-тесте
    (package.json "type":"module") такой граг загружаем изолированным
@@ -49,8 +49,8 @@ const loadCjs = (file, deps = {}) => {
   );
   return moduleObj.exports;
 };
-const CORE = loadCjs(pathNode.resolve(__dir, "../../shared/tariffs/core.cjs"));
-const TARIFFS = loadCjs(pathNode.resolve(__dir, "../../server/tariffs.cjs"), { "../shared/tariffs/core.cjs": CORE });
+const CORE = loadCjs(pathNode.resolve(__dir, "../../shared/tariffs/core.mjs"));
+const TARIFFS = loadCjs(pathNode.resolve(__dir, "../../server/tariffs.cjs"), { "../shared/tariffs/core.mjs": CORE });
 const { buyerLimitsOf, BUYER_PLANS } = TARIFFS;
 
 describe("buyerLimitsOf", () => {

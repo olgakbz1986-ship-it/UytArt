@@ -50,6 +50,7 @@ const u = require("./migrate-utils.cjs");
         await client.query("ROLLBACK").catch(() => {});
         console.error(`✗ ошибка миграции ${version}: ${e.message}`);
         process.exitCode = 1;
+        process.exit(1);
         break;
       }
     }

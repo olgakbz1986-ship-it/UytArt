@@ -84,6 +84,7 @@ const mail = process.env.SMTP_HOST ? nodemailer.createTransport({ host: process.
    REFRESH_TTL_SEC (7 дней) и хранится ТОЛЬКО в httpOnly-куке qf_refresh —
    JavaScript клиента его не читает; кука отправляется только на /api/auth/*. */
 const app = express();
+app.set("trust proxy", 1);
 
 /* ================= БЛОК 2, Пункт 2.3: Helmet + CORS (до всех роутов) =================
    helmet() добавляет защитные HTTP-заголовки: Content-Security-Policy,

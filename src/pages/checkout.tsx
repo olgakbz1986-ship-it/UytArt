@@ -139,7 +139,6 @@ export function CheckoutPage() {
   const nav = useNavigate();
   const sess = useAppStore((s) => s.session);
   useEffect(() => { if (!sess) nav("/auth"); }, [sess, nav]);
-  if (!sess) return null;
 
   const [addrId, setAddrId] = useState(addresses[0]?.id || "");
   const [deliveryId, setDeliveryId] = useState(DELIVERY[0].id);
@@ -152,6 +151,7 @@ export function CheckoutPage() {
   const [done, setDone] = useState<string | null>(null);
 
   const market = useMarketProducts();
+
   const rows = cart.map((c) => ({ ...c, p: market.find((x) => x.id === c.productId) })).filter((r) => r.p);
   const subtotal = rows.reduce((s, r) => s + (r.p!.price * r.qty), 0);
   const discount = Math.round((subtotal * lim.discountPct) / 100);

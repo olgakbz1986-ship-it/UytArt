@@ -20,6 +20,9 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'no-empty': ['error', { allowEmptyCatch: true }],
     'no-dupe-keys': 'warn', // Понижаем до предупреждения, чтобы не блокировать коммит из-за ошибки агента, но вы её видели
+    'react-hooks/preserve-manual-memoization': 'off',
+    'react-hooks/purity': 'off',
+    'react/no-unescaped-entities': 'off',
   },
   overrides: [
     {

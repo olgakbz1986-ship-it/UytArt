@@ -30,6 +30,7 @@ services:
       DATABASE_URL: postgres://uyart:uyart_dev_pass@db:5432/uyart
       JWT_SECRET: dev-insecure-secret-change-me
       ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
+      API_URL: ${API_URL:-http://localhost:8787}
       SMTP_HOST: ""
     ports:
       - "8787:8787"
