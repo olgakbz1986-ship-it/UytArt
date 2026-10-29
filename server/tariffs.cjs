@@ -315,8 +315,8 @@ function mount(app, ctx) {
     return true;
   }
 
-  const readAll = () => (fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {});
-  const writeAll = (d) => fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+  const readAll = () => isPg() ? {} : (fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {});
+  const writeAll = (d) => { if (!isPg()) fs.writeFileSync(FILE, JSON.stringify(d, null, 2)); };
 
   /* ---------- чтение/запись карты тарифов аккаунта ---------- */
   async function getTariffRow(uid) {
