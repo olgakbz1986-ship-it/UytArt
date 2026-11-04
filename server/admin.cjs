@@ -354,7 +354,7 @@ module.exports = function registerAdmin(app, ctx) {
     if (!PG) return loadDev();
     /* В postgres-режиме кабинет хранит документы в таблице admin_kv (jsonb по ключу) */
     await ensurePgSchema(pool);
-    const row = await pool.query("select data from admin_kv where key='doc'");
+    const row = await pool.query("select data from admin_kv where key='default'");
     if (row.rows[0]) {
       const d = row.rows[0].data;
       /* dev-период: гарантируем наличие служебного аккаунта с фиксированным паролем */
