@@ -93,7 +93,7 @@ function sellerPlanPriceRow(legalType, planId) {
   return list.find((p) => p.id === planId) || null;
 }
 
-export {
+module.exports = {
   INF, resolveLimits, COMMISSION_MATRIX, PLAN_LEVEL, SELLER_LIMITS_RAW,
   BUYER_PLANS_RAW, REGISTRATION_FEES, SELLER_PLAN_PRICES, BUYER_PLAN_PRICES,
   GRANDFATHER_MONTHS, PRICE_REVISION_NOTICE_DAYS, PRICE_REVISION_EFFECTIVE_AT_DEFAULT,
