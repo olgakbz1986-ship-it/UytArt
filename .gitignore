@@ -6,3 +6,4 @@ server/dev-db.json
 *.env.*
 *.log
 *.tmp
+server/dev-admin.json

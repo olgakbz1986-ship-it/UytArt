@@ -83,7 +83,7 @@ export function buyerFeaturesOf(plan: BuyerPlanId): BuyerFeatures {
 /** Возможности текущего продавца: тип юрлица + тариф из аккаунт-стора. */
 export function currentSellerFeatures(): SellerFeatures {
   const uid = useAppStore.getState().session?.userId || "guest";
-  let best: SellerFeatures = { ...ALL_OFF };
+  const best: SellerFeatures = { ...ALL_OFF };
   (["self_employed", "ip", "ooo"] as SellerLegalType[]).forEach((t) => {
     const planId = useSellerAccount.getState().getPlan(uid, t);
     const f = sellerFeaturesOf(t, planId);

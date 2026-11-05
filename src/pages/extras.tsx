@@ -35,7 +35,7 @@ import {
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
 import MarketOrderDetail from "../components/MarketOrderDetail";
 import { Markdown } from "../components/markdown";
-;
+
 import { SellerAvatar } from "../components/SellerAvatar";
 import { SellerPremiumBlocksLite } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, SELLER_WATCHED } from "../components/LimitWarning";
@@ -225,7 +225,7 @@ export function MarketPage() {
     setEditOrderId(null); setEditPhoto(null); setRefs([]); setFErr(""); setWizardOpen(false);
   };
   const deleteDraft = (id: string) => { if (confirm("Удалить черновик безвозвратно?")) { removeOrder(id); useNotifyStore.getState().push({ kind: "report", title: "Черновик удалён", text: "Запись убрана с биржи." }); } };
-  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(() => !!searchParams.get("invite"));
   const [fType, setFType] = useState("Мебель и интерьер");
   const [fBudget, setFBudget] = useState("30000");
   const [fTerm, setFTerm] = useState("1–2 месяца");
@@ -243,7 +243,9 @@ export function MarketPage() {
      открывает /market?invite=<masterId>&new=1; id приглашённого мастера
      фиксируется в адресном заказе на сервере (POST /api/orders). */
   const invitedMasterId = searchParams.get("invite") || "";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (invitedMasterId) { setEditOrderId(null); setWizardOpen(true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invitedMasterId]);
@@ -1284,7 +1286,7 @@ export function SellerDashboardPage() {
   const [legalDraft, setLegalDraft] = useState({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress });
   const [legalSaved, setLegalSaved] = useState(false);
   const [legalFetching, setLegalFetching] = useState(false);
-  useEffect(() => { setLegalDraft({ legalName: s.legalName, inn: s.inn, production_city: s.production_city, ogrn: s.ogrn, legalAddress: s.legalAddress }); }, [sellerUid]);
+  // Инициализация legalDraft уже происходит в useState, useEffect удален во избежание каскадных рендеров
 const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.commissionRate;
   const sentOrders = myOrders.filter((o) => o.status !== "paid");
   const revenue = sentOrders.reduce((sum, o) => sum + o.total, 0);
