@@ -1,11 +1,10 @@
 import React from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useEffect, Suspense } from "react";
+import { useEffect } from "react";
 import { usePrefsStore, applyTheme } from "./lib/prefs";
 import { useAppStore } from "./lib/store";
 import { Header, Footer, Toasts } from "./components/layout";
 import { ToastProvider } from "./components/a11y";
-import { CenteredLoader } from "./components/CenteredLoader";
 import HomePage from "./pages/home";
 import { CatalogPage, ProductPage } from "./pages/catalog";
 import { CartPage, CheckoutPage } from "./pages/checkout";

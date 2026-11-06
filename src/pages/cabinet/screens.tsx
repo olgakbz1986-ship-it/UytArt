@@ -2,12 +2,12 @@
    CABINET ADMIN — экраны разделов (операционные очереди и карточки)
    Порядок на каждом экране: требует решения → произошло → почему.
    ============================================================ */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { Activity, ArrowDownRight, ArrowUpRight, HeartPulse, Send, ShieldAlert, Sparkles, Zap, CircleSlash, ClipboardList, Play } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Send, ShieldAlert, Sparkles, Zap, CircleSlash, ClipboardList, Play } from "lucide-react";
 import { Btn, Badge, Field, Switch, Modal } from "../../components/ui";
-import { adminApi, opKey } from "../../lib/admin-api";
+import { adminApi } from "../../lib/admin-api";
 import {
   cn, Panel, DataTable, Drawer, RiskTag, DangerConfirm, EmptyState, ErrorState, LoadingBlock,
   useCabinetData, useCabinet, useToast, fmtRub, fmtNum, timeAgo, dueIn, type Risk, type ConfirmSpec,
@@ -20,9 +20,9 @@ const St = ({ s }: { s: string }) => <Badge tone={STATUS_TONE[s] || "neutral"}>{
 export function HomeScreen() {
   const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.home());
   const nav = useNavigate();
+  const d = data!;
   if (loading) return <LoadingBlock rows={6} />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
-  const d = data!;
   const h = d.health;
   const hsColor = h.score >= 80 ? "text-success" : h.score >= 60 ? "text-warning" : "text-error";
   const METRICS: [string, keyof typeof d.metrics, number | undefined, string][] = [
@@ -137,7 +137,7 @@ const Info = ({ label, v }: { label: string; v: any }) => (
 /* ════════════════ АГЕНТ: обзор / режим / health / дрейф ════════════════ */
 export function AgentScreen() {
   const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.agent());
-  const { can, profile } = useCabinet();
+  const { can, _profile } = useCabinet();
   const { push } = useToast();
   const [chat, setChat] = useState<{ role: "me" | "agent"; text: string; conf?: number; sources?: string[]; evidence?: any[] }[]>([]);
   const [msg, setMsg] = useState("");
@@ -331,7 +331,9 @@ export function QueueScreen() {
   const [secondAdmin, setSecondAdmin] = useState("");
   const [admins, setAdmins] = useState<any[]>([]);
   const { can, profile } = useCabinet(); const { push } = useToast();
-  useEffect(() => { if (focus) setOpenId(focus); }, [focus]);
+  useEffect(() => {
+    if (focus && openId !== focus) { const _t = setTimeout(() => setOpenId(focus), 0); }
+  }, [focus, openId]);
   useEffect(() => { adminApi.settings().then((r: any) => r?.ok && setAdmins(r.admins || [])); }, []);
   useEffect(() => { if (openId) adminApi.decision(openId).then((r: any) => r?.ok && setDetail(r)); }, [openId]);
 
@@ -686,7 +688,7 @@ export function UsersScreen() {
   const [busy, setBusy] = useState(false);
   const { can } = useCabinet(); const { push } = useToast();
   const ACTIONS: [string, string, Risk, boolean][] = [["verify", "Верифицировать", "low", false], ["request_docs", "Запросить документы", "low", false], ["limit_functions", "Ограничить функции", "medium", false], ["block_temp", "Блокировать временно", "high", false], ["block_forever", "Блокировать навсегда", "critical", true], ["unblock", "Разблокировать", "medium", false], ["warn", "Отправить предупреждение", "low", false], ["compensate", "Начислить компенсацию", "high", false], ["delete_data", "Удалить персональные данные (GDPR)", "critical", true], ["export_data", "Экспортировать данные", "medium", false]];
-  const open = async (u: any) => { setSel(u); const r = await adminApi.user(u.id); r?.ok && setDetail(r); };
+  const open = async (u: any) => { setSel(u); const r = await adminApi.user(u.id); if (r?.ok) setDetail(r); };
   return (
     <div className="space-y-5">
       <Panel title="Пользователи" sub="Покупатели и их жизненный цикл" right={
@@ -715,7 +717,7 @@ export function UsersScreen() {
           </div>
           <section><p className="text-[12px] font-bold uppercase text-ink-mute mb-1.5">Действия администратора (каждое требует причины и пишется в журнал)</p>
             <div className="flex flex-wrap gap-2">
-              {ACTIONS.filter(([id, , , ], i) => can(id.includes("export") ? "export" : "manage_users")).map(([id, label, risk, irre]) => (
+              {ACTIONS.filter(([id, , , ], _i) => can(id.includes("export") ? "export" : "manage_users")).map(([id, label, risk, irre]) => (
                 <Btn key={id} size="sm" variant={irre ? "outline" : "ghost"} className={irre ? "!text-error !border-error/40" : ""} onClick={() => setConfirm({
                   spec: { title: label + " · " + sel.name, risk: risk as Risk, affected: `аккаунт ${sel.id}`, changes: [label], reversible: !irre, requireConfirmText: irre, reasonLabel: "почему" },
                   run: (reason, ct) => adminApi.userAction(sel.id, { action: id, reason, confirm_text: ct }),
@@ -755,7 +757,7 @@ export function SellersScreen() {
     <div className="space-y-5">
       <Panel title="Продавцы" sub="Поставщики, магазины и партнёры · онбординг, качество, репутация, финансы">
         {loading ? <LoadingBlock rows={5} /> : error ? <ErrorState message={error} onRetry={reload} /> : (
-          <DataTable rows={data!.sellers} rowKey={(s: any) => s.id} onRow={async (s: any) => { setSel(s); const r = await adminApi.seller(s.id); r?.ok && setDetail(r); }} cols={[
+          <DataTable rows={data!.sellers} rowKey={(s: any) => s.id} onRow={async (s: any) => { setSel(s); const r = await adminApi.seller(s.id); if (r?.ok) setDetail(r); }} cols={[
             { key: "name", title: "Продавец", render: (s: any) => <span className="font-semibold">{s.name}<br /><span className="text-ink-mute text-[11.5px] font-normal">ИНН {s.inn} · {s.region} · {s.cat}</span></span> },
             { key: "verified", title: "Вериф.", render: (s: any) => s.verified ? "✓" : "—" }, { key: "rating", title: "Рейтинг", render: (s: any) => s.rating || "—" },
             { key: "products", title: "Товаров", right: true }, { key: "orders30", title: "Заказов 30д", right: true },
@@ -1176,7 +1178,7 @@ export function ContentScreen() {
             <p className="text-[12px] text-ink-soft mt-1">Доставлено {fmtNum(c.stats.delivered)} · открыто {fmtNum(c.stats.opened)} · клики {fmtNum(c.stats.clicked)} · отписки {fmtNum(c.stats.unsub)}</p>
             {can("content_publish") && c.status === "scheduled" && (
               <div className="flex gap-2 mt-2">
-                <Btn size="sm" variant="ghost" onClick={async () => { const r = await adminApi.campaignSend(c.id, { test_only: true, reason: "тест" }); push("Тестовое письмо отправлено на служебный ящик"); }}>Тестовая отправка</Btn>
+                <Btn size="sm" variant="ghost" onClick={async () => { const _r = await adminApi.campaignSend(c.id, { test_only: true, reason: "тест" }); push("Тестовое письмо отправлено на служебный ящик"); }}>Тестовая отправка</Btn>
                 <Btn size="sm" onClick={() => setConfirm({ spec: { title: "Массовая рассылка: " + c.subject, risk: "high", affected: `${fmtNum(c.size)} получателей (${c.audience})`, changes: ["Отправка email/push кампании", "Отменить можно до начала доставки"], reversible: false, reasonLabel: "цель кампании" }, run: (r) => adminApi.campaignSend(c.id, { reason: r }) })}>Отправить всем</Btn>
               </div>
             )}
@@ -1409,6 +1411,19 @@ export function LearningScreen() {
   const { can } = useCabinet(); const { push } = useToast();
   const [report, setReport] = useState<any>(null);
   const [repBusy, setRepBusy] = useState(false);
+  const loadReport = useCallback(async (id?: string) => {
+    setRepBusy(true);
+    const r: any = await adminApi.skillReport(id);
+    setRepBusy(false);
+    if (r?.ok) setReport(r.report); else push(mapErrLocal(r), "err");
+  }, [push]);
+  // автозагрузка последнего отчёта: setState только после await — без каскадных рендеров
+  useEffect(() => {
+    if (report || !data?.reports?.length) return;
+    let alive = true;
+    adminApi.skillReport().then((r: any) => { if (alive && r?.ok) setReport(r.report); });
+    return () => { alive = false; };
+  }, [report, data?.reports?.length]);
   const [openSkill, setOpenSkill] = useState<any>(null);
   const [permit, setPermit] = useState<any>(null); // { skill, token, reask, statement_hash }
   const [reason, setReason] = useState("");
@@ -1416,13 +1431,6 @@ export function LearningScreen() {
   if (loading) return <LoadingBlock rows={6} />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
   const d = data!;
-  const loadReport = async (id?: string) => {
-    setRepBusy(true);
-    const r: any = await adminApi.skillReport(id);
-    setRepBusy(false);
-    if (r?.ok) setReport(r.report); else push(mapErrLocal(r), "err");
-  };
-  useEffect(() => { if (!report && d.reports?.length) loadReport(); /* первый отчёт — один раз */ }, [d.reports?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const requestApprove = async () => {
     if (reason.trim().length < 5) { push("Причина обязательна", "err"); return; }

@@ -11,7 +11,8 @@ import path from "node:path";
 
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  require("dotenv").config({ silent: true });
+  import * as dotenv from "dotenv";
+dotenv.config({ silent: true });
 } catch {
   /* dotenv опционален в тестовом окружении */
 }

@@ -6,10 +6,10 @@ function ok(name, cond, detail) {
   if (cond) { pass++; results.push('PASS ' + name); }
   else { fail++; results.push('FAIL ' + name + ' :: ' + detail); }
 }
-async function req(method, path, { token, body, form } = {}) {
+async function req(method, path, { token, body, _form } = {}) {
   const headers = {};
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  let cookie = '';
+  let _cookie = '';
   if (body) headers['Content-Type'] = 'application/json';
   const res = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
   const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];

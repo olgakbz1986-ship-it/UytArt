@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, Archive, ShieldAlert, X } from "lucide-react";
 import { Product, fmtDate } from "../data/seed";
 import { useChatStore, buyerQuestions, sellerTemplates, orderPrompts } from "../lib/chat";
-import { useAppStore, type Order, NEXT_STATUS } from "../lib/store";
+import { useAppStore, type Order } from "../lib/store";
 import { Modal, Btn } from "./ui";
 
 /* ============================================================

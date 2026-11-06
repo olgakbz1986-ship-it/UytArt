@@ -13,7 +13,7 @@
    (лимит активных индивидуальных заказов: free 1, start 3, designer 10,
    premium ∞ — см. BUYER_PLANS; серверный контроль — assertLimit("market_order")).
    ========================================================================== */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { MessageSquare } from "lucide-react";
 import { useAppStore } from "../lib/store";

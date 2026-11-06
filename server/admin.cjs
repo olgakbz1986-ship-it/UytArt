@@ -26,7 +26,7 @@
 // Все записи версионируются (prev_state/state), все действия требуют reason.
 // ============================================================
 module.exports = function registerAdmin(app, ctx) {
-  const { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, path } = ctx;
+  const { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, _path } = ctx;
   void bcrypt; void PORT;
 
   /* ---------- идемпотентность операций (защита от повторного нажатия) ------ */
@@ -45,7 +45,7 @@ module.exports = function registerAdmin(app, ctx) {
   /* ---------- risk policy helpers (shared with frontend via /bootstrap) ---- */
   const RISK_ORDER = { low: 0, medium: 1, high: 2, critical: 3 };
   const isCriticalRisk = (r) => r === "critical";
-  const needsDoubleConfirm = (r) => r === "critical";
+  const _needsDoubleConfirm = (r) => r === "critical";
   const CRITICAL_EFFECTIVE_DELAY_MS = 5 * 60 * 1000; // критические политики вступают не мгновенно
 
   /* ---------- storage adapters -------------------------------------------- */
@@ -72,7 +72,7 @@ module.exports = function registerAdmin(app, ctx) {
      этого документ пересоздаётся из seedDoc() ниже по loadDev. */
   const safeReadJson = () => { try { return JSON.parse(require("fs").readFileSync(FILE, "utf8")); } catch (e) { console.error("[dev-admin] повреждённый JSON, пересоздаю из seed:", e.message); return null; } };
   const saveDev = (d) => require("fs").writeFileSync(FILE, JSON.stringify(d, null, 2));
-  const devMutate = (fn) => { const d = loadDev(); const r = fn(d); saveDev(d); return r; };
+  const _devMutate = (fn) => { const d = loadDev(); const r = fn(d); saveDev(d); return r; };
 
   function seedDoc() {
     const now = Date.now();
@@ -85,7 +85,7 @@ module.exports = function registerAdmin(app, ctx) {
         A("adm-aiops", "aiops@starttechpro.ru", "AI Ops", "ai_ops"),
         A("adm-audit", "audit@starttechpro.ru", "Аудитор", "auditor"),
       ],
-      codes: [], attempts: [], devices: [], blocks: [],
+      codes: [], attempts: [], devices: [],
       security_log: [{ id: "sec-seed", ts: now, admin_id: null, type: "system", result: "success", ip: "-", device_id: "-", region: "-", detail: "Кабинет инициализирован" }],
       actions_log: [],
       roles: {
@@ -399,7 +399,7 @@ module.exports = function registerAdmin(app, ctx) {
        5. Policy Engine — режим permit_required для всех записывающих action_type (auto осталось только для чтения/наблюдений)
      Иные маршруты (users/sellers/orders/finance/disputes/security/content/settings/releases) — руки ЧЕЛОВЕКА-оператора:
      они не вызываются агентом и требуют RBAC, причины и журнала; агент влияет на них только карточками очереди. */
-  const AGENT_HANDS_AUDIT = {
+  const _AGENT_HANDS_AUDIT = {
     audited_at: "2026-10-17", constitution: "A1v2", autonomy_target: "advisor",
     hands: [
       { where: "POST /api/admin/decisions/:id/resolve → executeWithPermit", kind: "arm_execution", guarded_by: "two_step_permit" },
@@ -429,7 +429,7 @@ module.exports = function registerAdmin(app, ctx) {
     if (/^212\.44\.|^89\.\.?/.test(ip)) return "RU/MSK";
     return "RU/other";
   }
-  const hourKey = (ts) => new Date(ts).toISOString().slice(0, 13);
+  const _hourKey = (ts) => new Date(ts).toISOString().slice(0, 13);
 
   function logSec(doc, entry) {
     doc.security_log.unshift(Object.assign({ id: rid("sec"), ts: Date.now(), result: "success" }, entry));

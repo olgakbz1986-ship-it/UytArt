@@ -4,7 +4,7 @@ import { persist } from "zustand/middleware";
 import { api } from "./api";
 /* БЛОК 3 §3.1: токен платёжного метода ЮKassa (виджет-iframe на клиенте) */
 import { getPaymentMethodToken, clearPaymentMethodToken } from "./yookassa";
-import { useTariffStore, applyServerTariff } from "./tariff";
+import { applyServerTariff } from "./tariff";
 /* Единое тарифное ядро (shared/tariffs/core.cjs) — единственный источник
    истинных числовых таблиц комиссий/цен/взносов для клиента и сервера. */
 import * as core from "../../shared/tariffs/core.cjs";
@@ -210,7 +210,7 @@ export function sellerBadgeOf(type: SellerLegalType | null | undefined, planId: 
   return idx === list.length - 1 ? BADGE_BY_LEGAL[type] : null;
 }
 
-export function getCurrentPlanKey(type: SellerLegalType | null | undefined, accountId?: string): string {
+export function getCurrentPlanKey(type: SellerLegalType | null | undefined, _accountId?: string): string {
   if (!type) return "free";
   // Эта функция должна вызываться из компонента, где доступен стейт
   // Для использования в extras.tsx передавайте accountId явно
@@ -541,7 +541,7 @@ export const useSellerReg = create<SellerRegState>()(
           set({ ...EMPTY_REG });
           return;
         }
-        const { accountId, ...rest } = p;
+        const { _accountId, ...rest } = p;
         set({ ...rest, production_city: p.production_city || p.city || "", docs: p.docs || {} });
       },
       saveProfile: (uid) => {

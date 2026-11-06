@@ -31,11 +31,11 @@ export default function AgentPanelSeller() {
   const userSaid = useAgentStore((s) => s.userSaidSeller);
   const addTask = useAgentStore((s) => s.addTask);
   const updateTask = useAgentStore((s) => s.updateTask);
-  const tasks = useAgentStore((s) => s.tasks);
+  const _tasks = useAgentStore((s) => s.tasks);
   const myProducts = (useSellerAccount((st: any) => st.products) || []) as any[];
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [_attachedFile, setAttachedFile] = useState<File | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

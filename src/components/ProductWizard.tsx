@@ -48,6 +48,8 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
   const sellerReg = useSellerReg();
   const editItem = editId ? acc.products.find((pp) => pp.id === editId) : undefined;
   useEffect(() => {
+    // Асинхронное обновление для предотвращения каскадного рендера
+    const t = setTimeout(() => {
     if (!open) return;
     if (editItem) {
       setDraft({
@@ -79,7 +81,9 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
     }
     setStep(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editId]);
+  
+    }, 0);
+    return () => clearTimeout(t);}, [open, editId]);
   const month = new Date().toISOString().slice(0, 7);
   /* §2.5: остаток AI-генераций карточек — из СЕРВЕРНОГО тарифа (кэш), а не хардкод 10 */
   const tariffCache = useTariffStore((s) => s.tariff);

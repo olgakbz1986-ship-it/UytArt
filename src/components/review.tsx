@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Camera, BadgeCheck, Star, MessageSquare, Upload, ShieldAlert, Flag } from "lucide-react";
 import { Product, fmtDate, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
-import { useReviewStore, approvedReviews, type UserReview } from "../lib/review";
+import { useReviewStore, approvedReviews, _type  } from "../lib/review";
 import { useChatStore, TICKET_REASONS } from "../lib/chat";
 import { useComplaintStore, COMPLAINT_CATEGORIES } from "../lib/complaint";
 import { useSellerReg } from "../lib/seller";
@@ -113,7 +113,7 @@ export function ReviewsSection({ product }: { product: Product }) {
   const replyToReview = useReviewStore((s) => s.replyToReview);
   const sellerReg = useSellerReg();
   const list = approvedReviews(reviews, product.id);
-  const [sort, setSort] = useState<"new" | "photo" | "rating">("new");
+  const [sort, _setSort] = useState<"new" | "photo" | "rating">("new");
   const sorted = [...list].sort((a, b) => {
     if (sort === "new") return b.createdAt.localeCompare(a.createdAt);
     if (sort === "photo") return (b.hasPhoto ? 1 : 0) - (a.hasPhoto ? 1 : 0);

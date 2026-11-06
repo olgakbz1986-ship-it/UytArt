@@ -117,7 +117,7 @@ export function SellerAboutModal({ open, onClose, sellerData }: { open: boolean;
             <section>
               <h3 className="text-[12px] font-bold text-ink-mute uppercase tracking-wider mb-2">Особенности</h3>
               <div className="flex flex-wrap gap-1.5">
-                {reg.achievements.split(/[\n,;]+/).map((a, i) => a.trim()).filter(Boolean).slice(0, 12).map((a, i) => (
+                {reg.achievements.split(/[\n,;]+/).map((a, _i) => a.trim()).filter(Boolean).slice(0, 12).map((a, i) => (
                   <span key={i} className="px-2.5 py-1 rounded-full bg-accent/10 text-accent-deep text-[11.5px] font-bold">{a}</span>
                 ))}
               </div>

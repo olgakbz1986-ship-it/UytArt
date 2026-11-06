@@ -4,7 +4,7 @@
    ============================================================ */
 import { describe, it, expect } from "vitest";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { geoFilter, geoAllowed } = require("../../server/geo-filter.cjs");
+import { geoFilter, geoAllowed } from "../../server/geo-filter.cjs";
 
 describe("geoFilter", () => {
   const products = [

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing , Trash2} from "lucide-react";
 import { useMarketProducts } from "../lib/market";
-import { CATEGORIES, fmt, catBySlug, groupById } from "../data/seed";
+import { fmt, catBySlug, groupById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { CITIES } from "../lib/geo";
 import { useSellerAccount } from "../lib/seller";

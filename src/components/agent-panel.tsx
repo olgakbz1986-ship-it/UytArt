@@ -68,7 +68,7 @@ export default function AgentPanel() {
     setInput("");
     if (attached) { setPhoto(null); setPhotoName(""); }
     setTimeout(() => {
-      const low = text.toLowerCase();
+      const _low = text.toLowerCase();
       if (attached || /фото|хочу вот это|похож|найди|вот эт|подбери/i.test(text)) {
         if (!attached) { say("Прикрепите фото скрепкой рядом с полем ввода — и я начну визуальный поиск по всему сервису."); return; }
         say(AGENT_TEMPLATES.photoAck);

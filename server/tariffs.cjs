@@ -1247,7 +1247,7 @@ function mount(app, ctx) {
   const PREMIUM_FILE = require("path").resolve(__dirname, "premium-content.json");
   function premRead() {
     try { return fsP.existsSync(PREMIUM_FILE) ? JSON.parse(fsP.readFileSync(PREMIUM_FILE, "utf8")) : {}; }
-    catch (e) { return {}; }
+    catch (_e) { return {}; }
   }
   function premWrite(seg, val) {
     const d = premRead(); d[seg] = val; fsP.writeFileSync(PREMIUM_FILE, JSON.stringify(d, null, 2));
@@ -1666,7 +1666,7 @@ function mount(app, ctx) {
   });
   app.post("/api/limits/fair-use/unlock", guard, async (req, res) => {
     try {
-      const r = await requireFeature(req.userId, "seller", "weeklyReport"); /* ручная разблокировка — через менеджерскую линию поддержки */
+      const _r = await requireFeature(req.userId, "seller", "weeklyReport"); /* ручная разблокировка — через менеджерскую линию поддержки */
       const d = readAll();
       if (!d.fairUseUnlocks) d.fairUseUnlocks = {};
       d.fairUseUnlocks[String(req.userId)] = { unlocked_at: new Date().toISOString(), via: "manual_support" };

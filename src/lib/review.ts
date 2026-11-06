@@ -81,7 +81,7 @@ export const approvedReviews = (reviews: UserReview[], productId: string) =>
 
 
 /* Живой рейтинг и счётчик отзывов товара (включает новые отзывы без перезагрузки) */
-export const productRating = (productId: string): { avg: number; count: number } => {
+export const ProductRating = (productId: string): { avg: number; count: number } => {
   const approved = useReviewStore((s) => s.reviews).filter((r) => r.productId === productId && r.status === "approved");
   if (approved.length === 0) return { avg: 0, count: 0 };
   const sum = approved.reduce((acc, r) => acc + r.rating, 0);

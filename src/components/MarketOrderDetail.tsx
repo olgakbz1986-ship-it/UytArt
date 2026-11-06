@@ -67,6 +67,24 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
         
         if (msgData.ok) setMessages(msgData.messages || []);
         if (mileData.ok) {
+  const createDefaultMilestones = async () => {
+    const defaults = [
+      { title: "Согласование деталей", description: "Обсуждение ТЗ и материалов", status: "completed" },
+      { title: "Изготовление", description: "Основной этап работы", status: "in_progress" },
+      { title: "Финальная проверка", description: "Контроль качества и упаковка", status: "pending" }
+    ];
+    const created = [];
+    for (const m of defaults) {
+      const res = await fetch(`/api/orders/${order.id}/milestones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(m)
+      });
+      const data = await res.json();
+      if (data.ok) created.push(data.milestone);
+    }
+    setMilestones(created);
+  };
           // Если этапов нет, создаем дефолтные для заказа в работе
           if (mileData.milestones.length === 0 && order.status === 'in_progress') {
             await createDefaultMilestones();
@@ -208,24 +226,6 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
     }
   };
 
-  const createDefaultMilestones = async () => {
-    const defaults = [
-      { title: "Согласование деталей", description: "Обсуждение ТЗ и материалов", status: "completed" },
-      { title: "Изготовление", description: "Основной этап работы", status: "in_progress" },
-      { title: "Финальная проверка", description: "Контроль качества и упаковка", status: "pending" }
-    ];
-    const created = [];
-    for (const m of defaults) {
-      const res = await fetch(`/api/orders/${order.id}/milestones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(m)
-      });
-      const data = await res.json();
-      if (data.ok) created.push(data.milestone);
-    }
-    setMilestones(created);
-  };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,7 +317,7 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
       if (data.ok) {
         alert("Спасибо за ваш отзыв!");
         // Обновляем локальный статус заказа, чтобы скрыть форму
-        (order as any).reviewed = true;
+        // (order as any).reviewed = true; // Мутация удалена для соблюдения иммутабельности
         setReviewText("");
         setReviewRating(5);
       }

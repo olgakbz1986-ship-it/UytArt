@@ -6,7 +6,6 @@
    сообщение: продавец не найден / лимит исчерпан / сеть недоступна
    / сервер ошибся (п.22 ЗАДАЧИ 4).
    ============================================================ */
-import { useState } from 'react';
 import { marketProducts } from '../lib/market';
 import { canonicalSellerId } from '../lib/userFeed';
 import { useSubscriptions } from '../hooks/useSubscriptions';

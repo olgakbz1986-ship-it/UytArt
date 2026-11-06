@@ -173,7 +173,7 @@ function mount(app, ctx) {
 }
 
 async function callTask(taskOf) {
-  return async (req, res) => {
+  return async (req, _res) => {
     const task = taskOf(req);
     const payload = { projectId: req.params.id, variantId: req.params.variantId, objectId: req.params.objectId, ...(req.body || {}) };
     /* §4.3: изоляция контекста — проект принадлежит только владельцу;

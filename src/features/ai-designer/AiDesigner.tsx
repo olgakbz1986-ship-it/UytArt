@@ -18,7 +18,7 @@ import { Badge, Btn, Rating } from "../../components/ui";
 import { useDesignerStore, listSavedProjects } from "../../lib/ai-designer/store";
 import { AI_DESIGNER_CONFIG } from "../../lib/ai-designer/config";
 import type {
-  DesignObject, DesignProject, DesignVariant, FashionAnalysisResult,
+  DesignObject, _DesignProject, DesignVariant, FashionAnalysisResult,
   InteriorAnalysisResult, PhotoQualityIssue, ProductMatch, DesignerMode, ClarifyingQuestion,
 } from "../../lib/ai-designer/types";
 import {

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BarChart3, FileSpreadsheet, Globe2, Send, Sparkles, Trophy, Upload, Users, Crown, FlaskConical, Briefcase, Headphones, Megaphone, CheckCircle2, Lock } from "lucide-react";
-import { Badge, Btn, Modal } from "./ui";
+import { Badge, Btn } from "./ui";
 import { CATEGORIES } from "../data/seed";
 import { useAppStore } from "../lib/store";
-import { useSellerAccount, SELLER_PLANS, sellerPlanById, type SellerLegalType } from "../lib/seller";
-import { useSubStore } from "../lib/subscriptions";
+import { useSellerAccount, sellerPlanById, type SellerLegalType } from "../lib/seller";
 import {
   useSellerFeatures, useBuyerFeatures, useWeeklyReport, useAbTests, useCurator, usePremiumSales,
   useCuratorPicks, thisWeekPicks, useManagerLine, useTopSlots, usePromoBookings, useSellerSite,
@@ -341,9 +340,9 @@ function SegmentsInner() {
 /* ---------- §5.6 Кастомные отчёты ---------- */
 export function CustomReportsBlock() {
   const f = useSellerFeatures();
-  if (!f.customReports) return <LockedStub feature="customReports" />;
   const [dims, setDims] = useState<ReportDim[]>(["date", "product", "revenue"]);
   const table = useMemo(() => buildCustomTable(dims), [dims]);
+  if (!f.customReports) return <LockedStub feature="customReports" />;
   return (
     <Card icon={<FileSpreadsheet size={17} />} title="Конструктор кастомных отчётов" tag="выгрузка CSV/XLSX">
       <div className="flex flex-wrap gap-2 mb-3">
@@ -393,12 +392,12 @@ function WhiteLabelInner() {
 /* ---------- §5.6 Топ-позиции категорий ---------- */
 export function TopPositionsBlock() {
   const f = useSellerFeatures();
-  if (!f.topPositions) return <LockedStub feature="topPositions" />;
   const uid = useAppStore((s) => s.session?.userId || "guest");
   const slots = useTopSlots((s) => s.slots[uid] || []);
   const reserve = useTopSlots((s) => s.reserve);
   const release = useTopSlots((s) => s.release);
   const [cat, setCat] = useState(CATEGORIES[0].name);
+  if (!f.topPositions) return <LockedStub feature="topPositions" />;
   return (
     <Card icon={<Trophy size={17} />} title="Гарантированные топ-позиции" tag="пометка «Реклама»">
       <div className="flex gap-2">
@@ -420,7 +419,6 @@ export function TopPositionsBlock() {
 /* ---------- §5.6 Промо в рассылках ---------- */
 export function PromoBlock() {
   const f = useSellerFeatures();
-  if (!f.promoMailout) return <LockedStub feature="promoMailout" />;
   const bookings = usePromoBookings((s) => s.bookings);
   const book = usePromoBookings((s) => s.book);
   const month = new Date().toISOString().slice(0, 7);
@@ -428,6 +426,7 @@ export function PromoBlock() {
   const [placement, setPlacement] = useState(MEDIA_KIT.placements[0]);
   const [creative, setCreative] = useState("");
   const [err, setErr] = useState("");
+  if (!f.promoMailout) return <LockedStub feature="promoMailout" />;
   return (
     <Card icon={<Megaphone size={17} />} title="Промо в рассылках платформы" tag={`${used}/${PROMO_MONTHLY_LIMIT} выхода в месяц`}>
       <p className="text-[12.5px] text-ink-mute mb-2">Медиа-кит: {MEDIA_KIT.audience}; баннер {MEDIA_KIT.specs.banner}, текст {MEDIA_KIT.specs.text}.</p>
@@ -502,10 +501,10 @@ export function SellerPremiumBlocksLite() {
    ============================================================ */
 export function PremiumSalesBlock() {
   const f = useBuyerFeatures();
-  if (!f.premiumSales) return <LockedFeatureStub label="Закрытые распродажи" need="Покупатель «Премиум»" />;
   const drops = usePremiumSales((s) => s.drops);
   const ensure = usePremiumSales((s) => s.ensureThisWeek);
   useEffect(() => { ensure(); }, []);
+  if (!f.premiumSales) return <LockedFeatureStub label="Закрытые распродажи" need="Покупатель «Премиум»" />;
   const live = drops.find((d) => d.status === "live");
   const items = dropProducts(live);
   return (
@@ -530,10 +529,10 @@ export function PremiumSalesBlock() {
 
 export function CuratorBlock() {
   const f = useBuyerFeatures();
-  if (!f.curator) return <LockedFeatureStub label="Цифровой куратор" need="Покупатель «Премиум»" />;
   const tickets = useCurator((s) => s.tickets);
   const escalate = useCurator((s) => s.escalate);
   const [q, setQ] = useState("");
+  if (!f.curator) return <LockedFeatureStub label="Цифровой куратор" need="Покупатель «Премиум»" />;
   return (
     <Card icon={<Headphones size={17} />} title="Цифровой куратор" tag="приоритет · SLA 30 мин">
       <p className="text-[13px] text-ink-soft mb-2">Приоритетная ветка агента; нерешённый вопрос эскалируется живому оператору.</p>

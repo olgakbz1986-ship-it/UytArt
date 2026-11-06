@@ -33,6 +33,7 @@ export function CardAnimation({ frames, captions, frameMs }: { frames: string[];
 export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
   const toggleFav = useAppStore((s) => s.toggleFav);
   const favorites = useAppStore((s) => s.favorites);
+  const addToCart = useAppStore((s) => s.addToCart);
   const onFav = favorites.includes(p.id);
   const cat = catBySlug(p.categoryId);
   const vendor = vendorById(p.vendorId);
@@ -105,7 +106,6 @@ export function ProductCard({ p, index = 0 }: { p: Product; index?: number }) {
     );
   }
 
-  const addToCart = useAppStore((s) => s.addToCart);
   return (
     <Link
       to={`/product/${p.slug}`}

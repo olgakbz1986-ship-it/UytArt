@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Camera, Image as ImageIcon, Sparkles, Package, Layers, Ruler, Tags, Check, ArrowLeft, ArrowRight, Wand2, Upload, Trash2 } from "lucide-react";
+import { Sparkles, Check, ArrowLeft, ArrowRight, Upload } from "lucide-react";
 import { useSellerAccount, useSellerReg, type DeliveryZone } from "../lib/seller";
-import { CITIES, zoneLabel } from "../lib/geo";
 import { CATEGORIES } from "../data/seed";
-import { Modal, Btn, Field, Badge } from "./ui";
+import { Modal, Btn, Field } from "./ui";
 
 type Media = { type: "image" | "video"; url: string; name: string };
 
@@ -82,37 +81,40 @@ export function ProductWizard_v2({ open, onClose, editId, initialData }: Props) 
   
   useEffect(() => {
     if (!open) return;
-    if (editItem) {
-      setDraft({
-        ...empty,
-        media: editItem.media || [],
-        name: editItem.name,
-        category: editItem.category,
-        price: String(editItem.price),
-        materials: editItem.materials || [],
-        style: editItem.style || "",
-        color: editItem.color || "",
-        size: editItem.size || "",
-        weight: editItem.weight ? String(editItem.weight) : "",
-        specs: editItem.specs || [],
-        description: editItem.description || "",
-        aiBullets: (editItem as any).aiBullets || [],
-        sellerCity: editItem.sellerCity || sellerReg.city || "",
-        deliveryZone: editItem.deliveryZone || { mode: "nationwide" },
-      });
-    } else if (initialData) {
-      setDraft({
-        ...empty,
-        name: initialData.name || "",
-        description: initialData.description || "",
-        category: initialData.category || CATEGORIES[0]?.name || "",
-        media: initialData.photo ? [{ type: "image" as const, url: initialData.photo, name: "from-studio.jpg" }] : [],
-        sellerCity: sellerReg.city || "",
-      });
-    } else {
-      setDraft({ ...empty, sellerCity: sellerReg.city || "" });
-    }
-    setStep(1);
+    const t = setTimeout(() => {
+      if (editItem) {
+        setDraft({
+          ...empty,
+          media: editItem.media || [],
+          name: editItem.name,
+          category: editItem.category,
+          price: String(editItem.price),
+          materials: editItem.materials || [],
+          style: editItem.style || "",
+          color: editItem.color || "",
+          size: editItem.size || "",
+          weight: editItem.weight ? String(editItem.weight) : "",
+          specs: editItem.specs || [],
+          description: editItem.description || "",
+          aiBullets: (editItem as any).aiBullets || [],
+          sellerCity: editItem.sellerCity || sellerReg.city || "",
+          deliveryZone: editItem.deliveryZone || { mode: "nationwide" },
+        });
+      } else if (initialData) {
+        setDraft({
+          ...empty,
+          name: initialData.name || "",
+          description: initialData.description || "",
+          category: initialData.category || CATEGORIES[0]?.name || "",
+          media: initialData.photo ? [{ type: "image" as const, url: initialData.photo, name: "from-studio.jpg" }] : [],
+          sellerCity: sellerReg.city || "",
+        });
+      } else {
+        setDraft({ ...empty, sellerCity: sellerReg.city || "" });
+      }
+      setStep(1);
+    }, 0);
+    return () => clearTimeout(t);
   }, [open, editId, initialData, editItem, sellerReg.city]);
 
   const totalSteps = 5;

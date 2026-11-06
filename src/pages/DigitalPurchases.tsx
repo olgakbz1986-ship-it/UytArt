@@ -14,7 +14,7 @@ export function DigitalPurchasesPage() {
 
   useEffect(() => {
     if (!session?.userId) {
-      setLoading(false);
+      const _t = setTimeout(() => { if (loading !== false) setLoading(false); }, 0);
       return;
     }
     // Фильтруем покупки текущего пользователя
@@ -25,8 +25,10 @@ export function DigitalPurchasesPage() {
         product: products.find((prod) => prod.id === p.productId),
       }))
       .sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime());
-    setMyPurchases(filtered);
-    setLoading(false);
+    const _t2 = setTimeout(() => {
+      setMyPurchases(filtered);
+      setLoading(false);
+    }, 0);
   }, [session?.userId, purchases, products]);
 
   const handleDownload = (productId: string) => {

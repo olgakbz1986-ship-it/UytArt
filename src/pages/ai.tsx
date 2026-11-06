@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Send, Camera, ScanLine, ShoppingBag, Palette, Upload, X } from "lucide-react";
-import { Product, PRODUCTS, aiPickProducts, fmt, fmtDate } from "../data/seed";
+import { Sparkles, Send, Camera, ScanLine, ShoppingBag, Palette, Upload } from "lucide-react";
+import { Product, aiPickProducts, fmt, fmtDate } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits, selectAiLeft, fmtLimit } from "../lib/subscriptions";
@@ -29,7 +29,11 @@ export default function AiPage() {
 
   const marketList = useMarketProducts();
   const useMarketProductsRef = useRef(marketList);
-  useMarketProductsRef.current = marketList;
+  useEffect(() => {
+
+    useMarketProductsRef.current = marketList;
+
+  }, [marketList]);
 
   const [mode, setMode] = useState<Mode>("chat");
   const [input, setInput] = useState("");

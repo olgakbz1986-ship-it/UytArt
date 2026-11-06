@@ -49,7 +49,13 @@ export function BuyerSubscriptionsPanel() {
   /* п.13: курсор следующей страницы берём из последнего id загруженного списка */
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  useEffect(() => { setCursor(null); }, [sortBy, debounced]); // новой фильтре — новая страница
+  const prevFilters = useRef({ sortBy, debounced });
+  useEffect(() => {
+    if (prevFilters.current.sortBy !== sortBy || prevFilters.current.debounced !== debounced) {
+      setCursor(null);
+      prevFilters.current = { sortBy, debounced };
+    }
+  }, [sortBy, debounced]); // новой фильтре — новая страница
   const nextCursor = cursor === null && list.length >= PAGE_SIZE ? String(list[list.length - 1]?.id ?? "") : cursor;
 
   const loadMore = async () => {

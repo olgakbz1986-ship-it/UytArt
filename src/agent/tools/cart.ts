@@ -1,5 +1,4 @@
 // Инструмент управления корзиной с проверкой региона
-import { Product } from './search';
 
 export interface CartItem {
   productId: string;

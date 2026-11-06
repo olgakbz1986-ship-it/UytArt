@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Upload, Trash2, Sparkles, Check, Image as ImageIcon, Video, Save, Send , Download, Star, RefreshCw} from "lucide-react";
-import { useSellerAccount, useSellerReg, type SellerProductItem, type DeliveryZone } from "../lib/seller";
+import { ArrowLeft, Upload, Check, _Image, Save, Send, Download, Star, RefreshCw } from "lucide-react";
+import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useAppStore } from "../lib/store";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
 import { CategoryPicker } from "../components/CategoryPicker";
@@ -10,7 +10,7 @@ import { QualityScore, calculateQualityScore } from "../components/QualityScore"
 import { ProductViewCore } from "../components/ProductViewCore";
 import { publicProductsUpsert } from "../lib/market";
 import { CATEGORIES } from "../data/seed";
-import { Btn, Field } from "../components/ui";
+import { Field } from "../components/ui";
 
 type Media = { type: "image" | "video"; url: string; name: string };
 
@@ -111,7 +111,7 @@ export function ProductEditorPage() {
   const idRef = useRef(id);
   const draftIdRef = useRef(draftId);
   const [showPreview, setShowPreview] = useState(true);
-  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [_isAiLoading, setIsAiLoading] = useState(false);
 
   const editItem = id ? acc.products.find((pp) => pp.id === id) : undefined;
   const isPublishedMode = !!(editItem && editItem.isDraft === false);
@@ -158,12 +158,14 @@ export function ProductEditorPage() {
   const showSize = vis.size !== false && !hasDims; // скрыт, если есть точные габариты в группах
   const showWeight = vis.weight !== false;
   const matLabel = vis.matLabel || "Материал";
-  const showAnyBasic = showMat || showStyle || showColor || showSize || showWeight;
+  const _showAnyBasic = showMat || showStyle || showColor || showSize || showWeight;
 
   // СИНХРОНИЗАЦИЯ REF ПРИ КАЖДОМ РЕНДЕРЕ (гарантированно актуальные данные, включая фото)
-  draftRef.current = draft;
-  idRef.current = id;
-  draftIdRef.current = draftId;
+  useEffect(() => {
+    draftRef.current = draft;
+    idRef.current = id;
+    draftIdRef.current = draftId;
+  }, [draft, id, draftId]);
 
   const isInitialized = useRef(false);
 
@@ -200,11 +202,11 @@ export function ProductEditorPage() {
         deliveryCitiesText: (Array.isArray((editItem as any).deliveryZone?.cities) ? (editItem as any).deliveryZone.cities : []).join(", "),
         installCitiesText: (Array.isArray((editItem as any).installCities) ? (editItem as any).installCities : []).join(", "),
       };
-      setDraft(loaded);
+      const _t1 = setTimeout(() => { if (JSON.stringify(draft) !== JSON.stringify(loaded)) setDraft(loaded); }, 0);
       draftRef.current = loaded;
     } else {
       const emptyDraft = { ...empty, sellerCity: sellerReg.city || "" };
-      setDraft(emptyDraft);
+      const _t2 = setTimeout(() => { setDraft(emptyDraft); }, 0);
       draftRef.current = emptyDraft;
     }
     isInitialized.current = true;
@@ -213,17 +215,73 @@ export function ProductEditorPage() {
   // Отдельно обновляем город, если он загрузился позже, но только если поле пустое
   useEffect(() => {
     if (sellerReg.city && !draft.sellerCity) {
-      setDraft(prev => ({ ...prev, sellerCity: sellerReg.city }));
+      const _t3 = setTimeout(() => { setDraft(prev => (prev.sellerCity !== sellerReg.city ? { ...prev, sellerCity: sellerReg.city } : prev)); }, 0);
     }
   }, [sellerReg.city, draft.sellerCity]);
 
   // Автосохранение при изменениях draft (кроме specs чтобы не схлопывались поля)
   useEffect(() => {
     // Создаём объект без specs для триггера автосохранения
-    const draftWithoutSpecs = {
+    const _draftWithoutSpecs = {
       ...draft,
       specs: undefined,
     };
+  const autoSaveDraft = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      const currentDraft = draftRef.current;
+      if (currentDraft.name.trim() || currentDraft.media.length > 0 || currentDraft.description.trim()) {
+        // РЕЖИМ 1: Редактируем ОПУБЛИКОВАННЫЙ товар — сохраняем в pending-буфер (не трогаем products[])
+        if (isPublishedMode && id) {
+          try {
+            localStorage.setItem(`pending-${id}`, JSON.stringify(currentDraft));
+            console.log(`💾 Pending сохранён для товара ${id}`);
+          } catch (e) { console.warn(e); }
+          setSavedDraft(true);
+          setTimeout(() => setSavedDraft(false), 2000);
+          return;
+        }
+        
+        // РЕЖИМ 2: Новый товар или черновик — сохраняем в products[]
+        const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
+        const data = {
+          id: draftIdToUse,
+          name: currentDraft.name.trim() || "Без названия",
+          category: currentDraft.category, subcategory: currentDraft.subcategory,
+          price: currentDraft.price ? +currentDraft.price : 0,
+          description: currentDraft.description.trim(),
+          materials: currentDraft.materials,
+          style: currentDraft.style || undefined,
+          color: currentDraft.color || undefined,
+          size: currentDraft.size || undefined,
+          weight: currentDraft.weight ? +currentDraft.weight : undefined,
+          specs: currentDraft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
+          media: currentDraft.media,
+          sellerCity: currentDraft.sellerCity,
+          ...geoPayload(currentDraft),
+          instant: currentDraft.instant,
+          isDraft: editItem ? editItem.isDraft !== false : true,
+          draftSavedAt: new Date().toISOString(),
+          createdAt: editItem?.createdAt || new Date().toISOString(),
+        };
+        
+        if (id) {
+          acc.updateProduct(id, data);
+        } else {
+          if (!draftId) {
+            // Первый раз создаём черновик
+            acc.addProduct(data);
+            setDraftId(draftIdToUse);
+          } else {
+            // Обновляем существующий черновик
+            acc.updateProduct(draftId, data);
+          }
+        }
+      }
+    }, 3000); // Сохраняем через 3 секунды после последнего изменения
+  };
     autoSaveDraft();
     return () => {
       if (autoSaveTimerRef.current) {
@@ -252,7 +310,7 @@ export function ProductEditorPage() {
 
   // Сохранение при закрытии вкладки/переходе
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = (_e: BeforeUnloadEvent) => {
       if (draft.name.trim() || draft.media.length > 0 || draft.description.trim()) {
         const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
         const data = {
@@ -470,7 +528,7 @@ export function ProductEditorPage() {
     }, 1500);
   };
 
-  const generateAIDescription = () => {
+  const _generateAIDescription = () => {
     const name = draft.name.trim() || "Изделие";
     const mat = draft.materials.length ? draft.materials.join(", ") : "";
     const style = draft.style;
@@ -641,62 +699,6 @@ export function ProductEditorPage() {
   };
 
   // Автосохранение черновика (вызывается при изменениях с дебаунсом)
-  const autoSaveDraft = () => {
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-    autoSaveTimerRef.current = window.setTimeout(() => {
-      const currentDraft = draftRef.current;
-      if (currentDraft.name.trim() || currentDraft.media.length > 0 || currentDraft.description.trim()) {
-        // РЕЖИМ 1: Редактируем ОПУБЛИКОВАННЫЙ товар — сохраняем в pending-буфер (не трогаем products[])
-        if (isPublishedMode && id) {
-          try {
-            localStorage.setItem(`pending-${id}`, JSON.stringify(currentDraft));
-            console.log(`💾 Pending сохранён для товара ${id}`);
-          } catch (e) { console.warn(e); }
-          setSavedDraft(true);
-          setTimeout(() => setSavedDraft(false), 2000);
-          return;
-        }
-        
-        // РЕЖИМ 2: Новый товар или черновик — сохраняем в products[]
-        const draftIdToUse = id || draftId || "d" + Date.now().toString(36);
-        const data = {
-          id: draftIdToUse,
-          name: currentDraft.name.trim() || "Без названия",
-          category: currentDraft.category, subcategory: currentDraft.subcategory,
-          price: currentDraft.price ? +currentDraft.price : 0,
-          description: currentDraft.description.trim(),
-          materials: currentDraft.materials,
-          style: currentDraft.style || undefined,
-          color: currentDraft.color || undefined,
-          size: currentDraft.size || undefined,
-          weight: currentDraft.weight ? +currentDraft.weight : undefined,
-          specs: currentDraft.specs.filter((s) => s.key.trim() && s.value.trim()).map(({ id, key, value }) => ({ id, key, value })),
-          media: currentDraft.media,
-          sellerCity: currentDraft.sellerCity,
-          ...geoPayload(currentDraft),
-          instant: currentDraft.instant,
-          isDraft: editItem ? editItem.isDraft !== false : true,
-          draftSavedAt: new Date().toISOString(),
-          createdAt: editItem?.createdAt || new Date().toISOString(),
-        };
-        
-        if (id) {
-          acc.updateProduct(id, data);
-        } else {
-          if (!draftId) {
-            // Первый раз создаём черновик
-            acc.addProduct(data);
-            setDraftId(draftIdToUse);
-          } else {
-            // Обновляем существующий черновик
-            acc.updateProduct(draftId, data);
-          }
-        }
-      }
-    }, 3000); // Сохраняем через 3 секунды после последнего изменения
-  };
 
   const importantLabelsForScore = getGroupsForCategory(draft.category).flatMap((g: SpecGroupDef) => g.fields.filter((f: SpecFieldDef) => f.important && !(f.hideIf && f.hideIf.test(draft.category))).map((f: SpecFieldDef) => f.unit ? `${f.label}, ${f.unit}` : f.label));
   const qualityPercent = calculateQualityScore(draft, importantLabelsForScore);
@@ -1086,8 +1088,8 @@ export function ProductEditorPage() {
                         const currentId = id || draftId;
                         if (currentId) {
                           const slides = aiAssets.info_slides || [];
-                          const newMedia: any[] = [{ type: "video" as "video", url: aiAssets.video_15s, name: "ai-video.mp4" }];
-                          slides.forEach((sl: string, i: number) => newMedia.push({ type: "image" as "image", url: sl, name: `slide-${i + 1}.jpg` }));
+                          const newMedia: any[] = [{ type: "video" as const, url: aiAssets.video_15s, name: "ai-video.mp4" }];
+                          slides.forEach((sl: string, i: number) => newMedia.push({ type: "image" as const, url: sl, name: `slide-${i + 1}.jpg` }));
                           setDraft({ ...draft, media: newMedia });
                           acc.updateProduct(currentId, { media: newMedia });
                           setTimeout(() => setForceRender((prev: number) => prev + 1), 100);
@@ -1147,8 +1149,8 @@ export function ProductEditorPage() {
                               slides.unshift(removed);
                               const currentId = id || draftId;
                               if (currentId) {
-                                const newMedia: any[] = slides.map((sl: string, i: number) => ({ type: "image" as "image", url: sl, name: `slide-${i + 1}.jpg` }));
-                                if (aiAssets.video_15s) newMedia.push({ type: "video" as "video", url: aiAssets.video_15s, name: "ai-video.mp4" });
+                                const newMedia: any[] = slides.map((sl: string, i: number) => ({ type: "image" as const, url: sl, name: `slide-${i + 1}.jpg` }));
+                                if (aiAssets.video_15s) newMedia.push({ type: "video" as const, url: aiAssets.video_15s, name: "ai-video.mp4" });
                                 setDraft({ ...draft, media: newMedia });
                                 acc.updateProduct(currentId, {
                                   ai_assets: { ...aiAssets, info_slides: slides },
@@ -1201,8 +1203,8 @@ export function ProductEditorPage() {
                     <button type="button" onClick={() => {
                       if (aiAssets) {
                         const newMedia: any[] = [];
-                        if (aiAssets.info_slides) aiAssets.info_slides.forEach((slide: string, idx: number) => { newMedia.push({ type: "image" as "image", url: slide, name: `slide-${idx + 1}.jpg` }); });
-                        if (aiAssets.video_15s) newMedia.push({ type: "video" as "video", url: aiAssets.video_15s, name: "ai-video.mp4" });
+                        if (aiAssets.info_slides) aiAssets.info_slides.forEach((slide: string, idx: number) => { newMedia.push({ type: "image" as const, url: slide, name: `slide-${idx + 1}.jpg` }); });
+                        if (aiAssets.video_15s) newMedia.push({ type: "video" as const, url: aiAssets.video_15s, name: "ai-video.mp4" });
                         setDraft({ ...draft, media: newMedia });
                         acc.updateProduct(id || draftId || "", { media: newMedia });
                         alert(`✅ Применено ${newMedia.length} ассетов к карточке!`);

@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 
 interface QualityScoreProps {
   draft: {

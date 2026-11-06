@@ -44,7 +44,7 @@ function resolveUserId(req, ctx) {
    из-за этого кнопка «Подписаться» меняла вид, но подписка НЕ сохранялась
    и в кабинете «Мои подписки» магазин не появлялся. Теперь хранилище
    инициализируется лениво и безопасно. */
-function readDb() {
+function _readDb() {
   let d = {};
   if (fs.existsSync(DB_PATH)) {
     try {
@@ -59,11 +59,11 @@ function readDb() {
   return d;
 }
 
-function writeDb(db) {
+function _writeDb(db) {
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
-const genId = () => 'sub_' + Math.random().toString(36).substr(2, 9);
+const _genId = () => 'sub_' + Math.random().toString(36).substr(2, 9);
 
 module.exports = function subscriptionsRouter(app, ctx, repo) {
   /* ЗАДАЧА 2: репозиторный слой (server/repo.cjs) — два режима:

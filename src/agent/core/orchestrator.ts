@@ -13,7 +13,7 @@ export class AgentOrchestrator {
     this.userRegion = userRegion;
   }
 
-  async processMessage(message: string, history: AgentMessage[]): Promise<AgentMessage> {
+  async processMessage(message: string, _history: AgentMessage[]): Promise<AgentMessage> {
     // 1. Проверка конституции (базовая валидация действия)
     if (!validateAction('chat_process')) {
       throw new Error('Constitution violation');

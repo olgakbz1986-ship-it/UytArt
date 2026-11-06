@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect, useMemo, lazy, Suspense, type ReactNode } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, MessageSquare, ShieldAlert, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot, Store, Wrench, BookOpen} from "lucide-react";
-import { fmt, fmtDate, productById } from "../data/seed";
+import { LogOut, MapPin, Heart, Gift, Settings, Package, CheckCircle2, Sparkles, BellRing, ClipboardList, Trash2, Flag, CreditCard, X, Lock, Palette, Bell, Shield, Camera, Check , Bot} from "lucide-react";
+import { fmt, productById } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
-import { orderOwnerIdLike as orderOwnerId } from "../lib/ownership";
+import { _orderOwnerIdLike } from "../lib/ownership";
 import { useMarketStore } from "../lib/marketStore";
 /* ЗАДАЧА завершения, п.2: тяжёлые панели кабинета вынесены в React.lazy —
    каждая вкладка догружается при переключении, первый экран легче. */
@@ -23,13 +23,12 @@ const BuyerConceptsPanelLazy = lazy(() => import("../components/BuyerConceptPane
 const BuyerPriceWatchesPanelLazy = lazy(() => import("../components/BuyerConceptPanels").then((m) => ({ default: m.BuyerPriceWatchesPanel })));
 /* п.3: блок ленты новинок от всех подписок (useFeed, TanStack Query) */
 const FeedBlockLazy = lazy(() => import("../components/feed/FeedBlock").then((m) => ({ default: m.FeedBlock })));
-import { Badge, Btn, Field, ProductImg, ProgressBar, SettingsSection, Switch } from "../components/ui";
+import { Badge, Btn, Field, ProgressBar, SettingsSection, Switch } from "../components/ui";
 import { usePrefsStore } from "../lib/prefs";
 import { useNotifyStore } from "../lib/notify";
 import { ChatModal } from "../components/chat";
 import MarketOrderDetail from "../components/MarketOrderDetail";
 import { ReviewModal, TicketModal } from "../components/review";
-import { BuyerPremiumSection } from "../components/PremiumBlocks";
 import LimitWarning, { LimitCounters, DEFAULT_WATCHED } from "../components/LimitWarning";
 /* ЗАДАЧА ЗАВЕРШЕНИЯ, п.4: мёртвые импорты из userFeed удалены — панель
    «Мои подписки» (BuyerSubscriptionsPanel) полностью работает поверх
@@ -94,7 +93,7 @@ const BUYER_TIER: Record<string, { level: number; accent: string; soft: string; 
   },
 };
 
-const ORDER_LABEL: Record<string, { label: string; tone: "honey" | "ai" | "success" | "premium" }> = {
+const _ORDER_LABEL: Record<string, { label: string; tone: "honey" | "ai" | "success" | "premium" }> = {
   paid: { label: "Принят", tone: "honey" },
   shipped: { label: "В пути", tone: "ai" },
   delivered: { label: "Готов к выдаче", tone: "premium" },
@@ -108,25 +107,25 @@ export default function ProfilePage() {
   const orders = useAppStore((s) => s.orders);
   const favorites = useAppStore((s) => s.favorites);
   const market = useMarketProducts();
-  const toggleFav = useAppStore((s) => s.toggleFav);
-  const addresses = useAppStore((s) => s.addresses);
-  const addAddress = useAppStore((s) => s.addAddress);
-  const removeAddress = useAppStore((s) => s.removeAddress);
-  const advanceStatus = useAppStore((s) => s.advanceStatus);
-  const confirmReceipt = useAppStore((s) => s.confirmReceipt);
-  const bonusBalance = useAppStore((s) => s.bonusBalance);
-  const bonusHistory = useAppStore((s) => s.bonusHistory);
+  const _toggleFav = useAppStore((s) => s.toggleFav);
+  const _addresses = useAppStore((s) => s.addresses);
+  const _addAddress = useAppStore((s) => s.addAddress);
+  const _removeAddress = useAppStore((s) => s.removeAddress);
+  const _advanceStatus = useAppStore((s) => s.advanceStatus);
+  const _confirmReceipt = useAppStore((s) => s.confirmReceipt);
+  const _bonusBalance = useAppStore((s) => s.bonusBalance);
+  const _bonusHistory = useAppStore((s) => s.bonusHistory);
   const nav = useNavigate();
 
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
-  const concepts = useSubStore((s) => s.concepts);
+  const _concepts = useSubStore((s) => s.concepts);
 
-  const removeConcept = useSubStore((s) => s.removeConcept);
-  const priceWatches = useSubStore((s) => s.priceWatches);
-  const removePriceWatch = useSubStore((s) => s.removePriceWatch);
+  const _removeConcept = useSubStore((s) => s.removeConcept);
+  const _priceWatches = useSubStore((s) => s.priceWatches);
+  const _removePriceWatch = useSubStore((s) => s.removePriceWatch);
   const aiLeft = useSubStore((s) => selectAiLeft(s, session?.userId || "guest"));
-  const tickets = useChatStore((s) => s.tickets);
-  const complaints = useComplaintStore((s) => s.complaints);
+  const _tickets = useChatStore((s) => s.tickets);
+  const _complaints = useComplaintStore((s) => s.complaints);
   const marketOrders = useMarketStore((s) => s.orders);
   const myMarketOrders = marketOrders.filter((o) => o.myOwn);
 
@@ -143,7 +142,7 @@ export default function ProfilePage() {
   const tier = BUYER_TIER[buyerPlan] || BUYER_TIER.free;
 
   const [tab, setTab] = useState<Tab>("orders");
-  const [addr, setAddr] = useState({ label: "Дом", city: "", street: "", zip: "" });
+  const [_addr, _setAddr] = useState({ label: "Дом", city: "", street: "", zip: "" });
   const [profile, setProfile] = useState({
     name: session?.name || "", email: session?.email || "", phone: session?.phone || "",
     city: "", birth: "", about: "",
@@ -153,9 +152,9 @@ export default function ProfilePage() {
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [ticketFor, setTicketFor] = useState<{ order: Order; kind: "problem" | "return" } | null>(null);
   const [reviewFor, setReviewFor] = useState<Order | null>(null);
-  const [responsesMap, setResponsesMap] = useState<Record<string, any[]>>({});
-  const [loadingResponses, setLoadingResponses] = useState<Record<string, boolean>>({});
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [_responsesMap, setResponsesMap] = useState<Record<string, any[]>>({});
+  const [_loadingResponses, setLoadingResponses] = useState<Record<string, boolean>>({});
+  const [_expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [selectedMarketOrder, setSelectedMarketOrder] = useState<any>(null);
 
   const loadResponses = async (orderId: string) => {
@@ -174,7 +173,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAcceptResponse = async (orderId: string, responseId: string) => {
+  const _handleAcceptResponse = async (orderId: string, responseId: string) => {
     try {
       const res = await fetch(`/api/orders/${orderId}/responses/${responseId}`, {
         method: 'PUT',
@@ -194,7 +193,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleRejectResponse = async (orderId: string, responseId: string) => {
+  const _handleRejectResponse = async (orderId: string, responseId: string) => {
     try {
       const res = await fetch(`/api/orders/${orderId}/responses/${responseId}`, {
         method: 'PUT',
@@ -300,7 +299,7 @@ export default function ProfilePage() {
     );
   }
 
-  const favProducts = favorites.map((id) => {
+  const _favProducts = favorites.map((id) => {
     // Сначала ищем в динамических товарах (созданных пользователями)
     const dynamicProduct = market.find((p: any) => p.id === id);
     if (dynamicProduct) return dynamicProduct;

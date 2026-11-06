@@ -198,7 +198,7 @@ interface CuratorState {
 }
 export const useCurator = create<CuratorState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       tickets: [],
       escalate: (question) => {
         if (!currentBuyerFeatures().curator) return null; /* гейт: только Премиум */
@@ -280,7 +280,7 @@ interface CuratorPicksState {
 }
 export const useCuratorPicks = create<CuratorPicksState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       sets: [],
       publishPick: (productIds, note) => {
         if (!currentSellerFeatures().curatorPicks) return null;
@@ -314,7 +314,7 @@ interface SiteState {
 export const PLATFORM_DOMAIN = "quantiform.ru";
 export const useSellerSite = create<SiteState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       sites: {},
       activate: async (opts) => {
         const uid = useAppStore.getState().session?.userId || "guest";
@@ -358,7 +358,7 @@ interface AbState {
 }
 export const useAbTests = create<AbState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       tests: [],
       start: (productId, variantA, variantB) => {
         if (!currentSellerFeatures().abTest) return null;
@@ -397,7 +397,7 @@ interface ManagerState {
 }
 export const useManagerLine = create<ManagerState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       tickets: [],
       request: async (message) => {
         const f = currentSellerFeatures();
@@ -572,7 +572,7 @@ interface TopSlotsState {
 }
 export const useTopSlots = create<TopSlotsState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       slots: {},
       reserve: (category) => {
         if (!currentSellerFeatures().topPositions) return null;
@@ -595,7 +595,7 @@ export const useTopSlots = create<TopSlotsState>()(
   ),
 );
 /** Категории рекламных слотов всех продавцов (для каталога) */
-export function adCategoriesForProducts(list: Product[]): Set<string> {
+export function adCategoriesForProducts(_list: Product[]): Set<string> {
   const all = Object.values(useTopSlots.getState().slots).flat();
   return new Set(all.map((s) => s.category));
 }

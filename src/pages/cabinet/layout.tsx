@@ -10,10 +10,10 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Bot, ClipboardCheck, Users, Store, Package, ShoppingCart, Wallet,
   Scale, LifeBuoy, Shield, Megaphone, BarChart3, Rocket, Settings, ScrollText,
-  Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, Sparkles, ChevronRight,
+  Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, _Sparkles, ChevronRight,
   GraduationCap, Radar, Trash2,
 } from "lucide-react";
-import { Btn, Badge, Field, Modal, Switch } from "../../components/ui";
+import { Btn, Badge, Field, Modal } from "../../components/ui";
 import { adminApi } from "../../lib/admin-api";
 
 export const cn = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(" ");
@@ -38,14 +38,15 @@ export function useCabinetData<T>(loader: () => Promise<any>, deps: any[] = []):
   const [tick, setTick] = useState(0);
   const { reloadKey } = useCabinet();
   useEffect(() => {
-    let on = true; setLoading(true); setError(null);
+    let alive = true;
+    const _t = setTimeout(() => { setLoading(true); setError(null); }, 0);
     loader().then((r: any) => {
-      if (!on) return;
+      if (!alive) return;
       if (r && r.ok === false) setError(mapError(r));
       else setData(r);
-    }).catch(() => on && setError("Сервер недоступен. Проверьте соединение и попробуйте ещё раз."))
-      .finally(() => on && setLoading(false));
-    return () => { on = false; };
+    }).catch(() => { if (alive) setError("Сервер недоступен. Проверьте соединение и попробуйте ещё раз."); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick, reloadKey]);
   return { data, loading, error, reload: () => setTick((t) => t + 1) };
@@ -248,8 +249,13 @@ function GlobalSearch() {
   const [res, setRes] = useState<any>(null);
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (q.trim().length < 2) { setRes(null); return; }
-    const t = setTimeout(() => adminApi.search(q.trim()).then(setRes), 250);
+    const t = setTimeout(() => {
+      if (q.trim().length < 2) {
+        setRes(prev => (prev !== null ? null : prev));
+        return;
+      }
+      adminApi.search(q.trim()).then(setRes);
+    }, 250);
     return () => clearTimeout(t);
   }, [q]);
   const groups = res?.groups || {};

@@ -567,7 +567,7 @@ const aiSessions = new Map();
 
 app.post("/api/agent/chat", aiUserLimiter, async (req, res) => {
   try {
-    const { message, role, userRegion, items } = req.body;
+    const { message, role, userRegion, _items } = req.body;
     /* §4.1/§4.2: пользовательский ввод санитизируется и очищается от PII
        ДО любой обработки и ДО формирования сообщений для LLM. */
     const safeMessage = aiSec.maskPII(aiSec.sanitizeUserInput(message));
@@ -687,7 +687,7 @@ app.get("/api/agent/reports", async (req, res) => {
 // ==========================================
 app.post("/api/agent/negotiate", async (req, res) => {
   try {
-    const { productId, productName, currentPrice, requestedDiscountPercent, sellerMaxDiscountPercent } = req.body;
+    const { _productId, _productName, currentPrice, requestedDiscountPercent, sellerMaxDiscountPercent } = req.body;
     const CONSTITUTION_MAX = 15; // 15%
     
     let reply = "";
@@ -783,12 +783,6 @@ app.post("/api/orders", guard, async (req, res) => {
       coverImage: b.coverImage || images[0],
       images,
       attachments: images,
-        /* Итерация два, Пункт В: письменная информация о порядке и сроках возврата */
-        returnNotice: {
-          text: "Товар надлежащего качества подлежит возврату в течение 7 дней с момента передачи; изделие на заказ надлежащего качества возврату не подлежит; при обнаружении недостатков действуют статьи 18–29 Закона о защите прав потребителей; порядок заявки описан в политике возвратов",
-          url: "/legal/return_policy",
-          timestamp: now,
-        },
     /* Итерация два, Пункт В: письменная информация о порядке и сроках возврата */
     returnNotice: {
       text: "Товар надлежащего качества подлежит возврату в течение 7 дней с момента передачи; изделие на заказ надлежащего качества возврату не подлежит; при обнаружении недостатков действуют статьи 18–29 Закона о защите прав потребителей; порядок заявки описан в политике возвратов",

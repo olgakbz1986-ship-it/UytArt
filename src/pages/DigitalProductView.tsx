@@ -17,15 +17,17 @@ export function DigitalProductView() {
   const [testDriveLoading, setTestDriveLoading] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    fetch(`/api/digital/products/${id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.product) setProduct(data.product);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    const _fetchTimer = setTimeout(() => {
+      if (!id) return;
+      if (loading !== true) setLoading(true);
+      fetch(`/api/digital/products/${id}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.product) setProduct(data.product);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    }, 0);
   }, [id]);
 
   useEffect(() => {
@@ -78,13 +80,6 @@ export function DigitalProductView() {
     setTestDriveLoading(false);
   };
 
-  if (loading) return <div className="max-w-[1280px] mx-auto px-4 py-16">Загрузка...</div>;
-  if (!product) return <div className="max-w-[1280px] mx-auto px-4 py-16">Товар не найден</div>;
-
-  const isPrompt = product.type === "prompt";
-  const isAgent = product.type === "agent";
-  const showTestDrive = (isPrompt || isAgent) && !purchased;
-
   /* Автофокус на секции тест-драйва при переходе с карточки каталога (?section=test-drive) */
   useEffect(() => {
     if (!loading && product && searchParams.get("section") === "test-drive" && testDriveRef.current) {
@@ -93,6 +88,13 @@ export function DigitalProductView() {
       if (ta) setTimeout(() => ta.focus(), 350);
     }
   }, [loading, product, searchParams]);
+  if (loading) return <div className="max-w-[1280px] mx-auto px-4 py-16">Загрузка...</div>;
+  if (!product) return <div className="max-w-[1280px] mx-auto px-4 py-16">Товар не найден</div>;
+
+  const isPrompt = product.type === "prompt";
+  const isAgent = product.type === "agent";
+  const showTestDrive = (isPrompt || isAgent) && !purchased;
+
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-8">

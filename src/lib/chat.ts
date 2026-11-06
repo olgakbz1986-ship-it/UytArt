@@ -30,7 +30,7 @@ export function isForbidden(text: string): boolean {
 }
 
 /* 10 ключевых вопросов покупателя до заказа */
-export function buyerQuestions(p: Product): string[] {
+export function buyerQuestions(_p: Product): string[] {
   return [
     "Есть ли этот товар в наличии и когда возможна отправка?",
     "Можно ли изменить габариты под мои размеры?",
@@ -110,7 +110,7 @@ const now = () => new Date().toISOString();
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       dialogs: {},
       tickets: [],
 

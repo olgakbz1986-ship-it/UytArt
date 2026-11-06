@@ -1,12 +1,12 @@
 import { useEffect } from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Minus, Plus, ShoppingBag, ShieldCheck, CreditCard, Smartphone, Wallet, CheckCircle2 } from "lucide-react";
-import { PRODUCTS, fmt, productById, legalDoc } from "../data/seed";
+import { fmt } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
-import { Badge, Btn, ProductImg, Field } from "../components/ui";
+import { Badge, Btn, ProductImg } from "../components/ui";
 
 const DELIVERY = [
   { id: "sdek", label: "СДЭК до пункта выдачи", price: 350, days: "2–5 дней" },

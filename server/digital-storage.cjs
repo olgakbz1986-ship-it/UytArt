@@ -40,6 +40,6 @@ module.exports = {
       const urlObj = new URL(url, 'http://localhost');
       const expires = parseInt(urlObj.searchParams.get('expires'));
       return Date.now() <= expires;
-    } catch (e) { return false; }
+    } catch (_e) { return false; }
   }
 };

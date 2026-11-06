@@ -4,7 +4,7 @@
    ============================================================ */
 import { describe, it, expect } from "vitest";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { validateProhibitedGoods } = require("../../server/validators.cjs");
+import { validateProhibitedGoods } from "../../server/validators.cjs";
 
 describe("validateProhibitedGoods", () => {
   it("блокирует товары со стоп-словами в названии", () => {

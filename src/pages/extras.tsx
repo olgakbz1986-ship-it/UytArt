@@ -2,7 +2,6 @@ import { ProductWizard_v2 } from "../components/ProductWizard_v2";
 import { DigitalProductWizard, DigitalVersionForm, DigitalAnalyticsModal } from "../components/DigitalProductWizard";
 import { useNotifyStore } from "../lib/notify";
 import { useDigitalStore } from "../lib/digital";
-import type { DigitalProduct } from "../types/digital";
 import { DIGITAL_TYPE_META } from "../types/digital";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -11,26 +10,24 @@ import { useEffect, useMemo, useState } from "react";
 import { PasswordInput } from "../components/PasswordInput";
 import { CategoryMultiPicker } from "../components/CategoryPicker";
 import { useSearchParams,  Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
-  ShieldCheck, Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
-  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, Home, Shirt, Clock,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , Search , ShoppingBag , PackageCheck , Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag, BellRing} from "lucide-react";
-import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS, GROUP_IMG } from "../data/seed";
+  ShieldCheck, _Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
+  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, _Home, _Shirt, Clock,
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , _Search , ShoppingBag , _PackageCheck , _Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag, BellRing} from "lucide-react";
+import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS } from "../data/seed";
 import { CITIES, safeDistrictLabel } from "../lib/geo";
-import { validateINN, validateOGRN, fetchCompanyDataByINN, CompanyData } from "../lib/inn";
+import { validateINN, validateOGRN, fetchCompanyDataByINN } from "../lib/inn";
 import { useAppStore } from "../lib/store";
 import { orderOwnerIdLike } from "../lib/ownership";
-import { useMarketProducts, sellerProfileOf } from "../lib/market";
+import { useMarketProducts } from "../lib/market";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById, yearPriceOf,
   SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX, previewLegalTypeChange, LegalTypePreview, SellerProfile,
 } from "../lib/seller";
 import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
 import {
-  useSubStore, BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
+  useSubStore, _BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
 import MarketOrderDetail from "../components/MarketOrderDetail";
@@ -129,7 +126,7 @@ export function MarketPage() {
       return () => clearTimeout(t);
     }
   }, [focusId]);
-  const [draftForm, setDraftForm] = useState<any>({});
+  const [draftForm, _setDraftForm] = useState<any>({});
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const user = useAppStore((s) => s.session);
@@ -140,7 +137,7 @@ export function MarketPage() {
   const orders = useMarketStore((s) => s.orders);
   const responded = useMarketStore((s) => s.responded);
   const addOrder = useMarketStore((s) => s.addOrder);
-  const respond = useMarketStore((s) => s.respond);
+  const _respond = useMarketStore((s) => s.respond);
   const sellerActive = useSellerReg((s) => s.status === "active");
 
   /* ===== Правило владения (ТЗ «Фундаментальный принцип») =====
@@ -193,8 +190,8 @@ export function MarketPage() {
     try { await fetch('/api/orders/' + id, { method: 'DELETE' }); } catch (e) { console.error('[sync DELETE]', e); }
   };
   const startEdit = (o: any) => { if (!isMine(o)) return; setEditOrderId(o.id); setFTitle(o.title); setFType(o.type); setFDesc(o.desc); setFMaterial(o.material); setFBudget(String(o.budget)); setFTerm(o.term); setFRegion(o.region); setEditPhoto(o.agentPhoto || null); const photos: Array<{ name: string; type: "image" | "video"; url: string }> = []; if (o.images && o.images.length > 0) { o.images.forEach((url: string, idx: number) => photos.push({ name: o.refName || "Фото " + (idx+1), type: "image", url })); } else if (o.coverImage) { photos.push({ name: "Обложка", type: "image", url: o.coverImage }); } else if (o.agentPhoto) { photos.push({ name: "Фото агента", type: "image", url: o.agentPhoto }); } setRefs(photos); setSelectedCoverImage(o.coverImage || photos[0]?.url || null); setFErr(""); setWizardOpen(true); };
-  const saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
-  const cancelEdit = () => { setEditingDraft(null); };
+  const _saveEdit = () => { if (!editingDraft) return; patchOrder(editingDraft, draftForm); setEditingDraft(null); };
+  const _cancelEdit = () => { setEditingDraft(null); };
   const sendDraft = (id: string) => {
     const o = useMarketStore.getState().orders.find((x) => x.id === id);
     const verdict = moderateOrder(o || {});
@@ -238,7 +235,7 @@ export function MarketPage() {
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const [respondOrderId, setRespondOrderId] = useState<string | null>(null);
   const [fErr, setFErr] = useState("");
-  const [filterType, setFilterType] = useState("all");
+  const [_filterType, _setFilterType] = useState("all");
   /* ЭТАП 4 (§4.1): защищённое предзаполнение исполнителя — карточка мастера
      открывает /market?invite=<masterId>&new=1; id приглашённого мастера
      фиксируется в адресном заказе на сервере (POST /api/orders). */
@@ -250,7 +247,7 @@ export function MarketPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invitedMasterId]);
   
-  const REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
+  const _REGIONS = ["all", "Москва", "Санкт-Петербург", "ЦФО", "СЗФО", "ЮФО", "Урал", "Сибирь", "Дальний Восток", "Любой регион"];
 
   const myActive = orders.filter((o) => isMine(o) && o.status === "published").length;
   const overLimit = myActive >= lim.marketOrders;
@@ -648,7 +645,7 @@ export function MarketPage() {
    ============================================================ */
 export function PlansPage() {
   const session = useAppStore((s) => s.session);
-  const login = useAppStore((s) => s.login);
+  const _login = useAppStore((s) => s.login);
   
   const buyerPlan = useSubStore((s) => s.getBuyerPlan(session?.userId || "guest"));
   const setBuyerPlan = (p: BuyerPlanId) => useSubStore.getState().setBuyerPlan(session?.userId || "guest", p);
@@ -827,7 +824,7 @@ export function PlansPage() {
 export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
   const s = useSellerReg();
   const login = useAppStore((st) => st.login);
-  const session = useAppStore((st) => st.session);
+  const _session = useAppStore((st) => st.session);
   const nav = useNavigate();
   const [ocrOk, setOcrOk] = useState<Record<string, boolean>>({});
   const [modScenario, setModScenario] = useState<"approve" | "reject">("approve");
@@ -1196,7 +1193,7 @@ export function SellerDashboardPage() {
   const sellerBuyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
   const sellerBuyerLim = buyerLimits(sellerBuyerPlan);
   const sellerIsPaidBuyer = sellerBuyerPlan !== "free";
-  const nav = useNavigate();
+  const _nav = useNavigate();
   /* «Мои отклики» мастера: все его отклики на чужие заказы с актуальными статусами */
   const [myResponses, setMyResponses] = useState<any[] | null>(null);
   useEffect(() => {
@@ -1311,7 +1308,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     const key = d.toISOString().slice(0, 10);
     return { key, label: `${d.getDate()}.${d.getMonth() + 1}`, sum: myOrders.filter((o) => o.date.slice(0, 10) === key).reduce((s2, o) => s2 + o.total, 0) };
   });
-  const maxDay = Math.max(1, ...days.map((d) => d.sum));
+  const _maxDay = Math.max(1, ...days.map((d) => d.sum));
   const topItems = Object.entries(
     myOrders.flatMap((o) => o.items).filter((i) => i.productId.startsWith("sp-"))
       .reduce<Record<string, number>>((m2, i) => ({ ...m2, [i.productId]: (m2[i.productId] || 0) + i.qty }), {})
@@ -1319,9 +1316,9 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
   const month = currentMonth();
   const aiUsed = acc.aiCardGens[month] || 0;
-  const balance = acc.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
-  const commission = selectCommissionSum(acc);
-  const turnover = selectTurnover(acc);
+  const _balance = acc.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
+  const _commission = selectCommissionSum(acc);
+  const _turnover = selectTurnover(acc);
   const nowTs = Date.now();
   const tx30 = acc.transactions.filter((t) => t.kind === "sale" && nowTs - new Date(t.date).getTime() <= 30 * 864e5);
   const activeDays = new Set(tx30.map((t) => t.date.slice(0, 10))).size;
@@ -1350,7 +1347,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const aiLimitReached = Number.isFinite(plan.aiCardGens) && aiUsed >= plan.aiCardGens;
   const nextCharge = new Date(Date.now() + 20 * 864e5);
 
-  const addMedia = (f: File) => {
+  const _addMedia = (f: File) => {
     const r = new FileReader();
     r.onload = () => {
       const url = r.result as string;
@@ -1359,7 +1356,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     r.readAsDataURL(f);
   };
 
-  const publishProduct = () => {
+  const _publishProduct = () => {
     if (prod.name.trim().length < 3 || !+prod.price || overProducts) return;
     acc.addProduct({
       name: prod.name.trim(), category: prod.category, price: +prod.price,

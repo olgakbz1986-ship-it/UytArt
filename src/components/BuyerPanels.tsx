@@ -8,7 +8,7 @@
    ========================================================================== */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Heart, MapPin, Trash2, Flag } from "lucide-react";
+import { Heart, MapPin, Flag } from "lucide-react";
 import { fmt, fmtDate, productById } from "../data/seed";
 import { useAppStore } from "../lib/store";
 import { useComplaintStore } from "../lib/complaint";

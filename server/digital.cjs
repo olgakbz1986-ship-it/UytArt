@@ -97,7 +97,7 @@ function mount(app, { guard, softGuard, db }) {
         list = list.filter((p) => p.status === "published");
       }
       // приватные поля не покидают сервер до покупки
-      const safe = list.map(({ systemPrompt, agentConfig, fileUrl, ...rest }) => rest);
+      const safe = list.map(({ _systemPrompt, _agentConfig, _fileUrl, ...rest }) => rest);
       res.json({ products: safe });
     } catch (e) { console.error("[DIGITAL LIST ERROR]", e); res.status(500).json({ error: "server" }); }
   });
@@ -109,7 +109,7 @@ function mount(app, { guard, softGuard, db }) {
       const p = s.products.find((x) => x.id === req.params.id);
       if (!p) return res.status(404).json({ error: "not_found" });
       const access = req.userId ? hasDigitalAccess(s, req.userId, p) : { ok: false };
-      const { systemPrompt, agentConfig, fileUrl, ...pub } = p;
+      const { _systemPrompt, _agentConfig, _fileUrl, ...pub } = p;
       const used = req.userId ? (s.testDrives[`${req.userId}:${p.id}`]?.count || 0) : 0;
       res.json({ product: pub, hasAccess: access.ok, accessVia: access.via || null, testDrivesUsed: used, testDrivesLeft: Math.max(0, (p.testDriveLimit || 2) - used) });
     } catch (e) { console.error("[DIGITAL GET ERROR]", e); res.status(500).json({ error: "server" }); }
@@ -160,7 +160,7 @@ function mount(app, { guard, softGuard, db }) {
       });
       if (denied) { logSecurity(null, { userId: req.userId, endpoint: "PATCH /api/digital/products/" + req.params.id, productId: req.params.id, ipAddress: clientIp(req), action: "ownership_violation" }); return res.status(403).json({ error: "forbidden" }); }
       if (!updated) return res.status(404).json({ error: "not_found" });
-      const { systemPrompt, agentConfig, fileUrl, ...pub } = updated;
+      const { _systemPrompt, _agentConfig, _fileUrl, ...pub } = updated;
       res.json({ product: pub });
     } catch (e) { console.error("[DIGITAL PATCH ERROR]", e); res.status(500).json({ error: "server" }); }
   });
@@ -333,7 +333,7 @@ function mount(app, { guard, softGuard, db }) {
       const items = s.purchases.filter((x) => x.userId === req.userId).sort((a, b) => Date.parse(b.purchasedAt) - Date.parse(a.purchasedAt)).map((x) => {
         const p = s.products.find((pp) => pp.id === x.productId);
         if (!p) return { ...x, product: null, note: "Продавец удалил товар. Скачанные файлы остаются у вас." };
-        const { systemPrompt, agentConfig, fileUrl, ...pub } = p;
+        const { _systemPrompt, _agentConfig, _fileUrl, ...pub } = p;
         return { ...x, product: pub, updateAvailable: pub.version !== x.purchasedVersion };
       });
       res.json({ purchases: items });
@@ -348,7 +348,7 @@ function mount(app, { guard, softGuard, db }) {
       if (!p) return res.status(404).json({ error: "not_found" });
       const access = req.userId ? hasDigitalAccess(s, req.userId, p) : { ok: false };
       if (!access.ok && p.ownerId !== req.userId) return res.status(403).json({ error: "no_access" });
-      res.json({ versions: s.versions.filter((v) => v.productId === p.id).sort((a, b) => Date.parse(b.releasedAt) - Date.parse(a.releasedAt)).map(({ fileUrl, ...v }) => v) });
+      res.json({ versions: s.versions.filter((v) => v.productId === p.id).sort((a, b) => Date.parse(b.releasedAt) - Date.parse(a.releasedAt)).map(({ _fileUrl, ...v }) => v) });
     } catch (e) { console.error("[DIGITAL VERSIONS ERROR]", e); res.status(500).json({ error: "server" }); }
   });
 
@@ -363,7 +363,7 @@ function mount(app, { guard, softGuard, db }) {
         if (!p) { err = 404; return; }
         if (p.ownerId !== req.userId) { err = 403; return; }
         oldVer = p.version;
-        if (Date.parse(version) <= 0) {} // noop
+        if (Date.parse(version) <= 0) { /* noop */ }
         if (parseFloat(version) <= parseFloat(p.version)) { err = 400; return; }
         let fileUrl = p.fileUrl;
         if (base64 && filename) fileUrl = storage.uploadDigitalFile(Buffer.from(String(base64).replace(/^data:.*?;base64,/, ""), "base64"), String(filename));
@@ -402,7 +402,7 @@ function mount(app, { guard, softGuard, db }) {
         },
         salesByDay: byDay,
         recentPurchases: myPurchases.slice(-20).reverse(),
-        products: mine.map(({ systemPrompt, agentConfig, fileUrl, ...rest }) => rest),
+        products: mine.map(({ _systemPrompt, _agentConfig, _fileUrl, ...rest }) => rest),
       });
     } catch (e) { console.error("[DIGITAL ANALYTICS ERROR]", e); res.status(500).json({ error: "server" }); }
   });
@@ -428,7 +428,7 @@ function mount(app, { guard, softGuard, db }) {
       const s = seg();
       const subs = (s.subscriptions || []).filter((x) => x.userId === req.userId).map((x) => ({ ...x, plan: PLANS.find((p) => p.id === x.planId) }));
       res.json({ subscriptions: subs });
-    } catch (e) { res.status(500).json({ error: "server" }); }
+    } catch (_e) { res.status(500).json({ error: "server" }); }
   });
 
   app.post("/api/digital/my/subscriptions/:planId/auto-renew", guard, async (req, res) => {
@@ -441,7 +441,7 @@ function mount(app, { guard, softGuard, db }) {
       });
       if (!ok) return res.status(404).json({ error: "not_found" });
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "server" }); }
+    } catch (_e) { res.status(500).json({ error: "server" }); }
   });
 
   /* фоновый процесс суточного обслуживания подписок + очистка просроченных presigned */

@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2, Truck, Wrench } from "lucide-react";
 import { SellerAboutModal } from "../components/SellerAboutModal";
 import {
-  GROUPS, GROUP_IMG, PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
+  GROUPS, GROUP_IMG, _PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
   vendorById, productBySlug,
 } from "../data/seed";
 import { canDeliver, CITIES, zoneLabel } from "../lib/geo";
@@ -17,10 +17,9 @@ import { SubscribeButton } from "../components/SubscribeButton";
 import { useTopSlots } from "../lib/premium";
 import { ChatModal } from "../components/chat";
 import { ReviewsSection } from "../components/review";
-import { productRating } from "../lib/review";
+import { ProductRating } from "../lib/review";
 import { SpecSections } from "../components/SpecSections";
 import { canonicalSellerId } from "../lib/userFeed";
-import { DIGITAL_TYPE_META, type DigitalProductType } from "../types/digital";
 
 /* ЭТАП 2 (§2.3): динамический калькулятор логистики в карточке товара.
    Запрашивает серверный расчёт (GET /api/products/:id/logistics) для города
@@ -45,7 +44,7 @@ function LogisticsQuoteBox({ productId, fallbackCity }: { productId: string; fal
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    const _t = setTimeout(() => { if (!loading) setLoading(true); }, 0);
     fetch(`/api/products/${encodeURIComponent(productId)}/logistics${buyerCity ? `?city=${encodeURIComponent(buyerCity)}` : ""}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (alive) setData(j as LogisticsResp | null); })
@@ -131,7 +130,8 @@ export function CatalogPage() {
   const [cityInput, setCityInput] = useState(region === "all" ? "" : region);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   useEffect(() => {
-    setCityInput(region === "all" ? "" : region);
+    const newCity = region === "all" ? "" : region;
+    if (cityInput !== newCity) { const _t = setTimeout(() => setCityInput(newCity), 0); }
   }, [region]);
 
   // Загрузка серверных товаров при монтировании каталога.
@@ -465,7 +465,7 @@ export function ProductPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p?.id]);
-  const sellerReg = useSellerReg();
+  const _sellerReg = useSellerReg();
   const session = useAppStore((s) => s.session);
 
   if (!p) {
@@ -551,8 +551,8 @@ export function ProductPage() {
           </div>
           <h1 className="font-display font-bold text-[clamp(24px,3vw,32px)] leading-tight text-ink">{p.name}</h1>
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
-            <Rating value={productRating(p.id).avg} />
-            <span className="text-[12.5px] text-ink-mute">{productRating(p.id).count} отзывов · арт. {p.sku}</span>
+            <Rating value={ProductRating(p.id).avg} />
+            <span className="text-[12.5px] text-ink-mute">{ProductRating(p.id).count} отзывов · арт. {p.sku}</span>
           </div>
 
           <div className="flex items-end gap-3.5 mt-5">

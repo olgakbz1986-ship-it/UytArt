@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { Bell, Package } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Star, Wrench, ArrowRight } from "lucide-react";
-import { fmt } from "../data/seed";
 import { useMarketProducts } from "../lib/market";
 import { ProductGrid } from "../components/product";
 import { Reveal } from "../components/ui";

@@ -62,7 +62,7 @@ const createRepo = require('../server/repo.cjs');
   await new Promise(r => setTimeout(r, 50));
   await q(`INSERT INTO products (seller_id,name,price) VALUES ($1,'Товар до прочтения',50)`, [s1]);
   await new Promise(r => setTimeout(r, 50));
-  const seen2 = await repo.markSubscriptionSeen(u1, 'shop', s1);
+  const _seen2 = await repo.markSubscriptionSeen(u1, 'shop', s1);
   const fresh = await repo.listSubscriptions(u1, {});
   const it2 = fresh.items.find(x => String(x.target_id) === String(s1));
   const counts2 = await repo.countNewProductsForSubscriptions([it2]);

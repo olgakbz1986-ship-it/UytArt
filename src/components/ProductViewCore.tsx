@@ -53,16 +53,18 @@ export function ProductViewCore(p: ProductViewCoreProps) {
   const [logistics, setLogistics] = useState<LogisticsResp | null>(null);
   const [logisticsLoading, setLogisticsLoading] = useState(false);
   useEffect(() => {
-    if (!p.productId) { setLogistics(null); return; }
+    if (!p.productId) return;
     let cancelled = false;
-    setLogisticsLoading(true);
-    const qs = p.buyerCity ? "?city=" + encodeURIComponent(p.buyerCity) : "";
-    fetch(`/api/products/${encodeURIComponent(p.productId)}/logistics${qs}`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (!cancelled && j && j.ok) setLogistics(j as LogisticsResp); })
-      .catch(() => { /* деградация: показываем статичный блок без расчёта */ })
-      .finally(() => { if (!cancelled) setLogisticsLoading(false); });
-    return () => { cancelled = true; };
+    const logisticsTimer = setTimeout(() => {
+      setLogisticsLoading(true);
+      const qs = p.buyerCity ? "?city=" + encodeURIComponent(p.buyerCity) : "";
+      fetch(`/api/products/${encodeURIComponent(p.productId)}/logistics${qs}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => { if (!cancelled && j && j.ok) setLogistics(j as LogisticsResp); })
+        .catch(() => { /* деградация: показываем статичный блок без расчёта */ })
+        .finally(() => { if (!cancelled) setLogisticsLoading(false); });
+    }, 0);
+    return () => { cancelled = true; clearTimeout(logisticsTimer); };
   }, [p.productId, p.buyerCity]);
   const [mainIdx, setMainIdx] = useState(0);
   const media = p.media && p.media.length ? p.media : [];
@@ -223,7 +225,7 @@ function useMyPurchaseStatus(productId?: string): { canReview: boolean; loading:
   const [canReview, setCanReview] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    if (!productId) { setCanReview(false); setLoading(false); return; }
+    if (!productId) return;
     let alive = true;
     fetch(`/api/purchases/status?productId=${encodeURIComponent(productId)}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
@@ -249,7 +251,7 @@ function ProductServerReviews({ productId }: { productId?: string }) {
       .then((j) => { if (j && j.ok) setServer(j.reviews || []); })
       .catch(() => { /* деградация: показываем статичную заглушку */ });
   };
-  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [productId]);
+  useEffect(() => { if (productId) { const t = setTimeout(reload, 0); return () => clearTimeout(t); } }, [productId, reload]);
 
   const submit = async () => {
     if (!productId || sending) return;

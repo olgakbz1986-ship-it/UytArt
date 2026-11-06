@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { PRODUCTS } from "../data/seed";
 import { applyServerTariff } from "./tariff";
 
 export type SellerType = "self_employed" | "ip" | "ooo";
@@ -118,7 +117,7 @@ import { api } from "./api";
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       accounts: {},
       session: null,
       cart: [],

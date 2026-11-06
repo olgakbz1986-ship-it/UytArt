@@ -1,15 +1,14 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MapPin, ShieldCheck, Flag, Store, MessageSquare, Wrench } from "lucide-react";
+import { MapPin, ShieldCheck, Wrench } from "lucide-react";
 import { CITIES } from "../lib/geo";
-import { fmt, vendorById, catBySlug, groupById } from "../data/seed";
+import { catBySlug, groupById } from "../data/seed";
 import { useSellerReg, useSellerAccount, type SellerProfile } from "../lib/seller";
 import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useReviewStore } from "../lib/review";
 import { ProductGrid } from "../components/product";
-import { Badge, Rating, Btn } from "../components/ui";
-import { ComplaintModal } from "../components/review";
+import { Badge, Rating } from "../components/ui";
 import { SubscribeButton } from "../components/SubscribeButton";
 
 const LEGAL_META: Record<string, { label: string; emoji: string; color: string }> = {

@@ -66,26 +66,38 @@ export function DigitalProductWizard({ open, editId, onClose }: Props) {
 
   /* предзаполнение при редактировании */
   useEffect(() => {
-    if (!open) { setStep(1); setErrors([]); }
-    if (open && editing) {
-      const e = editing as unknown as Record<string, any>;
-      setD({
-        ...emptyDraft(),
-        type: editing.type, title: editing.title, description: editing.description,
-        price: String(editing.price), licenseType: editing.licenseType, version: editing.version,
-        fileUrl: editing.fileUrl, fileName: editing.fileUrl.split("/").pop() || "", previewUrl: editing.previewUrl,
-        previewName: editing.previewUrl.split("/").pop() || "", testDriveLimit: editing.testDriveLimit,
-        techStack: (e.techStack || []).join(", "), demoUrl: e.demoUrl || "", includesSourceCode: !!e.includesSourceCode,
-        systemPrompt: e.systemPrompt || "", exampleInputs: e.exampleInputs?.length ? e.exampleInputs : [""],
-        exampleOutputs: e.exampleOutputs?.length ? e.exampleOutputs : [""], targetAI: e.targetAI || "gpt4",
-        skillFormat: e.skillFormat || "json", compatibleAgents: (e.compatibleAgents || []).join(", "), documentation: e.documentation || "",
-        agentConfig: e.agentConfig ? JSON.stringify(e.agentConfig, null, 2) : "{}", modelProvider: e.modelProvider || "openai",
-        requiresHosting: !!e.requiresHosting, monthlyTokenLimit: e.monthlyTokenLimit ?? 1000000,
-        billingCycle: e.billingCycle || "monthly", includedProducts: (e.includedProducts || []).join(", "),
-        tier: e.tier || "basic", features: (e.features || []).join("\n"),
-      });
+    if (!open) {
+      // Асинхронный сброс для предотвращения каскадного рендера
+      const t = setTimeout(() => {
+        if (step !== 1) setStep(1);
+        if (errors.length > 0) setErrors([]);
+      }, 0);
+      return () => clearTimeout(t);
     }
-    if (open && !editing) setD(emptyDraft());
+    
+    // Асинхронное обновление состояния при открытии для предотвращения каскадного рендера
+    const t2 = setTimeout(() => {
+      if (open && editing) {
+        const e = editing as unknown as Record<string, any>;
+        setD({
+          ...emptyDraft(),
+          type: editing.type, title: editing.title, description: editing.description,
+          price: String(editing.price), licenseType: editing.licenseType, version: editing.version,
+          fileUrl: editing.fileUrl, fileName: editing.fileUrl.split("/").pop() || "", previewUrl: editing.previewUrl,
+          previewName: editing.previewUrl.split("/").pop() || "", testDriveLimit: editing.testDriveLimit,
+          techStack: (e.techStack || []).join(", "), demoUrl: e.demoUrl || "", includesSourceCode: !!e.includesSourceCode,
+          systemPrompt: e.systemPrompt || "", exampleInputs: e.exampleInputs?.length ? e.exampleInputs : [""],
+          exampleOutputs: e.exampleOutputs?.length ? e.exampleOutputs : [""], targetAI: e.targetAI || "gpt4",
+          skillFormat: e.skillFormat || "json", compatibleAgents: (e.compatibleAgents || []).join(", "), documentation: e.documentation || "",
+          agentConfig: e.agentConfig ? JSON.stringify(e.agentConfig, null, 2) : "{}", modelProvider: e.modelProvider || "openai",
+          requiresHosting: !!e.requiresHosting, monthlyTokenLimit: e.monthlyTokenLimit ?? 1000000,
+          billingCycle: e.billingCycle || "monthly", includedProducts: (e.includedProducts || []).join(", "),
+          tier: e.tier || "basic", features: (e.features || []).join("\n"),
+        });
+      }
+      if (open && !editing) setD(emptyDraft());
+    }, 0);
+    return () => clearTimeout(t2);
   }, [open, editId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
@@ -517,7 +529,7 @@ export function DigitalAnalyticsModal({ productId, onClose }: { productId: strin
     const dt = new Date(Date.now() - i * 864e5);
     const key = dt.toISOString().slice(0, 10);
     const dayPur = purchases.filter((p) => p.purchasedAt.slice(0, 10) === key);
-    days.push({ day: key.slice(5), count: dayPur.length, sum: dayPur.reduce((a, p) => a + product.price, 0) });
+    days.push({ day: key.slice(5), count: dayPur.length, sum: dayPur.reduce((a, _p) => a + product.price, 0) });
   }
   const maxCount = Math.max(1, ...days.map((x) => x.count));
 
