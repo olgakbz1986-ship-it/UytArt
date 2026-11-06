@@ -7,3 +7,4 @@ server/dev-db.json
 *.log
 *.tmp
 server/dev-admin.json
+lint-report.json
