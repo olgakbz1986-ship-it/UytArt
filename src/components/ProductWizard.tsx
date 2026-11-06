@@ -80,9 +80,8 @@ export function ProductWizard({ open, onClose, editId, initialData }: { open: bo
       setDraft(empty);
     }
     setStep(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  
-    }, 0);
+        }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- черновик грузится только при открытии/смене товара
     return () => clearTimeout(t);}, [open, editId]);
   const month = new Date().toISOString().slice(0, 7);
   /* §2.5: остаток AI-генераций карточек — из СЕРВЕРНОГО тарифа (кэш), а не хардкод 10 */

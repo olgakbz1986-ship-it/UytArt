@@ -84,7 +84,7 @@ export const useMarketStore = create<MarketState>()(
         /* §1.5/§2.2: СЕРВЕРНАЯ проверка лимита активных индивидуальных заказов
            (1 / 3 / 10 / ∞ по тарифу покупателя) до создания заказа. */
         try {
-          const { useTariffStore, _LimitReachedError } = await import("./tariff");
+          const { useTariffStore } = await import("./tariff");
           await useTariffStore.getState().assertLimit("market_order");
         } catch (e: any) {
           if (e && e.name === "LimitReachedError") {

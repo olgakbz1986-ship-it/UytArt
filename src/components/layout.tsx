@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ShoppingBag, User, LogOut, Search, ArrowRight, X, MapPin, Bell, ClipboardList, HelpCircle, UserCheck, BellRing , Trash2} from "lucide-react";
 import { useMarketProducts } from "../lib/market";
@@ -75,7 +75,7 @@ function NotifyBell() {
   useEffect(() => {
     if (open) {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const toClean = items.filter((i) => i.read && i.createdAt < sevenDaysAgo);
+      const toClean = useNotifyStore.getState().items.filter((i) => i.read && i.createdAt < sevenDaysAgo);
       toClean.forEach((i) => remove(i.id));
 
       fetch('/api/notifications')
@@ -100,7 +100,7 @@ function NotifyBell() {
         })
         .catch(err => console.error("Ошибка загрузки уведомлений биржи", err));
     }
-  }, [open]);
+  }, [open, remove]);
 
   const groupByDate = (list: typeof items) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -433,11 +433,11 @@ export function Header() {
     { to: "/legal", label: "Документы" },
   ];
 
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     if (closing || !menuOpen) return;
     setClosing(true);
     setTimeout(() => { setMenuOpen(false); setClosing(false); }, 300);
-  };
+  }, [closing, menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -445,7 +445,7 @@ export function Header() {
     window.addEventListener("keydown", h);
     document.body.style.overflow = "hidden";
     return () => { window.removeEventListener("keydown", h); document.body.style.overflow = ""; };
-  }, [menuOpen]);
+  }, [menuOpen, closeMenu]);
 
   return (
     <>

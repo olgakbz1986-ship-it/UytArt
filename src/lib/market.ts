@@ -340,7 +340,7 @@ export function useMarketProducts(buyerCity?: string): Product[] {
     ensurePublicProducts();
     return unsub;
   }, [viewerCity]);
-  return useMemo(() => marketProducts(buyerCity), [products, profiles, digital, viewerCity, addresses, buyerCity, publicRev]);
+  return useMemo(() => { void products; void profiles; void digital; void viewerCity; void addresses; void publicRev; return marketProducts(buyerCity); }, [products, profiles, digital, viewerCity, addresses, buyerCity, publicRev]);
 }
 
 export function useSellerMarketProducts(): Product[] {
@@ -354,7 +354,7 @@ export function useSellerMarketProducts(): Product[] {
     ensurePublicProducts();
     return unsub;
   }, []);
-  return useMemo(() => sellerMarketProducts(), [products, profiles, publicRev]);
+  return useMemo(() => { void products; void profiles; void publicRev; return sellerMarketProducts(); }, [products, profiles, publicRev]);
 }
 
 /* Товар витрины по id ("sp-..." или demo-slug) — реактивно */

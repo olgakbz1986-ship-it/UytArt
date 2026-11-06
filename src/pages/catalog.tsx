@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2, Truck, Wrench } from "lucide-react";
 import { SellerAboutModal } from "../components/SellerAboutModal";
 import {
-  GROUPS, GROUP_IMG, _PRODUCTS, fmt, fmtDate, catBySlug, groupById, catsByGroup,
+  GROUPS, GROUP_IMG, fmt, fmtDate, catBySlug, groupById, catsByGroup,
   vendorById, productBySlug,
 } from "../data/seed";
 import { canDeliver, CITIES, zoneLabel } from "../lib/geo";
@@ -44,13 +44,13 @@ function LogisticsQuoteBox({ productId, fallbackCity }: { productId: string; fal
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let alive = true;
-    const _t = setTimeout(() => { if (!loading) setLoading(true); }, 0);
+    const loadT = setTimeout(() => setLoading(true), 0);
     fetch(`/api/products/${encodeURIComponent(productId)}/logistics${buyerCity ? `?city=${encodeURIComponent(buyerCity)}` : ""}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (alive) setData(j as LogisticsResp | null); })
       .catch(() => { if (alive) setData(null); })
       .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+    return () => { alive = false; clearTimeout(loadT); };
   }, [productId, buyerCity]);
 
   if (loading) {
@@ -131,7 +131,8 @@ export function CatalogPage() {
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   useEffect(() => {
     const newCity = region === "all" ? "" : region;
-    if (cityInput !== newCity) { const _t = setTimeout(() => setCityInput(newCity), 0); }
+    const _t = setTimeout(() => setCityInput(newCity), 0);
+    return () => clearTimeout(_t);
   }, [region]);
 
   // Загрузка серверных товаров при монтировании каталога.

@@ -19,7 +19,7 @@ export function DigitalProductView() {
   useEffect(() => {
     const _fetchTimer = setTimeout(() => {
       if (!id) return;
-      if (loading !== true) setLoading(true);
+      setLoading(true);
       fetch(`/api/digital/products/${id}`)
         .then((r) => r.json())
         .then((data) => {

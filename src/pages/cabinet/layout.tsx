@@ -10,7 +10,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Bot, ClipboardCheck, Users, Store, Package, ShoppingCart, Wallet,
   Scale, LifeBuoy, Shield, Megaphone, BarChart3, Rocket, Settings, ScrollText,
-  Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, _Sparkles, ChevronRight,
+  Search, Bell, ChevronDown, X, AlertTriangle, Inbox, LogOut, ChevronRight,
   GraduationCap, Radar, Trash2,
 } from "lucide-react";
 import { Btn, Badge, Field, Modal } from "../../components/ui";
@@ -251,7 +251,7 @@ function GlobalSearch() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (q.trim().length < 2) {
-        setRes(prev => (prev !== null ? null : prev));
+        setRes(null);
         return;
       }
       adminApi.search(q.trim()).then(setRes);

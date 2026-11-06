@@ -541,7 +541,7 @@ export const useSellerReg = create<SellerRegState>()(
           set({ ...EMPTY_REG });
           return;
         }
-        const { _accountId, ...rest } = p;
+        const { accountId: _accountId, ...rest } = p;
         set({ ...rest, production_city: p.production_city || p.city || "", docs: p.docs || {} });
       },
       saveProfile: (uid) => {

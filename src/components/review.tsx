@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Camera, BadgeCheck, Star, MessageSquare, Upload, ShieldAlert, Flag } from "lucide-react";
 import { Product, fmtDate, vendorById } from "../data/seed";
 import { useAppStore } from "../lib/store";
-import { useReviewStore, approvedReviews, _type  } from "../lib/review";
+import { useReviewStore, approvedReviews  } from "../lib/review";
 import { useChatStore, TICKET_REASONS } from "../lib/chat";
 import { useComplaintStore, COMPLAINT_CATEGORIES } from "../lib/complaint";
 import { useSellerReg } from "../lib/seller";

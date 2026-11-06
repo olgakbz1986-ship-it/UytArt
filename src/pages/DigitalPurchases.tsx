@@ -14,7 +14,7 @@ export function DigitalPurchasesPage() {
 
   useEffect(() => {
     if (!session?.userId) {
-      const _t = setTimeout(() => { if (loading !== false) setLoading(false); }, 0);
+      const _t = setTimeout(() => { setLoading(false); }, 0);
       return;
     }
     // Фильтруем покупки текущего пользователя

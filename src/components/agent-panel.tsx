@@ -51,10 +51,10 @@ export default function AgentPanel() {
   useEffect(() => {
     if (sessions.length === 0) { newSession(); return; }
     if (!currentSessionId && sessions[0]) switchSession(sessions[0].id);
-  }, [sessions.length]);
+  }, [sessions, currentSessionId, newSession, switchSession]);
   useEffect(() => {
     if (current && current.messages.length === 0) say(AGENT_TEMPLATES.greet(session?.name || ""));
-  }, [current?.id]);
+  }, [current, say, session?.name]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

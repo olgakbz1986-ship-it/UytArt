@@ -154,7 +154,7 @@ function AbTestInner() {
   const tests = useAbTests((s) => s.tests);
   const start = useAbTests((s) => s.start);
   const finalizeDue = useAbTests((s) => s.finalizeDue);
-  useEffect(() => { finalizeDue(); const id = setInterval(finalizeDue, 60000); return () => clearInterval(id); }, []);
+  useEffect(() => { finalizeDue(); const id = setInterval(finalizeDue, 60000); return () => clearInterval(id); }, [finalizeDue]);
   const [pid, setPid] = useState(products[0]?.id || "");
   const [a, setA] = useState(""); const [b, setB] = useState("");
   const conv = (m: { views: number; conversions: number }) => (m.views ? ((m.conversions / m.views) * 100).toFixed(1) + "%" : "—");
@@ -503,7 +503,7 @@ export function PremiumSalesBlock() {
   const f = useBuyerFeatures();
   const drops = usePremiumSales((s) => s.drops);
   const ensure = usePremiumSales((s) => s.ensureThisWeek);
-  useEffect(() => { ensure(); }, []);
+  useEffect(() => { ensure(); }, [ensure]);
   if (!f.premiumSales) return <LockedFeatureStub label="Закрытые распродажи" need="Покупатель «Премиум»" />;
   const live = drops.find((d) => d.status === "live");
   const items = dropProducts(live);

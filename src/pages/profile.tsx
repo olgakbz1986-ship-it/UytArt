@@ -7,7 +7,6 @@ import { useAppStore, type Order } from "../lib/store";
 import { useSubStore, buyerLimits, fmtLimit, selectAiLeft } from "../lib/subscriptions";
 import { useChatStore } from "../lib/chat";
 import { useComplaintStore } from "../lib/complaint";
-import { _orderOwnerIdLike } from "../lib/ownership";
 import { useMarketStore } from "../lib/marketStore";
 /* ЗАДАЧА завершения, п.2: тяжёлые панели кабинета вынесены в React.lazy —
    каждая вкладка догружается при переключении, первый экран легче. */

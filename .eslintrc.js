@@ -17,7 +17,7 @@ module.exports = {
     'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' }],
     'no-empty': ['error', { allowEmptyCatch: true }],
     'no-dupe-keys': 'warn', // Понижаем до предупреждения, чтобы не блокировать коммит из-за ошибки агента, но вы её видели
     'react-hooks/preserve-manual-memoization': 'off',

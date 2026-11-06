@@ -137,7 +137,7 @@ const Info = ({ label, v }: { label: string; v: any }) => (
 /* ════════════════ АГЕНТ: обзор / режим / health / дрейф ════════════════ */
 export function AgentScreen() {
   const { data, loading, error, reload } = useCabinetData<any>(() => adminApi.agent());
-  const { can, _profile } = useCabinet();
+  const { can } = useCabinet();
   const { push } = useToast();
   const [chat, setChat] = useState<{ role: "me" | "agent"; text: string; conf?: number; sources?: string[]; evidence?: any[] }[]>([]);
   const [msg, setMsg] = useState("");

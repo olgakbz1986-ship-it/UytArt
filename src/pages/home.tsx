@@ -13,26 +13,34 @@ export default function HomePage() {
   const [subscriptionsFeed, setSubscriptionsFeed] = useState<any[]>([]);
   const [subsLoading, setSubsLoading] = useState(true);
 
+  const [subscribedIds, setSubscribedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const userId = localStorage.getItem("userId") || "demo-user-1";
-    // Загружаем подписки
+    // Загружаем только список подписок
     fetch("/api/subscriptions", { headers: { "x-user-id": userId } })
       .then(r => r.json())
-      .then(async (data) => {
+      .then((data) => {
         if (data.ok && data.subscriptions.length > 0) {
-          // Собираем уникальные товары от подписанных сущностей
-          const subscribedIds = new Set(data.subscriptions.map((sub: any) => sub.targetId));
-          const uniqueProducts = market.filter((p: any) => {
-            const ownerId = p.ownerId || p.owner_id;
-            return subscribedIds.has(ownerId);
-          });
-          // Берём последние 8 товаров
-          setSubscriptionsFeed(uniqueProducts.slice(0, 8));
+          setSubscribedIds(new Set(data.subscriptions.map((sub: any) => sub.targetId)));
         }
       })
       .catch(console.error)
       .finally(() => setSubsLoading(false));
   }, []);
+
+  // Фид подписок пересчитывается, когда рынок догрузился или изменился
+  useEffect(() => {
+    if (!subscribedIds.size) return;
+    const t = setTimeout(() => {
+      const uniqueProducts = market.filter((p: any) => {
+        const ownerId = p.ownerId || p.owner_id;
+        return subscribedIds.has(ownerId);
+      });
+      setSubscriptionsFeed(uniqueProducts.slice(0, 8));
+    }, 0);
+    return () => clearTimeout(t);
+  }, [market, subscribedIds]);
 
 
   return (

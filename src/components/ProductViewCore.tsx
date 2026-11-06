@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ShoppingBag, Heart, MessageSquare, Star, MapPin , Building2, Truck, PackageCheck, Wrench, ShieldCheck } from "lucide-react";
 import { SellerAboutModal } from "./SellerAboutModal";
 import { SpecSections } from "./SpecSections";
@@ -55,10 +55,11 @@ export function ProductViewCore(p: ProductViewCoreProps) {
   useEffect(() => {
     if (!p.productId) return;
     let cancelled = false;
+    const pid = p.productId;
     const logisticsTimer = setTimeout(() => {
       setLogisticsLoading(true);
       const qs = p.buyerCity ? "?city=" + encodeURIComponent(p.buyerCity) : "";
-      fetch(`/api/products/${encodeURIComponent(p.productId)}/logistics${qs}`, { credentials: "include" })
+      fetch(`/api/products/${encodeURIComponent(pid)}/logistics${qs}`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => { if (!cancelled && j && j.ok) setLogistics(j as LogisticsResp); })
         .catch(() => { /* деградация: показываем статичный блок без расчёта */ })
@@ -244,13 +245,13 @@ function ProductServerReviews({ productId }: { productId?: string }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const reload = () => {
+  const reload = useCallback(() => {
     if (!productId) { setServer(null); return; }
     fetch(`/api/products/${encodeURIComponent(productId)}/reviews`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (j && j.ok) setServer(j.reviews || []); })
       .catch(() => { /* деградация: показываем статичную заглушку */ });
-  };
+  }, [productId]);
   useEffect(() => { if (productId) { const t = setTimeout(reload, 0); return () => clearTimeout(t); } }, [productId, reload]);
 
   const submit = async () => {

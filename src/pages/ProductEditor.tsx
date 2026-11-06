@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Upload, Check, _Image, Save, Send, Download, Star, RefreshCw } from "lucide-react";
+import { ArrowLeft, Upload, Check, Save, Send, Download, Star, RefreshCw } from "lucide-react";
 import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useAppStore } from "../lib/store";
 import { SpecGroupsEditor } from "../components/SpecGroupsEditor";
@@ -202,7 +202,7 @@ export function ProductEditorPage() {
         deliveryCitiesText: (Array.isArray((editItem as any).deliveryZone?.cities) ? (editItem as any).deliveryZone.cities : []).join(", "),
         installCitiesText: (Array.isArray((editItem as any).installCities) ? (editItem as any).installCities : []).join(", "),
       };
-      const _t1 = setTimeout(() => { if (JSON.stringify(draft) !== JSON.stringify(loaded)) setDraft(loaded); }, 0);
+      const _t1 = setTimeout(() => { setDraft((prev) => (JSON.stringify(prev) !== JSON.stringify(loaded) ? loaded : prev)); }, 0);
       draftRef.current = loaded;
     } else {
       const emptyDraft = { ...empty, sellerCity: sellerReg.city || "" };
@@ -210,7 +210,8 @@ export function ProductEditorPage() {
       draftRef.current = emptyDraft;
     }
     isInitialized.current = true;
-  }, [editItem]); // Убрали sellerReg.city отсюда!
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- город синхронизируется отдельным эффектом ниже, зависимость исключена сознательно
+  }, [editItem]);
 
   // Отдельно обновляем город, если он загрузился позже, но только если поле пустое
   useEffect(() => {
@@ -289,23 +290,12 @@ export function ProductEditorPage() {
       }
     };
   }, [
-    draft.name,
-    draft.category,
-    draft.price,
-    draft.description,
-    draft.materials,
-    draft.style,
-    draft.color,
-    draft.size,
-    draft.weight,
-    draft.media,
-    draft.sellerCity,
-    draft.deliveryCitiesText,
-    draft.installCitiesText,
-    draft.instant,
-    draft.manufacturer,
-    draft.sku,
-    draft.tags,
+    draft,
+    draftId,
+    editItem,
+    id,
+    acc,
+    isPublishedMode,
   ]);
 
   // Сохранение при закрытии вкладки/переходе
@@ -349,7 +339,7 @@ export function ProductEditorPage() {
     
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [draft, id, draftId]);
+  }, [draft, id, draftId, acc, editItem]);
 
   // СОХРАНЕНИЕ ПРИ ВЫХОДЕ СО СТРАНИЦЫ (навигация внутри SPA)
   useEffect(() => {
@@ -738,7 +728,7 @@ export function ProductEditorPage() {
       if (gen && gen !== draft.description) setDraft({ ...draft, description: gen });
     }, 800);
     return () => clearTimeout(t);
-  }, [draft.name, draft.category, draft.subcategory, draft.materials, draft.color, draft.style, draft.size, draft.weight, draft.specs, descTouched]);
+  }, [draft, descTouched]);
   const autoCorrectDescription = () => {
     const before = draft.description || "";
     let t = before;

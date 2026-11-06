@@ -117,7 +117,7 @@ export default function MarketOrderDetail({ order, onClose, role = "other", onSt
       }
     };
     loadData();
-  }, [order.id, order.status, role]);
+  }, [order.id, order.status, role, isGuest]);
 
   /* ===== Действия владельца: принять / отклонить отклик ===== */
   const setResponseStatus = async (rid: string, status: "accepted" | "rejected") => {

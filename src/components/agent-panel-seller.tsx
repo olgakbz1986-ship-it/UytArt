@@ -59,10 +59,10 @@ export default function AgentPanelSeller() {
   useEffect(() => {
     if (sessions.length === 0) { newSession(); return; }
     if (!currentSessionId && sessions[0]) switchSession(sessions[0].id);
-  }, [sessions.length]);
+  }, [sessions, currentSessionId, newSession, switchSession]);
   useEffect(() => {
     if (current && current.messages.length === 0) say("Здравствуйте! Я ваш агент-партнёр по продажам. Умею анализировать нишу по живым данным сервиса, рекомендовать цены и следить за спросом. С чего начнём?");
-  }, [current?.id]);
+  }, [current, say]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [current?.messages.length]);
 
   const stats = () => {

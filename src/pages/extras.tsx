@@ -12,9 +12,9 @@ import { CategoryMultiPicker } from "../components/CategoryPicker";
 import { useSearchParams,  Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   CheckCircle2, FileText, Upload, Wallet, Sparkles, Users, BarChart3, TrendingUp, Boxes, UserPlus,
-  ShieldCheck, _Mail, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
-  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, _Home, _Shirt, Clock,
-  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar , _Search , ShoppingBag , _PackageCheck , _Award , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag, BellRing} from "lucide-react";
+  ShieldCheck, HelpCircle, Send, AlertTriangle, Camera, Video, Play, X, CreditCard, Smartphone, Gem, ArrowRight,
+  Brain, Wrench, Package, Truck, Zap, Globe, Gift, Palette, Clock,
+  Lock, Bell, Shield, Settings, Check, Receipt, Banknote, Trash2, Calendar  , ShoppingBag   , Plus , Minus , ArrowDownUp , Bot, Edit3, Eye, Crown, Heart, MapPin, Flag, BellRing} from "lucide-react";
 import { CATEGORIES, OPERATOR, fmt, fmtDate, legalDoc, LEGAL_DOCUMENTS } from "../data/seed";
 import { CITIES, safeDistrictLabel } from "../lib/geo";
 import { validateINN, validateOGRN, fetchCompanyDataByINN } from "../lib/inn";
@@ -27,7 +27,7 @@ import {
 } from "../lib/seller";
 import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
 import {
-  useSubStore, _BUYER_PLANS, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
+  useSubStore, buyerLimits, sellerLimits, currentMonth, fmtLimit, BuyerPlanId,
 } from "../lib/subscriptions";
 import { Badge, Btn, Field, Modal, ProgressBar, Reveal, SettingsSection, Switch } from "../components/ui";
 import MarketOrderDetail from "../components/MarketOrderDetail";
@@ -121,11 +121,13 @@ export function MarketPage() {
   useEffect(() => {
     if (focusId) {
       const el = document.getElementById("order-" + focusId);
-      if (el) { setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 200); }
-      const t = setTimeout(() => { const p = new URLSearchParams(searchParams); p.delete("focus"); setSearchParams(p, { replace: true }); }, 4000);
-      return () => clearTimeout(t);
+      const scrollT = el ? setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 200) : null;
+      const t = setTimeout(() => {
+        setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete("focus"); return p; }, { replace: true });
+      }, 4000);
+      return () => { if (scrollT) clearTimeout(scrollT); clearTimeout(t); };
     }
-  }, [focusId]);
+  }, [focusId, setSearchParams]);
   const [draftForm, _setDraftForm] = useState<any>({});
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [editPhoto, setEditPhoto] = useState<string | null>(null);
@@ -1243,11 +1245,11 @@ export function SellerDashboardPage() {
   const [newMethodType, setNewMethodType] = useState<PayoutMethodType>("card");
   const [newMethodMask, setNewMethodMask] = useState("");
   useEffect(() => {
-    finance.tick();
-    const id = setInterval(() => finance.tick(), 5000);
+    useFinance.getState().tick();
+    const id = setInterval(() => useFinance.getState().tick(), 5000);
     return () => clearInterval(id);
   }, []);
-  useEffect(() => { finance.tick(); }, [finance.ledger.length, finance.deliveries.length, finance.payouts.length]);
+  useEffect(() => { useFinance.getState().tick(); }, [finance.ledger.length, finance.deliveries.length, finance.payouts.length]);
   const [withdrawSum, setWithdrawSum] = useState("");
 
   /* настройки: тема и уведомления — глобальные и персистентные */
