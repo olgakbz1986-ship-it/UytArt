@@ -289,7 +289,10 @@ export interface SellerProfile {
   phone: string;
   city: string;
   inn: string;
-  ogrn: string;
+  kpp?: string;
+  bankAccount?: string;
+  directorTitle?: string;
+ogrn: string;
   legalName: string;
   legalAddress: string;
   shopLogo?: string;
@@ -330,7 +333,10 @@ interface SellerRegState {
   phone: string;
   city: string;
   inn: string;
-  ogrn: string;
+  kpp?: string;
+  bankAccount?: string;
+  directorTitle?: string;
+ogrn: string;
   legalName: string;
   legalAddress: string;
   docs: Record<string, { fileName: string; size: number; ok: boolean }>;
@@ -360,7 +366,7 @@ interface SellerRegState {
   profilesByAccount: Record<string, SellerProfile>;
 
   setLegalType: (t: SellerLegalType) => void;
-  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar" | "isMaster" | "acceptsCustomOrders" | "productionGallery" | "videoTourUrl" | "submittedAt">>) => void;
+  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "kpp" | "bankAccount" | "directorTitle" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar" | "isMaster" | "acceptsCustomOrders" | "productionGallery" | "videoTourUrl" | "submittedAt">>) => void;
   toggleCategory: (slug: string) => void;
   backToStep1: () => void;
   toDocs: () => void;
@@ -402,6 +408,9 @@ export const useSellerReg = create<SellerRegState>()(
       city: "",
       inn: "",
       ogrn: "",
+      kpp: "",
+      bankAccount: "",
+      directorTitle: "",
       legalName: "",
       legalAddress: "",
       docs: {},

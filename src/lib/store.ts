@@ -93,7 +93,7 @@ interface AppState {
 
   login: (u: User, makeActive?: boolean) => void;
   logout: () => void;
-  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string; message?: string; userId?: string; name?: string; email?: string; role?: string; legal_type?: string }>;
+  authRegister: (p: { name: string; email: string; password: string; role?: string; legalType?: string; legalInfo?: { inn?: string; ogrn?: string; kpp?: string; bankDetails?: string }; consents?: ConsentRecord[] }) => Promise<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string; message?: string; userId?: string; name?: string; email?: string; role?: string; legal_type?: string }>;
   authLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string; message?: string; role?: string }>;
   restoreSession: () => Promise<void>;
   setActiveAccount: (email: string, role: UserRole, sellerType?: SellerType) => void;

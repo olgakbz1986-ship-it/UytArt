@@ -1,4 +1,5 @@
 import { ProductWizard_v2 } from "../components/ProductWizard_v2";
+import { api } from "../lib/api";
 import { DigitalProductWizard, DigitalVersionForm, DigitalAnalyticsModal } from "../components/DigitalProductWizard";
 import { useNotifyStore } from "../lib/notify";
 import { useDigitalStore } from "../lib/digital";
@@ -858,9 +859,14 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
 
   const nextFromStep1 = () => {
     if (!s.legalType) { setErr("Выберите юридический статус."); return; }
-    if (s.shopName.trim().length < 2 || s.contactName.trim().length < 2 || !s.email.includes("@") || s.masterName.trim().length < 2) {
-      setErr("Заполните магазин, ФИО, email и имя мастера."); return;
+    if (s.shopName.trim().length < 2 || s.contactName.trim().length < 2 || !s.email.includes("@") || (s.legalType !== "ooo" && s.masterName.trim().length < 2)) {
+      setErr("Заполните название магазина, ФИО, email" + (s.legalType !== "ooo" ? " и имя мастера." : ".")); return;
     }
+    /* Валидация реквизитов по типу: ИНН 12/10, ОГРНИП 15, ОГРН 13, КПП 9 */
+    const needInn = s.legalType === "ooo" ? 10 : 12;
+    if (s.inn.length !== needInn) { setErr("ИНН должен содержать " + needInn + " цифр."); return; }
+    if (s.legalType === "ip" && (s.ogrn || "").length !== 15) { setErr("ОГРНИП должен содержать 15 цифр."); return; }
+    if (s.legalType === "ooo" && ((s.ogrn || "").length !== 13 || (s.kpp || "").length !== 9)) { setErr("Для ООО нужны ОГРН (13 цифр) и КПП (9 цифр)."); return; }
     if (!agree) { setErr("Примите агентский договор-оферту."); return; }
     if (pwd.length < 8) { setErr("Пароль для входа должен быть не короче 8 символов"); return; }
     if (pwd !== pwd2) { setErr("Пароли не совпадают"); return; }
@@ -879,7 +885,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
       useNotifyStore.getState().push({ kind: "alert", title: "Оплата взноса не прошла", text: payRes.error === "payment_not_confirmed" ? "Платёж не подтверждён провайдером. Попробуйте ещё раз или выберите другой способ." : "Сервис оплаты недоступен: " + (payRes.error || "сеть") });
       return;
     }
-    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd, role: "seller", legalType: s.legalType || "self_employed" });
+    const regRes = await useAppStore.getState().authRegister({ name: s.contactName || s.masterName || s.shopName, email: s.email, password: pwd, role: "seller", legalType: s.legalType || "self_employed", legalInfo: { inn: s.inn, ogrn: s.ogrn || "", kpp: s.kpp || "", bankDetails: s.bankAccount || "" } });
     { const vk = "qf-demo-pass"; const vv = JSON.parse(localStorage.getItem(vk) || "{}"); vv[s.email.trim().toLowerCase()] = pwd; localStorage.setItem(vk, JSON.stringify(vv)); }
     if (regRes.ok && regRes.needConfirm) {
       useNotifyStore.getState().push({ kind: "report", title: "Подтвердите email", text: "Письмо отправлено на " + s.email + (regRes.devConfirmUrl ? ". Dev-ссылка: " + regRes.devConfirmUrl : "") });
@@ -948,23 +954,49 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Field label="Название магазина" required><input className="field" value={s.shopName} onChange={(e) => s.setInfo({ shopName: e.target.value })} placeholder="Глиняный дом" /></Field>
-            <Field label="Имя мастера" required><input className="field" value={s.masterName} onChange={(e) => s.setInfo({ masterName: e.target.value })} placeholder="Мария" /></Field>
-            <Field label="ФИО" required><input className="field" value={s.contactName} onChange={(e) => s.setInfo({ contactName: e.target.value })} placeholder="Ковалёва Мария Сергеевна" /></Field>
+            {s.legalType === "ooo" ? (
+              <>
+                <Field label="Название организации" required><input className="field" value={s.legalName || ""} onChange={(e) => s.setInfo({ legalName: e.target.value })} placeholder="ООО «Глиняный дом»" /></Field>
+                <Field label="Название магазина" required><input className="field" value={s.shopName} onChange={(e) => s.setInfo({ shopName: e.target.value })} placeholder="Глиняный дом" /></Field>
+                <Field label="ФИО руководителя" required><input className="field" value={s.contactName} onChange={(e) => s.setInfo({ contactName: e.target.value })} placeholder="Ковалёва Мария Сергеевна" /></Field>
+                <Field label="Должность руководителя"><input className="field" value={s.directorTitle || ""} onChange={(e) => s.setInfo({ directorTitle: e.target.value })} placeholder="Генеральный директор" /></Field>
+              </>
+            ) : (
+              <>
+                <Field label="Название магазина" required><input className="field" value={s.shopName} onChange={(e) => s.setInfo({ shopName: e.target.value })} placeholder="Глиняный дом" /></Field>
+                <Field label="Имя мастера" required><input className="field" value={s.masterName} onChange={(e) => s.setInfo({ masterName: e.target.value })} placeholder="Мария" /></Field>
+                <Field label="ФИО" required><input className="field" value={s.contactName} onChange={(e) => s.setInfo({ contactName: e.target.value })} placeholder="Ковалёва Мария Сергеевна" /></Field>
+              </>
+            )}
             <Field label="Email" required><input className="field" type="email" value={s.email} onChange={(e) => s.setInfo({ email: e.target.value })} placeholder="maria@studio.ru" /></Field>
             <Field label="Город"><input className="field" value={s.city} onChange={(e) => s.setInfo({ city: e.target.value })} placeholder="Псков" /></Field>
-            <Field label="ИНН"><input className="field" value={s.inn} onChange={(e) => s.setInfo({ inn: e.target.value.replace(/\D/g, "") })} placeholder="602709876543" /></Field>
+            {s.legalType === "ooo" ? (
+              <>
+                <Field label="ИНН организации (10 цифр)" required><input className="field" inputMode="numeric" value={s.inn} onChange={(e) => s.setInfo({ inn: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="6027000000" /></Field>
+                <Field label="КПП (9 цифр)" required><input className="field" inputMode="numeric" value={s.kpp || ""} onChange={(e) => s.setInfo({ kpp: e.target.value.replace(/\D/g, "").slice(0, 9) })} placeholder="602701001" /></Field>
+                <Field label="ОГРН (13 цифр)" required><input className="field" inputMode="numeric" value={s.ogrn || ""} onChange={(e) => s.setInfo({ ogrn: e.target.value.replace(/\D/g, "").slice(0, 13) })} placeholder="1026000000000" /></Field>
+                <Field label="Юридический адрес"><input className="field" value={s.legalAddress || ""} onChange={(e) => s.setInfo({ legalAddress: e.target.value })} placeholder="180000, г. Псков, ул. ..." /></Field>
+              </>
+            ) : (
+              <>
+                <Field label="ИНН (12 цифр)" required><input className="field" inputMode="numeric" value={s.inn} onChange={(e) => s.setInfo({ inn: e.target.value.replace(/\D/g, "").slice(0, 12) })} placeholder="602709876543" /></Field>
+                {s.legalType === "ip" && (
+                  <Field label="ОГРНИП (15 цифр)" required><input className="field" inputMode="numeric" value={s.ogrn || ""} onChange={(e) => s.setInfo({ ogrn: e.target.value.replace(/\D/g, "").slice(0, 15) })} placeholder="302600000000000" /></Field>
+                )}
+              </>
+            )}
+            <Field label={s.legalType === "ooo" ? "Расчётный счёт организации" : s.legalType === "ip" ? "Расчётный счёт ИП" : "Реквизиты банковской карты"}><input className="field" value={s.bankAccount || ""} onChange={(e) => s.setInfo({ bankAccount: e.target.value })} placeholder={s.legalType === "ooo" || s.legalType === "ip" ? "40817810…" : "2202 2006 …"} /></Field>
             <Field label="Пароль для входа" required hint="Минимум 8 символов"><PasswordInput value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="••••••••" /></Field>
             <Field label="Повторите пароль" required hint="Должен совпасть"><PasswordInput value={pwd2} onChange={(e) => setPwd2(e.target.value)} placeholder="••••••••" /></Field>
           </div>
 
           {/* блок «О мастере» */}
           <div className="mt-6 pt-6 border-t border-line-soft">
-            <p className="font-display font-bold text-[16px] text-ink mb-1">О мастере</p>
-            <p className="text-[12px] text-ink-mute mb-4">Расскажите о становлении бизнеса — это повышает доверие покупателей. Сервис распределит вас по категориям.</p>
+            <p className="font-display font-bold text-[16px] text-ink mb-1">{s.legalType === "ooo" ? "О компании" : s.legalType === "ip" ? "О бизнесе" : "О мастере"}</p>
+            <p className="text-[12px] text-ink-mute mb-4">{s.legalType === "ooo" ? "Расскажите о компании — это повышает доверие покупателей. Сервис распределит вас по категориям." : "Расскажите о становлении бизнеса — это повышает доверие покупателей. Сервис распределит вас по категориям."}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Field label="Лет опыта"><input className="field" value={s.yearsExperience} onChange={(e) => s.setInfo({ yearsExperience: e.target.value })} placeholder="7" /></Field>
-              <Field label="Достижения"><input className="field" value={s.achievements} onChange={(e) => s.setInfo({ achievements: e.target.value })} placeholder="Ярмарки, конкурсы, публикации…" /></Field>
+              <Field label={s.legalType === "ooo" || s.legalType === "ip" ? "Лет на рынке" : "Лет опыта"}><input className="field" value={s.yearsExperience} onChange={(e) => s.setInfo({ yearsExperience: e.target.value })} placeholder="7" /></Field>
+              <Field label={s.legalType === "ooo" ? "Достижения компании" : "Достижения"}><input className="field" value={s.achievements} onChange={(e) => s.setInfo({ achievements: e.target.value })} placeholder="Ярмарки, конкурсы, публикации…" /></Field>
             </div>
             <div className="mt-4">
               <Field label="Категории (минимум 1)">
@@ -972,7 +1004,7 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
               </Field>
             </div>
             <div className="mt-4">
-              <Field label="История бизнеса — взлёты и падения">
+              <Field label={s.legalType === "ooo" ? "История бренда" : "История бизнеса — взлёты и падения"}>
                 <textarea className="field" rows={4} value={s.businessStory} onChange={(e) => s.setInfo({ businessStory: e.target.value })} placeholder="Как вы начинали, с какими трудностями столкнулись, чем гордитесь…" />
               </Field>
               <MasterProfileBlock />
@@ -1264,8 +1296,29 @@ export function SellerDashboardPage() {
     masterName: s.masterName, yearsExperience: s.yearsExperience, achievements: s.achievements, businessStory: s.businessStory,
   });
   const [sProfSaved, setSProfSaved] = useState(false);
+  /* Синхронизация с сервером: при открытии кабинета подтягиваем анкету,
+     внесённую при регистрации (работает на любом устройстве). */
+  useEffect(() => {
+    let alive = true;
+    api.sellerProfileGet().then((r: any) => {
+      if (!alive || !r.ok || !r.profile) return;
+      const p = r.profile as Record<string, any>;
+      setSProf((prev: any) => ({ ...prev, ...p }));
+      const li = r.legal_info as Record<string, string> | null;
+      const liPatch: Record<string, string> = {};
+      if (li) {
+        if (li.inn) liPatch.inn = li.inn;
+        if (li.ogrn) liPatch.ogrn = li.ogrn;
+        if (li.kpp) liPatch.kpp = li.kpp;
+        if (li.bankDetails) liPatch.bankAccount = li.bankDetails;
+      }
+      if (Object.keys(liPatch).length) useSellerReg.getState().setInfo(liPatch);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const saveSProf = () => {
     s.setInfo(sProf);
+    api.sellerProfilePatch(sProf).catch(() => {});
     setSProfSaved(true);
     setTimeout(() => setSProfSaved(false), 2200);
   };
@@ -3534,27 +3587,24 @@ export function MasterProfileBlock() {
   const s = useSellerReg();
   return (
               <div className="md:col-span-2 mt-5 rounded-2xl border border-line p-5 bg-cream">
-                <p className="font-display font-bold text-[16px] text-ink mb-1">Мастер-профиль</p>
-                <p className="text-[12px] text-ink-mute mb-4">Эти данные формируют вашу карточку на странице «Мастера» и мини-сайт мастерской.</p>
+                <p className="font-display font-bold text-[16px] text-ink mb-1">{s.legalType === "ooo" ? "Профиль производства" : s.legalType === "ip" ? "Профиль продавца" : "Мастер-профиль"}</p>
+                <p className="text-[12px] text-ink-mute mb-4">{s.legalType === "ooo" ? "Эти данные формируют карточку компании на странице «Мастера» и мини-сайт бренда." : "Эти данные формируют вашу карточку на странице «Мастера» и мини-сайт мастерской."}</p>
                 <label className="flex items-center gap-2.5 text-[13px] font-semibold text-ink cursor-pointer mb-3">
                   <input type="checkbox" checked={!!s.isMaster} onChange={(e) => s.setInfo({ isMaster: e.target.checked })} />
-                  Я мастер-производитель — показывать мастерскую на странице «Мастера»
+                  {s.legalType === "ooo" || s.legalType === "ip" ? "Есть собственное производство — показывать на странице «Мастера»" : "Я мастер-производитель — показывать мастерскую на странице «Мастера»"}
                 </label>
                 <label className="flex items-center gap-2.5 text-[13px] font-semibold text-ink cursor-pointer mb-4">
                   <input type="checkbox" checked={!!s.acceptsCustomOrders} onChange={(e) => s.setInfo({ acceptsCustomOrders: e.target.checked })} />
-                  Принимаю индивидуальные заказы
+                  {s.legalType === "ooo" ? "Принимаем оптовые и корпоративные заказы" : s.legalType === "ip" ? "Принимаем индивидуальные заказы" : "Принимаю индивидуальные заказы"}
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
                     <p className="text-[12.5px] font-semibold text-ink mb-1.5">Логотип магазина <span className="text-[10.5px] text-ink-mute font-normal">— лицо бренда: карточки товаров, чеки, шапка кабинета</span></p>
                     <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { useNotifyStore.getState().push({ kind: "alert", title: "Файл слишком большой", text: "Максимум 1.5 МБ" }); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ shopLogo: r.result as string }); r.readAsDataURL(f); }} />
                     {s.shopLogo && <img src={s.shopLogo} alt="Логотип" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
-                  </div>
-                  <div>
-                    <p className="text-[12.5px] font-semibold text-ink mb-1.5">Аватар мастера <span className="text-[10.5px] text-ink-mute font-normal">— лицо человека: страница «Мастера» и панель «О продавце»</span></p>
+                  </div> {s.legalType !== "ooo" && (<div> <p className="text-[12.5px] font-semibold text-ink mb-1.5">Аватар мастера <span className="text-[10.5px] text-ink-mute font-normal">— лицо человека: страница «Мастера» и панель «О продавце»</span></p>
                     <input type="file" accept="image/*" className="field" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1500000) { alert("Файл до 1.5 МБ"); e.target.value = ""; return; } const r = new FileReader(); r.onload = () => s.setInfo({ masterAvatar: r.result as string }); r.readAsDataURL(f); }} />
-                    {s.masterAvatar && <img src={s.masterAvatar} alt="Аватар" className="w-14 h-14 rounded-[12px] object-cover mt-2" />}
-                  </div>
+                    {s.masterAvatar && <img src={s.masterAvatar} alt="Аватар" className="w-14 h-14 rounded-[12px] object-cover mt-2" />} </div> )}
                 </div>
                 <div className="mt-4">
                   <p className="text-[12.5px] font-semibold text-ink mb-1.5">Фотовитрина производства (до 6 фото, каждое до 1.5 МБ)</p>
@@ -3572,7 +3622,7 @@ export function MasterProfileBlock() {
                 </div>
                 <div className="mt-4">
                   <p className="text-[12.5px] font-semibold text-ink mb-1.5">
-                    {s.isMaster ? "🎬 Видео-экскурсия по мастерской" : "🎬 Видео о себе — презентация компании или услуг"}
+                    {s.isMaster ? "🎬 Видео-экскурсия по мастерской" : (s.legalType === "ooo" ? "🎬 Видео о компании — презентация производства" : "🎬 Видео о себе — презентация компании или услуг")}
                     <span className="text-[11px] text-ink-mute font-normal"> (mp4/webm, до 8 МБ)</span>
                   </p>
                   {s.videoTourUrl && (

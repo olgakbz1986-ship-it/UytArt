@@ -30,7 +30,7 @@ async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 export const api = {
   health: () => req("/health"),
-  register: (p: { name: string; email: string; password: string; role?: string; legalType?: string; consents?: { document: string; version: string; timestamp: string }[] }) =>
+  register: (p: { name: string; email: string; password: string; role?: string; legalType?: string; legalInfo?: { inn?: string; ogrn?: string; kpp?: string; bankDetails?: string }; consents?: { document: string; version: string; timestamp: string }[] }) =>
     req<{ ok: boolean; needConfirm?: boolean; devConfirmUrl?: string; error?: string; message?: string; userId?: string; name?: string; email?: string; role?: string; legal_type?: string }>("/auth/register", { method: "POST", body: JSON.stringify(p) }),
   login: (email: string, password: string) =>
     req<{ ok: boolean; profile?: ApiProfile; tariff?: ApiTariff; error?: string; message?: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
@@ -39,6 +39,12 @@ export const api = {
   resend: (email: string) => req("/auth/resend", { method: "POST", body: JSON.stringify({ email }) }),
   updateProfile: (p: { name?: string; phone?: string }) =>
     req<{ ok: boolean; profile?: ApiProfile }>("/profile", { method: "PATCH", body: JSON.stringify(p) }),
+
+  /* Серверный профиль продавца: анкета из регистрации видна в кабинете */
+  sellerProfileGet: () =>
+    req<{ ok: boolean; profile?: Record<string, any> | null; legal_info?: Record<string, string> | null; error?: string }>("/seller/profile"),
+  sellerProfilePatch: (p: Record<string, any>) =>
+    req<{ ok: boolean; profile?: Record<string, any>; error?: string }>("/seller/profile", { method: "PATCH", body: JSON.stringify(p) }),
 
   /* ---------- ТАРИФЫ (ЭТАП 1) ---------- */
   tariff: () => req<{ ok: boolean; tariff?: ApiTariff }>("/tariff"),

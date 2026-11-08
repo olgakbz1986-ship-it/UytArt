@@ -347,7 +347,16 @@ app.post("/api/auth/register", async (req, res) => {
     const reqLegal = String(req.body.legalType || "");
     const LEGAL_OK = ["self_employed", "ip", "ooo"];
     const legalType = role === "seller" ? (LEGAL_OK.includes(reqLegal) ? reqLegal : "self_employed") : "";
-    const token = crypto.randomUUID();
+    /* Реквизиты продавца: сохраняем только для роли seller. Только цифры,
+   с ограничением длины — защита от мусора в dev-db (аудит регистрации). */
+const rawLi = req.body.legalInfo || {};
+const legal_info = role === "seller" ? {
+  inn: String(rawLi.inn || "").replace(/\D/g, "").slice(0, 12),
+  ogrn: String(rawLi.ogrn || "").replace(/\D/g, "").slice(0, 15),
+  kpp: String(rawLi.kpp || "").replace(/\D/g, "").slice(0, 9),
+  bankDetails: String(rawLi.bankDetails || "").trim().slice(0, 300),
+} : null;
+const token = crypto.randomUUID();
     const exp = db.mode.startsWith("postgres") ? new Date(Date.now() + DAY) : Date.now() + DAY;
     /* Итерация два, Пункт А: реестр согласий с фиксацией версий. Клиент передаёт
        массив {document, version, timestamp}; нормализуем и сохраняем в запись
@@ -366,9 +375,10 @@ app.post("/api/auth/register", async (req, res) => {
         legal_type: legalType || existingU.legal_type || "",
         confirm_token: token,
         confirm_expires: exp,
+        ...(legal_info ? { legal_info } : {}),
       }) || existingU;
     } else {
-      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role, legal_type: legalType, tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}) });
+      newUser = await db.create({ id: crypto.randomUUID(), email, password_hash: await bcrypt.hash(password, 10), name, phone: "", role, legal_type: legalType, tier: "free", avatar_url: null, email_confirmed: !db.mode.startsWith("postgres"), confirm_token: token, confirm_expires: exp, ...(consents.length ? { consents } : {}), ...(legal_info ? { legal_info } : {}) });
     }
     const dev = await sendConfirm(email, name, token);
     /* ИСПРАВЛЕНИЕ «РЕГИСТРАЦИЯ ПРОШЛА — НЕ ПУСКАЕТ»: регистрация сразу
@@ -505,6 +515,38 @@ app.get("/api/auth/me", guard, async (req, res) => {
   try { tariff = await tariffsCtx.tariffView(req.userId); } catch (e) { console.error("[ME TARIFF]", e); }
   res.json({ ok: true, profile: profileOf(u), tariff });
 });
+/* Серверное хранение профиля продавца (канал «кабинет ↔ база»):
+   анкета, внесённая при регистрации, доступна из кабинета на любом
+   устройстве. Храним в записи пользователя как seller_profile. */
+const sanitizeSellerProfile = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const [k, max] of [["shopName",120],["contactName",120],["phone",30],["city",80],["masterName",120],["yearsExperience",10],["achievements",500],["businessStory",2000]]) {
+    if (raw[k] !== undefined && raw[k] !== null) out[k] = String(raw[k]).trim().slice(0, max);
+  }
+  if (raw.isMaster !== undefined) out.isMaster = !!raw.isMaster;
+  if (raw.acceptsCustomOrders !== undefined) out.acceptsCustomOrders = !!raw.acceptsCustomOrders;
+  return Object.keys(out).length ? out : null;
+};
+
+app.get("/api/seller/profile", guard, async (req, res) => {
+  try {
+    const u = (typeof db.byId === "function" ? await db.byId(req.userId) : null) || await db.update(req.userId, {});
+    res.json({ ok: true, profile: u?.seller_profile || null, legal_info: u?.legal_info || null });
+  } catch (e) { res.status(500).json({ error: "server", message: String(e && e.message || e) }); }
+});
+
+app.patch("/api/seller/profile", guard, async (req, res) => {
+  try {
+    const patch = sanitizeSellerProfile(req.body);
+    if (!patch) return res.status(400).json({ error: "no_fields" });
+    const cur = (typeof db.byId === "function" ? await db.byId(req.userId) : null) || await db.update(req.userId, {});
+    const merged = { ...(cur?.seller_profile || {}), ...patch };
+    const u = await db.update(req.userId, { seller_profile: merged });
+    res.json({ ok: true, profile: u?.seller_profile || merged });
+  } catch (e) { res.status(500).json({ error: "server", message: String(e && e.message || e) }); }
+});
+
 app.patch("/api/profile", guard, async (req, res) => {
   const u = await db.update(req.userId, { name: req.body.name !== undefined ? String(req.body.name).trim() : undefined, phone: req.body.phone !== undefined ? String(req.body.phone).trim() : undefined });
   res.json({ ok: true, profile: profileOf(u) });

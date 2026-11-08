@@ -44,12 +44,21 @@ const optionalText = (max) => z.string().trim().max(max).optional();
 /* ---------- схемы по эндпоинтам ---------- */
 
 /* POST /api/auth/register */
+const digitStr = (len) => z.string().trim().regex(new RegExp("^\\d{" + len + "}$"), "bad_digits");
 const REGISTER = z.object({
   email: z.string().trim().toLowerCase().regex(/^\S+@\S+\.\S+$/, "bad_email"),
   password: z.string().min(8, "password слишком короткий (мин. 8)").max(200),
   name: z.string().trim().min(2).max(100),
   role: z.enum(["buyer", "seller", "designer"]).catch("buyer"),
   legalType: z.enum(LEGAL_TYPES).or(z.literal("")).catch(""),
+  /* Реквизиты продавца по юр. статусу: самозанятый/ИП — ИНН 12 цифр, ОГРНИП 15;
+     ООО — ИНН 10, ОГРН 13, КПП 9. Пустые строки допускаются (заполнят позже). */
+  legalInfo: z.object({
+    inn: z.union([digitStr(12), digitStr(10), z.literal("")]).optional().catch(""),
+    ogrn: z.union([digitStr(15), digitStr(13), z.literal("")]).optional().catch(""),
+    kpp: z.union([digitStr(9), z.literal("")]).optional().catch(""),
+    bankDetails: optionalText(300),
+  }).optional(),
 });
 
 /* POST /api/auth/login, /api/auth/resend */
@@ -63,6 +72,16 @@ const RESEND = z.object({ email: z.string().trim().min(3).max(254) });
 const PROFILE_PATCH = z
   .object({ name: optionalText(100), phone: optionalText(30) })
   .refine((d) => d.name !== undefined || d.phone !== undefined, { message: "нет полей для обновления" });
+
+/* PATCH /api/seller/profile — анкета продавца из кабинета */
+const SELLER_PROFILE_PATCH = z
+  .object({
+    shopName: optionalText(120), contactName: optionalText(120), phone: optionalText(30),
+    city: optionalText(80), masterName: optionalText(120), yearsExperience: optionalText(10),
+    achievements: optionalText(500), businessStory: optionalText(2000),
+    isMaster: z.boolean().optional(), acceptsCustomOrders: z.boolean().optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "нет полей для обновления" });
 
 /* POST /api/tariff/set — tariffId/planId из допустимого списка тарифов */
 const TARIFF_SET = z
@@ -363,7 +382,7 @@ module.exports = {
   vMiddleware,
   validateProhibitedGoods,
   LEGAL_TYPES, BUYER_PLANS, SELLER_PLANS, ALL_PLANS, PACK_IDS, ACTIONS, COHORTS,
-  REGISTER, LOGIN, RESEND, PROFILE_PATCH,
+  REGISTER, LOGIN, RESEND, PROFILE_PATCH, SELLER_PROFILE_PATCH,
   TARIFF_SET, REGISTRATION_FEE, SUB_CREATE, PACK_CREATE,
   LIMIT_CONSUME, BUY_PACK,
   AB_CREATE, AB_EVENT, AB_START, AB_FINALIZE,
