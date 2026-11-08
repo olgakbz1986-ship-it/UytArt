@@ -1,15 +1,11 @@
 /* ============================================================
    ЗАДАЧА 5, п.7: модульные тесты buyerLimitsOf (server/tariffs.cjs)
    — лимиты тарифных планов покупателя. Значения берутся из
-   единого тарифного ядра shared/tariffs/core.cjs.
+   единого тарифного ядра shared/tariffs/core.mjs.
    ============================================================ */
 import { describe, it, expect } from "vitest";
-/* ЗАДАЧА 5: тарифное ядро shared/tariffs/core.cjs — CommonJS-исходник без
-   расширения .cjs (историческое решение проекта); серверный модуль
-   server/tariffs.cjs требует его через нативный require. В ESM-тесте
-   (package.json "type":"module") такой граг загружаем изолированным
-   Function-скоупом: читаем исходники и исполняем их как CJS, не меняя
-   production-код. */
+/* ЗАДАЧА 5: тарифное ядро shared/tariffs/core.mjs — ESM (единый источник истины для Node 24 и браузера); серверный
+   модуль server/tariffs.cjs подключает его через нативный require(). */
 import fsNode from "node:fs";
 import pathNode from "node:path";
 import { createRequire } from "node:module";
@@ -49,8 +45,10 @@ const loadCjs = (file, deps = {}) => {
   );
   return moduleObj.exports;
 };
-const CORE = loadCjs(pathNode.resolve(__dir, "../../shared/tariffs/core.cjs"));
-const TARIFFS = loadCjs(pathNode.resolve(__dir, "../../server/tariffs.cjs"), { "../shared/tariffs/core.cjs": CORE });
+/* core.mjs — ESM: импортируем нативно; tariffs.cjs исполняем изолированным
+   CJS-загрузчиком, подсовывая готовое ядро как зависимость */
+const CORE = await import("../../shared/tariffs/core.mjs");
+const TARIFFS = loadCjs(pathNode.resolve(__dir, "../../server/tariffs.cjs"), { "../shared/tariffs/core.mjs": CORE });
 const { buyerLimitsOf, BUYER_PLANS } = TARIFFS;
 
 describe("buyerLimitsOf", () => {
