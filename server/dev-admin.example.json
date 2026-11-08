@@ -1,0 +1,206 @@
+{
+  "admins": [],
+  "codes": [],
+  "attempts": [],
+  "devices": [],
+  "blocks": [],
+  "security_log": [],
+  "actions_log": [],
+  "roles": {
+    "super_admin": {
+      "title": "Super Admin",
+      "sections": [],
+      "perms": []
+    },
+    "product_owner": {
+      "title": "Product Owner",
+      "sections": [],
+      "perms": []
+    },
+    "operations": {
+      "title": "Operations",
+      "sections": [],
+      "perms": []
+    },
+    "finance": {
+      "title": "Finance",
+      "sections": [],
+      "perms": []
+    },
+    "trust_safety": {
+      "title": "Trust & Safety",
+      "sections": [],
+      "perms": []
+    },
+    "support": {
+      "title": "Support",
+      "sections": [],
+      "perms": []
+    },
+    "content_manager": {
+      "title": "Content Manager",
+      "sections": [],
+      "perms": []
+    },
+    "data_analyst": {
+      "title": "Data Analyst",
+      "sections": [],
+      "perms": []
+    },
+    "ai_ops": {
+      "title": "AI Ops",
+      "sections": [],
+      "perms": []
+    },
+    "auditor": {
+      "title": "Auditor",
+      "sections": [],
+      "perms": []
+    }
+  },
+  "policies": [],
+  "limits": {
+    "max_actions_per_hour": 0,
+    "max_money_impact_rub_day": 0,
+    "max_api_calls_per_run": 40,
+    "token_budget_per_day": 2000000,
+    "cost_budget_per_day_rub": 3000,
+    "notify_requests_per_hour_per_user": 6,
+    "digest_after_excess": true,
+    "four_eyes_threshold_rub": 150000,
+    "forbidden_data": [],
+    "constitution": "A1v2-hands-with-permit"
+  },
+  "agent": {
+    "status": "active",
+    "autonomy_mode": "advisor",
+    "model_version": "qf-agent-1.4.2",
+    "prompt_version": "p-87",
+    "rules_version": "r-31",
+    "tools_version": "t-19",
+    "last_updated": 1792874087918,
+    "owner": "adm-aiops",
+    "kill_switch": false,
+    "health": {
+      "answer_quality": 0.91,
+      "classification_accuracy": 0.88,
+      "false_positive_rate": 0.04,
+      "tool_errors": 3,
+      "avg_exec_ms": 2100,
+      "cost_rub_day": 214,
+      "human_share": 0.23,
+      "cancelled_by_admin": 2
+    },
+    "drift": {
+      "score": 0.06,
+      "flags": []
+    },
+    "roi": {
+      "tasks_closed_no_human": 500,
+      "hours_saved_week": 120,
+      "fraud_prevented_rub": 1840000,
+      "disputes_reduced_pct": 17,
+      "support_speedup_pct": 30,
+      "conversions_uplift_pct": 2.4,
+      "prevented_payouts": 18,
+      "cost_tokens_rub": 96,
+      "cost_infra_rub": 60,
+      "cost_control_rub": 45,
+      "cost_errors_rub": 12
+    }
+  },
+  "sources": [],
+  "observations": [],
+  "hypotheses": [],
+  "decisions": [],
+  "alerts": [],
+  "notifications": [],
+  "tickets": [],
+  "disputes": [],
+  "releases": [],
+  "flags": [],
+  "abtests": [],
+  "settings": {
+    "env": "production",
+    "platform_mode": "normal",
+    "maintenance_note": "",
+    "rules": {
+      "registration": "email+password, обязательное подтверждение email",
+      "publish": "модерация новых категорий обязательна",
+      "reviews": "1 отзыв на заказ, антинакрутка включена",
+      "returns": "14 дней, товары гигиены — исключения",
+      "delivery": "ETA = медиана продавца c 25.10",
+      "disputes": "SLA 48ч, эскалация +24ч",
+      "blocks": "временные ≤ 90 дней, апелляция 30 дней",
+      "commissions": "см. Финансы → правила комиссий"
+    },
+    "limits_cfg": {
+      "payout_confirm_threshold_rub": 150000,
+      "hold_max_days": 14,
+      "refund_auto_limit_rub": 3000
+    },
+    "regions": [],
+    "languages": [],
+    "currencies": [],
+    "units": [],
+    "taxes": "УСН 7% (сервис) / самозанятые NPD",
+    "legal": "ООО «СтартТехПро», ОГРН 121…"
+  },
+  "integrations": [],
+  "traces": [],
+  "evalcases": [],
+  "quality_gates": {
+    "min_acc_vs_prev": 0.02,
+    "block_on_regression": true,
+    "last_gate": {
+      "version": "qf-agent-1.4.2",
+      "result": "passed",
+      "ts": 1792874087918
+    }
+  },
+  "feed": [],
+  "campaigns": [],
+  "templates": [],
+  "analytics": {
+    "buyer_funnel": [],
+    "seller_funnel": [],
+    "cohorts": [],
+    "search": {
+      "top": [],
+      "noresult": [],
+      "lowconv": []
+    },
+    "problems": [],
+    "agent_insights": []
+  },
+  "users": null,
+  "usersSnapshotAt": 1793833008285,
+  "usersSnapshot": [],
+  "sellers": [],
+  "moderation": [],
+  "categories": [],
+  "brands": [],
+  "transactions": [],
+  "commission_rules": [],
+  "payouts": [],
+  "reconciliation": [],
+  "appeals": [],
+  "fraud_objects": [],
+  "graph": {
+    "nodes": [],
+    "edges": []
+  },
+  "antifraud_rules": [],
+  "skills": [],
+  "skill_reports": [],
+  "intel_runs": [],
+  "permission_log": [],
+  "dataset_events": [],
+  "notification_hygiene": {
+    "per_hour_per_user": 6,
+    "digests": []
+  },
+  "metrics_history": null,
+  "orders_cache": [],
+  "ordersCacheAt": 1793832979611
+}
