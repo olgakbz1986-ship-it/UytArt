@@ -9,13 +9,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  import * as dotenv from "dotenv";
-dotenv.config({ silent: true });
-} catch {
-  /* dotenv опционален в тестовом окружении */
-}
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 /* Гарантированно файловый режим репозитория, если PostgreSQL не задан явно */
 if (!process.env.DATABASE_URL) {
