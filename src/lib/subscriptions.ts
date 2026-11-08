@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { SellerLegalType } from "./seller";
-/* Единое тарифное ядро (shared/tariffs/core.cjs) — единственный источник
+/* Единое тарифное ядро (shared/tariffs/core.mjs) — единственный источник
    истинных числовых таблиц. Клиент обязан использовать ТОЛЬКО его:
    локальные дубли BUYER_PLANS / SELLER_LIMITS удалены (риск рассинхрона
    с сервером устранён). Маркер безлимита «∞» резолвится в Infinity. */
-import * as core from "../../shared/tariffs/core.cjs";
+import * as core from "../../shared/tariffs/core.mjs";
 
 /* ============================================================
    Подписки: покупатели (4 тарифа) + лимиты продавцов по юрлицу
