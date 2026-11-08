@@ -27,6 +27,8 @@
 // ============================================================
 module.exports = function registerAdmin(app, ctx) {
   const { express, jwt, crypto, bcrypt, mail, MAIL_FROM, COOKIE, DAY, JWT_SECRET, PORT, db, fs, _path } = ctx;
+  /* DEV-креды служебного аккаунта: из .env (см. server/dev-admin-creds.cjs) */
+  const { ADMIN_EMAIL, ADMIN_PASSWORD } = require("./dev-admin-creds.cjs");
   void bcrypt; void PORT;
 
   /* ---------- идемпотентность операций (защита от повторного нажатия) ------ */
@@ -60,8 +62,8 @@ module.exports = function registerAdmin(app, ctx) {
     let d = fs_exists() ? safeReadJson() : null;
     if (!d || !Array.isArray(d.admins)) d = seedDoc();
     /* dev-период: гарантируем наличие служебного аккаунта с фиксированным паролем */
-    if (!d.admins.some((a) => a.email === "almin@starttechpro.ru")) {
-      d.admins.unshift({ id: "adm-almin", email: "almin@starttechpro.ru", name: "Алмин — Super Admin (dev)", role: "super_admin", passkey: false, created_at: Date.now(), password_hash: sha16("admin123") });
+    if (!d.admins.some((a) => a.email === ADMIN_EMAIL)) {
+      d.admins.unshift({ id: "adm-almin", email: ADMIN_EMAIL, name: "Алмин — Super Admin (dev)", role: "super_admin", passkey: false, created_at: Date.now(), password_hash: sha16(ADMIN_PASSWORD) });
       saveDev(d);
     }
     return d;
@@ -79,7 +81,7 @@ module.exports = function registerAdmin(app, ctx) {
     const A = (id, email, name, role, extra = {}) => Object.assign({ id, email, name, role, passkey: false, created_at: now }, extra);
     return {
       admins: [
-        A("adm-almin", "almin@starttechpro.ru", "Алмин — Super Admin (dev)", "super_admin", { password_hash: sha16("admin123") }),
+        A("adm-almin", ADMIN_EMAIL, "Алмин — Super Admin (dev)", "super_admin", { password_hash: sha16(ADMIN_PASSWORD) }),
         A("adm-super", "admin@starttechpro.ru", "Главный администратор", "super_admin"),
         A("adm-fin", "finance@starttechpro.ru", "Финансовый контролёр", "finance"),
         A("adm-aiops", "aiops@starttechpro.ru", "AI Ops", "ai_ops"),
@@ -358,8 +360,8 @@ module.exports = function registerAdmin(app, ctx) {
     if (row.rows[0]) {
       const d = row.rows[0].data;
       /* dev-период: гарантируем наличие служебного аккаунта с фиксированным паролем */
-      if (Array.isArray(d.admins) && !d.admins.some((a) => a.email === "almin@starttechpro.ru")) {
-        d.admins.unshift({ id: "adm-almin", email: "almin@starttechpro.ru", name: "Алмин — Super Admin (dev)", role: "super_admin", passkey: false, created_at: Date.now(), password_hash: sha16("admin123") });
+      if (Array.isArray(d.admins) && !d.admins.some((a) => a.email === ADMIN_EMAIL)) {
+        d.admins.unshift({ id: "adm-almin", email: ADMIN_EMAIL, name: "Алмин — Super Admin (dev)", role: "super_admin", passkey: false, created_at: Date.now(), password_hash: sha16(ADMIN_PASSWORD) });
         await putStore(d);
       }
       return d;

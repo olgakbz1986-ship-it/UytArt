@@ -419,7 +419,7 @@ app.post("/api/auth/login", async (req, res) => {
        Теперь: (1) вход администраторов кабинета через публичный /auth/login корректно
        проверяется по sha16-хешу из dev-admin.json; (2) если у записи нет bcrypt-хеша —
        сравнение пропускаем без обращения к bcrypt.compare(undefined). */
-    if (email === "almin@starttechpro.ru" && !db.mode.startsWith("postgres")) {
+    if (email === require("./dev-admin-creds.cjs").ADMIN_EMAIL && !db.mode.startsWith("postgres")) {
       const adminFile = path.resolve(__dirname, "dev-admin.json");
       try {
         const dadmin = JSON.parse(fs.readFileSync(adminFile, "utf8"));
