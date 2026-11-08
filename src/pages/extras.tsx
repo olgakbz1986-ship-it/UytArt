@@ -1228,6 +1228,12 @@ export function SellerDashboardPage() {
      какие покупательские разделы закрыты замком. Правило тарификации то же,
      что в кабинете покупателя (profile.tsx): concepts/prices/custom — с paid-тарифа. */
   const sellerBuyerPlan = useSubStore((s) => s.getBuyerPlan(user?.userId || "guest"));
+  const BUYER_CHIP: Record<string, { label: string; accent: string }> = {
+    start: { label: "Старт", accent: "#2d5f4c" },
+    designer: { label: "Дизайнер", accent: "#c77e28" },
+    premium: { label: "Премиум", accent: "#d4a574" },
+    collector: { label: "Коллекционер", accent: "#5b3fa8" },
+  };
   const sellerBuyerLim = buyerLimits(sellerBuyerPlan);
   const sellerIsPaidBuyer = sellerBuyerPlan !== "free";
   const _nav = useNavigate();
@@ -1467,6 +1473,11 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             {lvl === 4 && <span className="inline-flex items-center h-7 px-3 rounded-full text-[12px] font-bold font-serif" style={{ border: "2px solid #d4af37", color: "#d4af37", background: "transparent" }}>Легенда платформы</span>}
           </div>
           <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline}{lvl === 4 && " · приоритетная модерация активна"} · комиссия {commissionNow}% · списание {fmtDate(nextCharge.toISOString())}</p>
+          {sellerBuyerPlan !== "free" && BUYER_CHIP[sellerBuyerPlan] && (
+            <p className="text-[12.5px] mt-0.5 font-bold" style={{ color: BUYER_CHIP[sellerBuyerPlan].accent }}>
+              Вы также покупатель — тариф «{BUYER_CHIP[sellerBuyerPlan].label}»{sellerBuyerPlan === "collector" ? " · скидка 10% на все покупки" : ""}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>
