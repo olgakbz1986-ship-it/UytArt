@@ -63,13 +63,13 @@ const FAIR_USE_THRESHOLD = 1000; /* §2.7: 1000 генераций в месяц
 const SELLER_FEATURES_BASE = {
   free: { weeklyReport: false, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: false, managerLine: false, roundTheClock: false, importFile: false, brandStore: false, segmentation: false, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
   tier1: { weeklyReport: false, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: false, managerLine: false, roundTheClock: false, importFile: true, brandStore: true, segmentation: false, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
-  tier2: { weeklyReport: true, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: true, managerLine: false, roundTheClock: false, importFile: true, brandStore: true, segmentation: true, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
-  tier3: { weeklyReport: true, curatorPicks: true, masterSite: true, abTest: true, b2bClosed: true, managerLine: true, roundTheClock: false, importFile: true, brandStore: true, segmentation: true, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
+  tier2: { weeklyReport: true, curatorPicks: false, masterSite: false, abTest: false, b2bClosed: true, managerLine: false, roundTheClock: false, importFile: true, brandStore: true, segmentation: true, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },  tier3: { weeklyReport: true, curatorPicks: true, masterSite: true, abTest: true, b2bClosed: true, managerLine: true, roundTheClock: false, importFile: true, brandStore: true, segmentation: true, customReports: false, whiteLabel: false, topPositions: false, promoMailout: false },
+  tier4: { weeklyReport: true, curatorPicks: true, masterSite: true, abTest: true, b2bClosed: true, managerLine: true, roundTheClock: true, importFile: true, brandStore: true, segmentation: true, customReports: true, whiteLabel: true, topPositions: true, promoMailout: true, priorityModeration: true, cohortAnalytics: true, legendBadge: true },
 };
 
 function sellerFeaturesOf(legalType, planId) {
   const lvl = PLAN_LEVEL[planId] != null ? PLAN_LEVEL[planId] : 0;
-  const key = ["free", "tier1", "tier2", "tier3"][Math.min(lvl, 3)];
+  const key = ["free", "tier1", "tier2", "tier3", "tier4"][Math.min(lvl, 4)];
   const f = { ...SELLER_FEATURES_BASE[key] };
   if (key === "tier3") {
     if (legalType === "ooo") {
@@ -78,9 +78,14 @@ function sellerFeaturesOf(legalType, planId) {
     } else if (legalType === "ip") {
       /* §5.3: Бизнес-Премиум — A/B, закрытые заказы, менеджер 2 ч; white-label линейки ИП */
       f.whiteLabel = true;
-    }
-    /* §5.2: Топ самозанятых — недельный отчёт, подборки кураторов, мини-сайт мастерской
+    }    /* §5.2: Топ самозанятых — недельный отчёт, подборки кураторов, мини-сайт мастерской
        (вместо белого ярлыка: у самозанятых whiteLabel недоступен всегда) */
+  } else if (key === "tier4") {
+    /* ЛЕГЕНДА: максимум сетки + приоритетная модерация, когортная аналитика,
+       персональный менеджер (у ООО уже 24/7 — остаётся) и бейдж статуса */
+    f.managerLine = true; f.roundTheClock = true; f.whiteLabel = true;
+    f.customReports = true; f.topPositions = true; f.promoMailout = true;
+    f.priorityModeration = true; f.cohortAnalytics = true; f.legendBadge = true;
   }
   return f;
 }
@@ -88,8 +93,8 @@ function sellerFeaturesOf(legalType, planId) {
 const BUYER_FEATURES = {
   free:     { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: false, qualityFilters: false, discountPct: 0 },
   start:    { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: false, qualityFilters: true, discountPct: 3 },
-  designer: { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: true, qualityFilters: true, discountPct: 5 },
-  premium:  { premiumSales: true, curator: true, vipBadge: true, freeDeliveryZone: true, earlyAccess: true, qualityFilters: true, discountPct: 7 },
+  designer: { premiumSales: false, curator: false, vipBadge: false, freeDeliveryZone: false, earlyAccess: true, qualityFilters: true, discountPct: 5 },  premium:  { premiumSales: true, curator: true, vipBadge: true, freeDeliveryZone: true, earlyAccess: true, qualityFilters: true, discountPct: 7 },
+  collector:{ premiumSales: true, curator: true, vipBadge: true, freeDeliveryZone: true, earlyAccess: true, qualityFilters: true, discountPct: 10, collectorStatus: true },
 };
 
 /* Разовые регистрационные взносы по типу юрлица: 5 / 10 / 15 тыс. ₽ (из ядра) */
@@ -234,7 +239,8 @@ const PLAN_LEVEL = {
   free: 0,
   master: 1, business: 1, corp: 1,
   "master-pro": 2, "business-pro": 2, "corp-pro": 2, profi: 2,
-  "master-premium": 3, "business-premium": 3, "corp-premium": 3, top: 3,
+  "master-premium": 3, "business-premium": 3, "corp-premium": 3,
+  legend: 4, "business-legend": 4, "corp-legend": 4, collector: 4, top: 3,
 };
 
 /* Комиссия по тарифу: точное попадание, иначе — уровень в матрице;

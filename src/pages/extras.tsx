@@ -673,13 +673,14 @@ export function PlansPage() {
   /* Эффективный тип юрлица: из сессии или из регистрации, или выбранный гостем */
   const effectiveSellerType: SellerLegalType = sessSellerType || (isRegisteredSeller ? (reg.legalType as SellerLegalType) : sellerType);
 
-  const BUYER_PRICES: Record<BuyerPlanId, number> = { free: 0, start: 500, designer: 1000, premium: 1500 };
-  const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Бесплатный", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
+  const BUYER_PRICES: Record<BuyerPlanId, number> = { free: 0, start: 500, designer: 1000, premium: 1500, collector: 3000 };
+  const BUYER_NAMES: Record<BuyerPlanId, string> = { free: "Бесплатный", start: "Старт", designer: "Дизайнер", premium: "Премиум", collector: "Коллекционер" };
   const BUYER_FEATURES: Record<BuyerPlanId, string[]> = {
     free: ["AI-агент: диалог и поиск по каталогу", "2 AI-генерации в месяц", "1 индивидуальный заказ", "Базовый поиск", "Без уведомлений о ценах"],
     start: ["AI-агент: фото-поиск и мониторинг (3 задачи)", "15 AI-генераций", "3 индивидуальных заказа", "Фильтры качества", "Скидка 3% на заказы", "10 отслеживаемых цен"],
     designer: ["AI-агент: проекты интерьера и корзина (10 задач)", "50 AI-генераций", "10 индивидуальных заказов", "Скидка 5%", "Ранний доступ к коллекциям", "Безлимит отслеживания цен"],
     premium: ["AI-агент-партнёр: безлимит задач, черновики заказов", "Безлимит AI-генераций", "Безлимит заказов", "Скидка 7%", "Персональный куратор", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
+      collector: ["Всё из Премиума", "VIP-статус «Коллекционер»", "Скидка 10% на все покупки", "Дропы вне очереди", "Купоны-сюрпризы от сервиса"],
   };
 
   const price = (id: BuyerPlanId) => {
@@ -691,7 +692,7 @@ export function PlansPage() {
   const [period, setPeriod] = useState<"month" | "year">("month");
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-10">
+    <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-10">
       <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2 text-center">Тарифы</h1>
       <p className="text-[14px] text-ink-soft mb-8 text-center max-w-xl mx-auto">Подписки открывают AI-инструменты, приоритеты и сниженные комиссии.</p>
 
@@ -721,7 +722,7 @@ export function PlansPage() {
               ))}
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid gap-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {(Object.keys(BUYER_PRICES) as BuyerPlanId[]).map((id, i) => {
               const active = buyerPlan === id;
               const isPremium = id === "premium";
@@ -782,7 +783,7 @@ export function PlansPage() {
               ))}
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid gap-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {SELLER_PLANS[effectiveSellerType].map((plan, i) => {
               const active = acc.getPlan(session?.userId || "guest", effectiveSellerType) === plan.id;
               const limits = sellerLimits(effectiveSellerType, plan.id);
@@ -1202,8 +1203,9 @@ const SELLER_LEVEL: { accent: string; soft: string; tagline: string }[] = [
   { accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Растущая мастерская" },
   { accent: "#c77e28", soft: "#f9ebd2", tagline: "Профессиональные продажи" },
   { accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей" },
+  { accent: "#5b3fa8", soft: "#ece7f8", tagline: "Легенда платформы" },
 ];
-const COMMISSION_BY_LEVEL: Record<SellerLegalType, number[]> = { self_employed: [10, 9, 8, 7], ip: [12, 11, 10, 9], ooo: [15, 14, 13, 11] };
+const COMMISSION_BY_LEVEL: Record<SellerLegalType, number[]> = { self_employed: [10, 9, 8, 7, 6], ip: [12, 11, 10, 9, 8], ooo: [15, 14, 13, 11, 9] };
 const levelOf = (lt: SellerLegalType, planId: string) => {
   const idx = (SELLER_PLANS[lt] || []).findIndex((p) => p.id === planId);
   return idx < 0 ? 0 : idx;
@@ -1452,17 +1454,18 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
       {/* шапка кабинета */}
-      <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
+      <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 4 ? "bg-[#221540] p-6 rounded-2xl shadow-lift" : lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
         <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream overflow-hidden" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{(s.shopLogo || s.masterAvatar || user?.avatar) ? <img src={(s.shopLogo || s.masterAvatar || user?.avatar) as string} className="w-full h-full object-cover" /> : s.shopName[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
+            <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl >= 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
             <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: lvlMeta.accent }}>
               {sellerTypeInfo(lt)?.short} · {planName}
             </span>
             {plan.badge && <Badge tone="premium"><ShieldCheck size={11} /> {plan.badge}</Badge>}
+            {lvl === 4 && <span className="inline-flex items-center h-7 px-3 rounded-full text-[12px] font-bold font-serif" style={{ border: "2px solid #d4af37", color: "#d4af37", background: "transparent" }}>Легенда платформы</span>}
           </div>
-          <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline} · комиссия {commissionNow}% · списание {fmtDate(nextCharge.toISOString())}</p>
+          <p className="text-[12.5px] text-ink-mute mt-1">{lvlMeta.tagline}{lvl === 4 && " · приоритетная модерация активна"} · комиссия {commissionNow}% · списание {fmtDate(nextCharge.toISOString())}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Сменить тариф</Link>

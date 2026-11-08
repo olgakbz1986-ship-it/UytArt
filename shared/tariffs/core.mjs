@@ -18,21 +18,24 @@ function resolveLimits(table) {
 }
 
 const COMMISSION_MATRIX = {
-  self_employed: { free: 10, master: 9, profi: 8, top: 7 },
-  ip: { free: 12, business: 11, "business-pro": 10, "business-premium": 9 },
-  ooo: { free: 15, corp: 14, "corp-pro": 13, "corp-premium": 11 },
+  self_employed: { free: 10, master: 9, profi: 8, top: 7, legend: 6 },
+  ip: { free: 12, business: 11, "business-pro": 10, "business-premium": 9, "business-legend": 8 },
+  ooo: { free: 15, corp: 14, "corp-pro": 13, "corp-premium": 11, "corp-legend": 9 },
+  
+  
 };
 
 const PLAN_LEVEL = {
   free: 0, master: 1, business: 1, corp: 1,
   "master-pro": 2, "business-pro": 2, "corp-pro": 2, profi: 2,
   "master-premium": 3, "business-premium": 3, "corp-premium": 3, top: 3,
+  legend: 4, "business-legend": 4, "corp-legend": 4, collector: 4,
 };
 
 const SELLER_LIMITS_RAW = {
-  self_employed: { free: { maxProducts: 50, aiCardGens: 0 }, master: { maxProducts: 500, aiCardGens: 100 }, "master-pro": { maxProducts: 2000, aiCardGens: "∞" }, "master-premium": { maxProducts: "∞", aiCardGens: "∞" } },
-  ip: { free: { maxProducts: 50, aiCardGens: 0 }, business: { maxProducts: 500, aiCardGens: 100 }, "business-pro": { maxProducts: 2000, aiCardGens: "∞" }, "business-premium": { maxProducts: "∞", aiCardGens: "∞" } },
-  ooo: { free: { maxProducts: 50, aiCardGens: 0 }, corp: { maxProducts: 500, aiCardGens: 100 }, "corp-pro": { maxProducts: 2000, aiCardGens: "∞" }, "corp-premium": { maxProducts: "∞", aiCardGens: "∞" } },
+  self_employed: { free: { maxProducts: 50, aiCardGens: 0 }, master: { maxProducts: 500, aiCardGens: 100 }, profi: { maxProducts: 2000, aiCardGens: "∞" }, top: { maxProducts: "∞", aiCardGens: "∞" }, legend: { maxProducts: "∞", aiCardGens: "∞" } },
+  ip: { free: { maxProducts: 50, aiCardGens: 0 }, business: { maxProducts: 500, aiCardGens: 100 }, "business-pro": { maxProducts: 2000, aiCardGens: "∞" }, "business-premium": { maxProducts: "∞", aiCardGens: "∞" }, "business-legend": { maxProducts: "∞", aiCardGens: "∞" } },
+  ooo: { free: { maxProducts: 50, aiCardGens: 0 }, corp: { maxProducts: 500, aiCardGens: 100 }, "corp-pro": { maxProducts: 2000, aiCardGens: "∞" }, "corp-premium": { maxProducts: "∞", aiCardGens: "∞" }, "corp-legend": { maxProducts: "∞", aiCardGens: "∞" } },
 };
 
 const BUYER_PLANS_RAW = {
@@ -40,17 +43,18 @@ const BUYER_PLANS_RAW = {
   start: { aiGens: 15, marketOrders: 3, priceWatches: 10 },
   designer: { aiGens: 50, marketOrders: 10, priceWatches: "∞" },
   premium: { aiGens: "∞", marketOrders: "∞", priceWatches: "∞" },
+  collector: { aiGens: "∞", marketOrders: "∞", priceWatches: "∞" },
 };
 
 const REGISTRATION_FEES = { self_employed: 5000, ip: 10000, ooo: 15000 };
 
 const SELLER_PLAN_PRICES = {
-  self_employed: [{ id: "free", price: 0 }, { id: "master", price: 300 }, { id: "profi", price: 600 }, { id: "top", price: 1200 }],
-  ip: [{ id: "free", price: 0 }, { id: "business", price: 999, legacyPrice: 800 }, { id: "business-pro", price: 1999, legacyPrice: 1800 }, { id: "business-premium", price: 4999, legacyPrice: 4000 }],
-  ooo: [{ id: "free", price: 0 }, { id: "corp", price: 4999, legacyPrice: 2500 }, { id: "corp-pro", price: 14999, legacyPrice: 6000 }, { id: "corp-premium", price: 49999, legacyPrice: 15000 }],
+  self_employed: [{ id: "free", price: 0 }, { id: "master", price: 300 }, { id: "profi", price: 600 }, { id: "top", price: 1200 }, { id: "legend", price: 2500 }],
+  ip: [{ id: "free", price: 0 }, { id: "business", price: 999, legacyPrice: 800 }, { id: "business-pro", price: 1999, legacyPrice: 1800 }, { id: "business-premium", price: 4999, legacyPrice: 4000 }, { id: "business-legend", price: 9999 }],
+  ooo: [{ id: "free", price: 0 }, { id: "corp", price: 4999, legacyPrice: 2500 }, { id: "corp-pro", price: 14999, legacyPrice: 6000 }, { id: "corp-premium", price: 49999, legacyPrice: 15000 }, { id: "corp-legend", price: 99999 }],
 };
 
-const BUYER_PLAN_PRICES = { free: 0, start: 500, designer: 1000, premium: 1500 };
+const BUYER_PLAN_PRICES = { free: 0, start: 500, designer: 1000, premium: 1500, collector: 3000 };
 const GRANDFATHER_MONTHS = { ip: 3, ooo: 6 };
 const PRICE_REVISION_NOTICE_DAYS = 30;
 const PRICE_REVISION_EFFECTIVE_AT_DEFAULT = "2026-10-18T00:00:00.000Z";

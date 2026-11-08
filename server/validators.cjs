@@ -23,7 +23,7 @@ const SELLER_PLANS = [
   "business", "business-pro", "business-premium",
   "corp", "corp-pro", "corp-premium",
 ];
-const ALL_PLANS = [...new Set([...BUYER_PLANS, ...SELLER_PLANS])];
+const ALL_PLANS = [...new Set([...BUYER_PLANS, ...SELLER_PLANS, "legend", "business-legend", "corp-legend", "collector"])];
 /* ID пакетов сверх лимита из server/tariffs.cjs (OVERLIMIT_PACKS):
    plus-products-50 (+50 слотов товаров), plus-ai-gens-50 (+50 AI-генераций).
    Клиентские псевдонимы products_50 / gens_50 принимаются и нормализуются. */

@@ -11,7 +11,7 @@ import * as core from "../../shared/tariffs/core.mjs";
    Подписки: покупатели (4 тарифа) + лимиты продавцов по юрлицу
    ============================================================ */
 
-export type BuyerPlanId = "free" | "start" | "designer" | "premium";
+export type BuyerPlanId = "free" | "start" | "designer" | "premium" | "collector";
 export interface BuyerLimits {
   aiGens: number;          /* AI-генераций в месяц, Infinity = безлимит */
   marketOrders: number;    /* активных индивидуальных заказов */
@@ -29,9 +29,11 @@ const BUYER_FEATURE_FLAGS: Record<BuyerPlanId, Pick<BuyerLimits, "qualityFilters
   start:    { qualityFilters: true,  discountPct: 3, earlyAccess: false, curator: false, vip: false },
   designer: { qualityFilters: true,  discountPct: 5, earlyAccess: true,  curator: false, vip: false },
   premium:  { qualityFilters: true,  discountPct: 7, earlyAccess: true,  curator: true,  vip: true },
+  collector: { qualityFilters: true,  discountPct: 10, earlyAccess: true,  curator: true,  vip: true },
 };
 const BUYER_NUM_LIMITS = core.resolveLimits(core.BUYER_PLANS_RAW) as Record<BuyerPlanId, Pick<BuyerLimits, "aiGens" | "marketOrders" | "priceWatches">>;
 export const BUYER_PLANS: Record<BuyerPlanId, BuyerLimits> = {
+  collector: { ...BUYER_NUM_LIMITS.collector, ...BUYER_FEATURE_FLAGS.collector },
   free:     { ...BUYER_NUM_LIMITS.free,     ...BUYER_FEATURE_FLAGS.free },
   start:    { ...BUYER_NUM_LIMITS.start,    ...BUYER_FEATURE_FLAGS.start },
   designer: { ...BUYER_NUM_LIMITS.designer, ...BUYER_FEATURE_FLAGS.designer },

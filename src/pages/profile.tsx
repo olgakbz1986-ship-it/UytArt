@@ -59,7 +59,7 @@ function TabFallback() {
   );
 }
 
-const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум" };
+const PLAN_NAME: Record<string, string> = { free: "Базовый", start: "Старт", designer: "Дизайнер", premium: "Премиум", collector: "Коллекционер" };
 
 /* Визуальные токены и возможности каждого уровня покупателя */
 const BUYER_TIER: Record<string, { level: number; accent: string; soft: string; tagline: string; unlocked: string[]; locked: string[]; next?: string }> = {
@@ -90,7 +90,13 @@ const BUYER_TIER: Record<string, { level: number; accent: string; soft: string; 
     unlocked: ["Безлимит AI-генераций и заказов", "Скидка 7%", "AI-агент-партнёр: безлимит задач и черновики заказов", "Бесплатная доставка по округу", "Закрытые распродажи", "VIP-бейдж"],
     locked: [],
   },
-};
+
+  collector: {
+    level: 4,
+    accent: "#5b3fa8", soft: "#ece7f8", tagline: "Легенда коллекций",
+    unlocked: ["Всё из Премиума", "Скидка 10% на все покупки", "Приоритетный доступ к дропам", "VIP-статус «Коллекционер»", "Купоны-сюрпризы от сервиса", "Персональный подбор коллекций"],
+    locked: [],
+  },};
 
 const _ORDER_LABEL: Record<string, { label: string; tone: "honey" | "ai" | "success" | "premium" }> = {
   paid: { label: "Принят", tone: "honey" },
@@ -335,7 +341,7 @@ export default function ProfilePage() {
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none", clipPath: "inset(50%)" }}
         onChange={(e) => { onAvatarFile(e.target.files?.[0], pendingInstantRef.current); e.target.value = ""; }}
       />
-      <div className={`flex items-center gap-4 mb-4 flex-wrap ${tier.level === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : tier.level === 2 ? "border-b-2 border-[#c77e28] pb-3" : tier.level === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
+      <div className={`flex items-center gap-4 mb-4 flex-wrap ${tier.level === 4 ? "bg-[#221540] p-6 rounded-2xl shadow-lift" : tier.level === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : tier.level === 2 ? "border-b-2 border-[#c77e28] pb-3" : tier.level === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
         {/* кликабельный аватар: мгновенная загрузка — фото сразу появляется в хедере и кабинете */}
         <button type="button" onClick={() => openAvatarPicker(true)} className="relative group shrink-0 cursor-pointer rounded-full" title="Загрузить фото профиля" aria-label="Загрузить фото профиля">
           {session.avatar ? (
@@ -349,8 +355,8 @@ export default function ProfilePage() {
         </button>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className={`font-display font-bold text-[clamp(24px,3vw,32px)] ${tier.level === 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>Здравствуйте, {session.name.split(" ")[0]}!</h1>
-            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: tier.accent, border: tier.level === 3 ? "2px solid #d4af37" : "none" }}>
+            <h1 className={`font-display font-bold text-[clamp(24px,3vw,32px)] ${tier.level >= 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>Здравствуйте, {session.name.split(" ")[0]}!</h1>
+            <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: tier.accent, border: tier.level >= 3 ? "2px solid #d4af37" : "none" }}>
               {lim.vip && <Sparkles size={11} />}{PLAN_NAME[buyerPlan]}
             </span>
           </div>
