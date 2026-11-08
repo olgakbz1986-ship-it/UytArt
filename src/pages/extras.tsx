@@ -1447,8 +1447,8 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     { id: "buyer-favorites" as const, label: "Избранное", icon: Heart },
     /* Покупательские разделы с тарифными замками — те же правила, что в кабинете
        покупателя: «Мои концепты» и «Отслеживание цен» закрыты на free-тарифе. */
-    { id: "concepts" as const, label: "Мои концепты", icon: Sparkles, locked: !sellerIsPaidBuyer },
-    { id: "prices" as const, label: "Отслеживание цен", icon: BellRing, locked: !sellerIsPaidBuyer },
+    { id: "concepts" as const, label: "Мои концепты", icon: Sparkles, locked: lvl < 2 },
+    { id: "prices" as const, label: "Отслеживание цен", icon: BellRing, locked: lvl < 2 },
     { id: "buyer-addresses" as const, label: "Адреса", icon: MapPin },
     { id: "buyer-bonus" as const, label: "Бонусы", icon: Gift },
     { id: "buyer-complaints" as const, label: "Жалобы", icon: Flag },
