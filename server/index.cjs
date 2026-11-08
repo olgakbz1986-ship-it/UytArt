@@ -1830,6 +1830,36 @@ const FINAL_ORDER_STATUSES = ["completed", "delivered", "confirmed", "reviewed"]
 /* Клиенту нужен честный признак «есть ли у меня оплаченная покупка», чтобы
    не рендерить форму отзыва в DOM для чужих/гостей (ЭТАП 1 п.2).
    Ответ совпадает с проверкой допуска POST /api/purchases/:productId/reviews. */
+/* КОГОРТНАЯ АНАЛИТИКА (tier4): обезличенный агрегат возвращаемости покупателей.
+   Источник — d.purchases (userId, seller_id, date, status). Когорта — покупатели,
+   впервые купившие у продавца в одну ISO-неделю; доля вернувшихся на неделях 1-3.
+   Имена покупателей не отдаются — только числа. */
+app.get("/api/seller/cohorts", guard, async (req, res) => {
+  try {
+    const FILE = require("path").resolve(__dirname, "dev-db.json");
+    const d = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {};
+    const buys = (d.purchases || []).filter((x) => String(x.seller_id || "") === String(req.userId) && x.status !== "cancelled");
+    const wk = (iso) => { const t = new Date(iso || "").getTime(); if (!t) return null; const dt = new Date(t); const day = (dt.getDay() + 6) % 7; dt.setDate(dt.getDate() - day); dt.setHours(0, 0, 0, 0); return Math.floor(dt.getTime() / 6048e5); };
+    const first = new Map();
+    for (const b of buys) { const w = wk(b.date || b.created_at); if (w === null) continue; const u = String(b.userId || ""); if (!u) continue; if (!first.has(u) || w < first.get(u)) first.set(u, w); }
+    const byCohort = new Map();
+    for (const b of buys) {
+      const u = String(b.userId || ""); if (!u) continue;
+      const w = wk(b.date || b.created_at); if (w === null) continue;
+      const w0 = first.get(u); if (w0 === undefined) continue;
+      const diff = w - w0; if (diff < 0 || diff > 3) continue;
+      if (!byCohort.has(w0)) byCohort.set(w0, { size: new Set(), w1: new Set(), w2: new Set(), w3: new Set() });
+      const c = byCohort.get(w0);
+      if (diff === 0) c.size.add(u); else c["w" + diff].add(u);
+    }
+    const cohorts = [...byCohort.keys()].sort((a, b) => b - a).slice(0, 6).map((w0) => {
+      const c = byCohort.get(w0); const size = c.size.size;
+      return { week: new Date(w0 * 6048e5).toISOString().slice(0, 10), size,
+        retention: [c.w1.size, c.w2.size, c.w3.size].map((n) => (size ? Math.round((n / size) * 100) : 0)) };
+    });
+    res.json({ ok: true, cohorts });
+  } catch (e) { res.status(500).json({ ok: false, error: "cohorts_failed" }); }
+});
 app.get("/api/purchases/status", guard, async (req, res) => {
   try {
     const rawId = String(req.query.productId || "");
