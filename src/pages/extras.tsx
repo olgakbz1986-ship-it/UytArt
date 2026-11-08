@@ -300,6 +300,7 @@ export function MarketPage() {
           <h1 className="font-display font-bold text-[clamp(26px,3vw,34px)] text-ink mb-2">Биржа индивидуальных заказов</h1>
           <p className="text-[14px] text-ink-soft max-w-xl">Опишите, что нужно изготовить, — мастера пришлют предложения. Сделка защищена: предоплата резервируется на платформе.</p>
         </div>
+          
         <Btn size="lg" onClick={() => { setEditOrderId(null); setFTitle(""); setFDesc(""); setFMaterial(""); setFBudget(""); setRefs([]); setFErr(""); setWizardOpen(true); }}><Sparkles size={18} /> Создать заказ</Btn>
       </div>
 
@@ -1484,7 +1485,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
           <p className={`flex items-center gap-2 ${plan.analytics !== "basic" ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.analytics !== "basic" ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Аналитика {plan.analytics !== "basic" ? "" : "(закрыта)"}</p>
           <p className={`flex items-center gap-2 ${plan.team > 0 ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.team > 0 ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Команда {plan.team > 0 ? `(${fmtLimit(plan.team)})` : "(закрыта)"}</p>
           <p className={`flex items-center gap-2 ${plan.massEdit ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.massEdit ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Массовое редактирование</p>
-          <p className={`flex items-center gap-2 ${plan.forecasts ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.forecasts ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Прогнозы продаж</p>
+          <p className={`flex items-center gap-2 ${plan.forecasts ? "text-ink-soft" : "text-ink-mute line-through"}`}>{plan.forecasts ? <CheckCircle2 size={13} style={{ color: lvlMeta.accent }} /> : <X size={13} />} Прогнозы продаж</p>          {lvl === 4 && (            <div className="mt-3 p-5 bg-[#f9f7ff] border border-[#e6d9ff] rounded-xl">              <p className="font-display font-bold text-[15px] mb-1" style={{ color: "#5b3fa8" }}>Когортная аналитика</p>              <p className="text-[12.5px] text-ink-soft mb-3">Возвращаемость покупателей по неделям</p>              <div className="grid grid-cols-3 gap-3">                {[["Неделя 1", "37%"], ["Неделя 2", "29%"], ["Неделя 3", "42%"]].map(([w, v]) => (                  <div key={w} className="p-3 bg-white border border-line-soft rounded-lg">                    <p className="text-ink-mute text-[11px]">{w}</p>                    <p className="font-bold text-ink text-[15px]">{v}</p>                  </div>                ))}              </div>              <p className="mt-3 text-[11px] italic text-ink-mute">Демо-данные · реальный расчёт подключим к заказам</p>            </div>          )}
         </div>
       </div>
 
