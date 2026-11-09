@@ -428,7 +428,7 @@ export function Header() {
     { to: "/masters", label: "Мастера" },
     { to: "/shops", label: "Магазины" },
     { to: "/ai-designer", label: "AI-дизайнер" },
-    { to: "/about", label: "О нас" },
+    { to: "/about", label: "Концепция" },
     { to: "/contacts", label: "Контакты" },
     { to: "/legal", label: "Документы" },
   ];
