@@ -1,6 +1,5 @@
 dist/
 node_modules/
-server/dev-db.json
 .env
 .env.local
 *.env.*

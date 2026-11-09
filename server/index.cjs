@@ -31,7 +31,7 @@ const ACCESS_TTL_SEC = cfg.ACCESS_TTL_SEC;   /* access-токен: 15 минут
 const REFRESH_TTL_SEC = cfg.REFRESH_TTL_SEC; /* refresh-токен: 7 дней  (§1.3) */
 const API_URL = process.env.API_URL || "http://localhost:8787";
 const COOKIE = "qf_session";        /* access-токен (httpOnly) */
-const REF_COOKIE = "qf_refresh";    /* refresh-токен (httpOnly, Path=/api/auth) */
+const REF_COOKIE = "qf_refresh";    /* refresh-токен (httpOnly, Path=/) */
 const MAIL_FROM = process.env.MAIL_FROM || "Quantiform <no-reply@starttechpro.ru>";
 const DAY = 24 * 3600 * 1000;
 const SECURE_COOKIES = process.env.QF_COOKIE_SECURE === "1" || cfg.IS_PROD;
@@ -206,7 +206,7 @@ function issueTokens(res, userId) {
   const jti = crypto.randomUUID();
   const refresh = jwt.sign({ sub: userId, scope: "user", typ: "refresh", jti }, JWT_SECRET, { expiresIn: REFRESH_TTL_SEC });
   res.cookie(COOKIE, access, cookieOpts(ACCESS_TTL_SEC * 1000, "/"));
-  res.cookie(REF_COOKIE, refresh, cookieOpts(REFRESH_TTL_SEC * 1000, "/api/auth"));
+  res.cookie(REF_COOKIE, refresh, cookieOpts(REFRESH_TTL_SEC * 1000, "/"));
   return { access, accessExpiresAt: new Date((nowSec + ACCESS_TTL_SEC) * 1000).toISOString(), expiresIn: ACCESS_TTL_SEC };
 }
 async function revokeToken(tok) {
@@ -222,7 +222,7 @@ async function resolveSession(req, res) {
   try {
     const p = jwt.verify(rt, JWT_SECRET);
     if (p.scope !== "user" || p.typ !== "refresh") return null;
-    if (await revokedRefresh.has(p.jti)) { await revokeToken(rt); res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth")); return null; }
+    if (await revokedRefresh.has(p.jti)) { await revokeToken(rt); res.clearCookie(REF_COOKIE, cookieOpts(0, "/")); return null; }
     /* rotation: одноразовое использование refresh-токена */
     await revokedRefresh.add(p.jti, p.sub, p.exp);
     const pair = issueTokens(res, p.sub);
@@ -456,7 +456,7 @@ app.post("/api/auth/login", async (req, res) => {
        /api/admin/login/* (одноразовый код на почту при каждом входе). */
     /* §1.3: access-токен живёт 15 минут и возвращается в теле ответа;
        refresh-токен (7 дней) устанавливается ТОЛЬКО httpOnly-кукой qf_refresh
-       (httpOnly + Secure + SameSite=Strict + Path=/api/auth) — в теле его нет. */
+       (httpOnly + Secure + SameSite=Strict + Path=/) — в теле его нет. */
     const pair = issueTokens(res, u.id);
     /* §5.1 security-событие: успешный вход (в логах — только id и маскированный email) */
     log.security("login_success", { ip: req.ip, userId: u.id, email });
@@ -478,7 +478,7 @@ app.post("/api/auth/refresh", async (req, res) => {
     let p;
     try { p = jwt.verify(rt, JWT_SECRET); } catch {
       log.security("refresh_denied", { ip: req.ip, reason: "invalid_or_expired" });
-      res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth")); return res.status(401).json({ error: "bad_session" });
+      res.clearCookie(REF_COOKIE, cookieOpts(0, "/")); return res.status(401).json({ error: "bad_session" });
     }
     if (p.scope !== "user" || p.typ !== "refresh") {
       log.security("refresh_denied", { ip: req.ip, userId: p.sub, reason: "wrong_scope" });
@@ -488,7 +488,7 @@ app.post("/api/auth/refresh", async (req, res) => {
       /* reuse-detector: токен уже использован — отзываем всю цепочку этой куки */
       log.security("refresh_reuse_detected", { ip: req.ip, userId: p.sub, jti: p.jti });
       await revokeToken(rt);
-      res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth"));
+      res.clearCookie(REF_COOKIE, cookieOpts(0, "/"));
       res.clearCookie(COOKIE, cookieOpts(0, "/"));
       return res.status(401).json({ error: "bad_session" });
     }
@@ -505,7 +505,7 @@ app.post("/api/auth/logout", async (req, res) => {
   const rt = req.cookies[REF_COOKIE];
   if (rt) await revokeToken(rt);
   res.clearCookie(COOKIE, cookieOpts(0, "/"));
-  res.clearCookie(REF_COOKIE, cookieOpts(0, "/api/auth"));
+  res.clearCookie(REF_COOKIE, cookieOpts(0, "/"));
   res.json({ ok: true });
 });
 app.get("/api/auth/me", guard, async (req, res) => {
