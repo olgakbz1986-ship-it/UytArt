@@ -2632,7 +2632,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 }
 
 /* ============================================================
-   Концепция — манифест маркетплейса нового поколения
+   Концепция — манифест платформы созидательного потребления
    ============================================================ */
 const aboutStats: [string, string][] = [
   ["1 240", "мастеров и производств"],
@@ -2675,7 +2675,7 @@ export function AboutPage() {
         <div className="relative max-w-[1280px] mx-auto px-4 sm:px-6 py-20 sm:py-28">
           <Reveal>
             <p className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-accent mb-6">
-              <span className="w-6 h-px bg-accent" /> Quantiform — маркетплейс нового поколения
+              <span className="w-6 h-px bg-accent" /> Quantiform — платформа созидательного потребления
             </p>
           </Reveal>
           <Reveal delay={80}>
