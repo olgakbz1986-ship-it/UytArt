@@ -3538,7 +3538,7 @@ export function LegalPage() {
    ============================================================ */
 export function ContactsPage() {
   const user = useAppStore((s) => s.session);
-  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", topic: "Вопрос по заказу", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", topic: "Вопрос по заказу", message: "" });
   const [sent, setSent] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
