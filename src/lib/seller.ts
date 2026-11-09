@@ -398,6 +398,7 @@ ogrn: string;
   changeLegalType: (uid: string, newType: SellerLegalType, oldPlanId: string) => { ok: boolean; error?: string; preview?: LegalTypePreview };
 }
 
+let profileSyncTimer: any = null;
 const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "master";
 
 export const useSellerReg = create<SellerRegState>()(
@@ -578,6 +579,16 @@ export const useSellerReg = create<SellerRegState>()(
           changeReason: prev?.changeReason,
         };
         set((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: prof } }));
+        /* ЗЕРКАЛО НА СЕРВЕР: анкета магазина сохраняется в seller_profile
+           (PATCH /api/seller/profile), чтобы кабинет и данные вспоминались
+           между сессиями, браузерами и устройствами. Дебаунс 1 секунда. */
+        if (useAppStore.getState().session?.role === "seller") {
+          if (profileSyncTimer) clearTimeout(profileSyncTimer);
+          profileSyncTimer = setTimeout(() => {
+            const { accountId: _aid, ...body } = prof;
+            api.sellerProfilePatch(body).catch(() => { /* сервер недоступен — синхронизируем в следующий раз */ });
+          }, 1000);
+        }
       },
       clearActive: () => set({ ...EMPTY_REG }),
       updateLegalFields: (uid, patch, reason) => {
@@ -1028,6 +1039,8 @@ export async function initSellerFromServer(uid: string): Promise<void> {
     };
     useSellerReg.setState((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: prof } }));
     useSellerReg.getState().loadProfile(uid);
+    const { accountId: _aid2, ...syncBody } = prof;
+    api.sellerProfilePatch(syncBody).catch(() => { /* noop */ });
   } catch { /* noop */ }
 }
 
