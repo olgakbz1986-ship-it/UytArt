@@ -8,3 +8,4 @@ server/dev-db.json
 *.tmp
 server/dev-admin.json
 lint-report.json
+public/img/*.old.jpg
