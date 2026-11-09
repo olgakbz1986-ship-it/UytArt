@@ -25,6 +25,7 @@ import { useMarketProducts } from "../lib/market";
 import {
   useSellerReg, useSellerAccount, SELLER_TYPES, sellerTypeInfo, SELLER_PLANS, sellerPlanById, yearPriceOf,
   SellerLegalType, ProductMedia, selectCommissionSum, selectTurnover, COMMISSION_MATRIX, previewLegalTypeChange, LegalTypePreview, SellerProfile,
+  initSellerFromServer,
 } from "../lib/seller";
 import { useFinance, PAYOUT_METHOD_META, selectAvailable, selectHeld, selectInTransit, type PayoutMethodType } from "../lib/finance";
 import {
@@ -1224,6 +1225,19 @@ export function SellerDashboardPage() {
   const acc = useSellerAccount();
   const marketList = useMarketProducts();
   const user = useAppStore((st) => st.session);
+  const [gateState, setGateState] = useState<"checking" | "open" | "closed">("checking");
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!user || user.role !== "seller") { if (alive) setGateState("closed"); return; }
+      if (useSellerReg.getState().status === "active") { if (alive) setGateState("open"); return; }
+      await initSellerFromServer(user.userId);
+      if (!alive) return;
+      setGateState(useSellerReg.getState().status === "active" ? "open" : "closed");
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.userId, user?.role]);
   const [tab, setTab] = useState<"products" | "agent" | "orders" | "responses" | "finance" | "analytics" | "team" | "digital" | "settings" | "buyer-favorites" | "my-orders" | "subscriptions" | "concepts" | "prices" | "buyer-addresses" | "buyer-bonus" | "buyer-complaints">("products");
   /* Покупательский тариф продавца (продавец — тоже покупатель): определяет,
      какие покупательские разделы закрыты замком. Правило тарификации то же,
@@ -1390,7 +1404,16 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   const sum30 = tx30.reduce((s2, t) => s2 + (t.productPrice || 0), 0);
   const forecast30 = activeDays >= 7 ? Math.round((sum30 / activeDays) * 30) : 0;
 
-  if (s.status !== "active" || !user || user.role !== "seller") {
+  if (gateState !== "open") {
+    if (gateState === "checking") {
+      return (
+        <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
+          <p className="text-[40px] mb-3">⏳</p>
+          <h1 className="font-display font-bold text-[28px] text-ink mb-2">Синхронизация кабинета с сервером…</h1>
+          <p className="text-[14px] text-ink-soft mb-7">Восстанавливаем профиль мастерской по данным аккаунта.</p>
+        </div>
+      );
+    }
     return (
       <div className="max-w-[700px] mx-auto px-4 py-24 text-center">
         <p className="text-[56px] mb-3">🏪</p>

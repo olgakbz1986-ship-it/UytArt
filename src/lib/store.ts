@@ -216,6 +216,14 @@ export const useAppStore = create<AppState>()(
         /* нормализуем хранилище под единым серверным id (чистим дубликаты
            вида "seller-<timestamp>" без password_hash, накопленные старыми
            версиями мастера регистрации) и сразу делаем аккаунт активным. */
+        if (serverRole === "seller") {
+          try {
+            const sr = await fetch("/api/shops", { credentials: "include" }).then((x) => x.json());
+            const sarr: any[] = Array.isArray(sr) ? sr : ((sr && (sr.shops || sr.items)) || []);
+            const shopRec = sarr.find((x) => String(x.id) === String(pr.id) || String(x.owner_id || x.user_id || x.userId || "") === String(pr.id));
+            if (shopRec && shopRec.name) user.name = String(shopRec.name);
+          } catch { /* оставляем имя из профиля */ }
+        }
         useAppStore.getState().login(user, true);
         return { ok: true, role: serverRole } as { ok: true; role: string };
       },
@@ -231,9 +239,18 @@ export const useAppStore = create<AppState>()(
             const serverLegal: SellerType | undefined = (pr.legal_type === "self_employed" || pr.legal_type === "ip" || pr.legal_type === "ooo") ? pr.legal_type : undefined;
             const rsEmailKey = String(pr.email || "").toLowerCase();
             const rsLocal = (useAppStore.getState().accounts[rsEmailKey] || []).find((a) => a.id === pr.id);
+            let rsName = rsLocal?.name || pr.name || pr.email.split("@")[0];
+            if (serverRole === "seller") {
+              try {
+                const rr = await fetch("/api/shops", { credentials: "include" }).then((x) => x.json());
+                const arr2: any[] = Array.isArray(rr) ? rr : ((rr && (rr.shops || rr.items)) || []);
+                const shop2 = arr2.find((x) => String(x.id) === String(pr.id) || String(x.owner_id || x.user_id || x.userId || "") === String(pr.id));
+                if (shop2 && shop2.name) rsName = String(shop2.name);
+              } catch { /* оставляем имя из профиля */ }
+            }
             useAppStore.getState().login({
               id: pr.id,
-              name: rsLocal?.name || pr.name || pr.email.split("@")[0],
+              name: rsName,
               email: pr.email,
               phone: pr.phone || rsLocal?.phone || "",
               role: serverRole,

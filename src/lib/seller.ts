@@ -978,6 +978,59 @@ export const consumeAiCardGen = (month: string) => useSellerAccount.getState().c
    - при выходе сбрасываем активный профиль, чтобы следующий
      пользователь не увидел чужой кабинет.
    ============================================================ */
+export async function initSellerFromServer(uid: string): Promise<void> {
+  if (!uid) return;
+  try {
+    const sess = useAppStore.getState().session;
+    let shopName = "";
+    let city = "";
+    let slug = "";
+    let inn = "";
+    let ogrn = "";
+    let shopLogo: string | undefined;
+    let legalType: SellerLegalType | null = (sess && sess.sellerType) || null;
+    try {
+      const sp = await api.sellerProfileGet();
+      const p: Record<string, any> = (sp && sp.ok && sp.profile) ? sp.profile : {};
+      const li: Record<string, any> = ((sp as any) && (sp as any).legal_info) || {};
+      shopName = String(p.shopName || p.shop_name || p.name || "");
+      city = String(p.city || "");
+      slug = String(p.slug || "");
+      inn = String(p.inn || li.inn || "");
+      ogrn = String(p.ogrn || li.ogrn || "");
+      shopLogo = p.shopLogo || undefined;
+      const lt = p.legalType || p.legal_type;
+      if (lt === "self_employed" || lt === "ip" || lt === "ooo") legalType = lt;
+    } catch { /* сервер без анкеты — не фатально */ }
+    if (!shopName) {
+      try {
+        const r = await fetch("/api/shops", { credentials: "include" }).then((x) => x.json());
+        const arr: any[] = Array.isArray(r) ? r : ((r && (r.shops || r.items)) || []);
+        const shop = arr.find((x) => String(x.id) === String(uid) || String(x.owner_id || x.user_id || x.userId || "") === String(uid));
+        if (shop) {
+          shopName = String(shop.name || "");
+          city = city || String(shop.city || shop.sellerCity || "");
+          slug = slug || String(shop.slug || "");
+          shopLogo = shopLogo || shop.avatar_url || shop.avatarUrl || undefined;
+        }
+      } catch { /* сервер недоступен */ }
+    }
+    if (!legalType) legalType = "self_employed";
+    const prof: SellerProfile = {
+      accountId: uid, status: "active", legalType, shopName,
+      contactName: (sess && sess.name) || "", email: (sess && sess.email) || "",
+      phone: (sess && sess.phone) || "", city, inn, ogrn, legalName: "", legalAddress: "",
+      shopLogo, slug, production_region: city, production_city: city,
+      commissionRate: getCommissionRate(legalType, "free"),
+      submittedAt: new Date().toISOString(), isMaster: true, acceptsCustomOrders: true,
+      masterName: "", yearsExperience: "", businessStory: "", achievements: "",
+      categories: [], productionGallery: [], videoTourUrl: "", docs: {},
+    };
+    useSellerReg.setState((st) => ({ profilesByAccount: { ...st.profilesByAccount, [uid]: prof } }));
+    useSellerReg.getState().loadProfile(uid);
+  } catch { /* noop */ }
+}
+
 let lastSyncedUid = "";
 useAppStore.subscribe((st) => {
   const uid = st.session?.userId || "";
@@ -995,7 +1048,7 @@ useAppStore.subscribe((st) => {
     const reg = useSellerReg.getState();
     if (isSeller) {
       if (reg.profilesByAccount[uid]) reg.loadProfile(uid);
-      else if (reg.status !== "active") reg.clearActive();
+      else void initSellerFromServer(uid);
       /* Миграция legacy: товары без владельца -> текущий аккаунт */
       const acc = useSellerAccount.getState();
       if (acc.products.some((p) => !p.ownerId)) {
