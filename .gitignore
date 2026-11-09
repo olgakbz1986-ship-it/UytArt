@@ -8,3 +8,4 @@ node_modules/
 server/dev-admin.json
 lint-report.json
 public/img/*.old.jpg
+server/dev-db.json
