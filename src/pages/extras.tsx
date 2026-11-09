@@ -1202,10 +1202,10 @@ export function SellerRegisterPage() {
 /* Визуальные токены уровней продавца (по позиции тарифа: 0 free → 3 топ) */
 const SELLER_LEVEL: { accent: string; soft: string; tagline: string }[] = [
   { accent: "#6b6b66", soft: "#eae4d4", tagline: "Старт продаж" },
-  { accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Растущая мастерская" },
-  { accent: "#c77e28", soft: "#f9ebd2", tagline: "Профессиональные продажи" },
-  { accent: "#d4a574", soft: "#f3e7d8", tagline: "Максимум возможностей" },
-  { accent: "#5b3fa8", soft: "#ece7f8", tagline: "Легенда платформы" },
+  { accent: "#c77e28", soft: "#f9ebd2", tagline: "Растущая мастерская" },
+  { accent: "#2d5f4c", soft: "#eaf2ee", tagline: "Профессиональные продажи" },
+  { accent: "#5b3fa8", soft: "#ece7f8", tagline: "Максимум возможностей" },
+  { accent: "#8b1e3f", soft: "#f7e8ed", tagline: "Легенда платформы" },
 ];
 const COMMISSION_BY_LEVEL: Record<SellerLegalType, number[]> = { self_employed: [10, 9, 8, 7, 6], ip: [12, 11, 10, 9, 8], ooo: [15, 14, 13, 11, 9] };
 const levelOf = (lt: SellerLegalType, planId: string) => {
@@ -1462,11 +1462,11 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
       {/* шапка кабинета */}
-      <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 4 ? "bg-[#221540] p-6 rounded-2xl shadow-lift" : lvl === 3 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "border-b-2 border-[#c77e28] pb-3" : lvl === 1 ? "border-b-2 border-[#2d5f4c] pb-3" : ""}`}>
+      <div className={`flex items-center gap-4 mb-4 flex-wrap ${lvl === 4 ? "bg-[#4a0e2e] p-6 rounded-2xl shadow-lift" : lvl === 3 ? "bg-[#221540] p-6 rounded-2xl shadow-lift" : lvl === 2 ? "bg-[#1a3d2e] p-6 rounded-2xl shadow-lift" : lvl === 1 ? "border-b-2 border-[#c77e28] pb-3" : ""}`}>
         <span className="w-14 h-14 rounded-[16px] flex items-center justify-center text-[26px] ring-2 ring-offset-2 ring-offset-cream overflow-hidden" style={{ background: "var(--color-dark)", color: "var(--color-accent)", ["--tw-ring-color" as string]: lvlMeta.accent }}>{(s.shopLogo || s.masterAvatar || user?.avatar) ? <img src={(s.shopLogo || s.masterAvatar || user?.avatar) as string} className="w-full h-full object-cover" /> : s.shopName[0]?.toUpperCase()}</span>
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl >= 3 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
+            <h1 className={`font-display font-bold text-[clamp(22px,3vw,30px)] ${lvl >= 2 ? "text-[#d4af37] font-serif" : "text-ink"}`}>{s.shopName}</h1>
             <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-bold text-white" style={{ background: lvlMeta.accent }}>
               {sellerTypeInfo(lt)?.short} · {planName}
             </span>
