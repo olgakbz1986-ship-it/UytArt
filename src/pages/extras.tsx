@@ -1603,7 +1603,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             {overProducts ? (
               <p className="text-[12px] font-semibold text-error">Достигнут лимит товаров ({fmtLimit(plan.maxProducts)}). Улучшите тариф.</p>
             ) : (
-              <button onClick={() => window.location.hash = "/seller/product/new"} className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-accent to-accent-deep px-7 py-3 text-cream font-semibold shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border border-accent/40">
+              <button style={{ background: lvlMeta.accent, boxShadow: "0 10px 24px -8px " + lvlMeta.accent }} onClick={() => window.location.hash = "/seller/product/new"} className="group relative overflow-hidden rounded-xl px-7 py-3 text-cream font-semibold hover:brightness-110 transition-xl hover:shadow-accent/30 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border border-accent/40">
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></span>
                 <span className="relative flex items-center gap-2.5">
                   <Sparkles size={16} className="group-hover:rotate-12 transition-transform duration-300" />
