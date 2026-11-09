@@ -2680,8 +2680,8 @@ export function AboutPage() {
           </Reveal>
           <Reveal delay={80}>
             <h1 className="font-lux text-[clamp(42px,6.5vw,88px)] leading-[1.02] max-w-4xl">
-              Мы не маркетплейс.<br />
-              <span className="text-accent">Мы — новая категория.</span>
+              Стек технологий.<br />
+              Душа мастерства.<br />Мир предложений.
             </h1>
           </Reveal>
           <Reveal delay={160}>
