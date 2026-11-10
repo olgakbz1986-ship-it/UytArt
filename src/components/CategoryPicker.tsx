@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { CATEGORIES } from "../data/seed";
 
 const fuzzyMatch = (text: string, query: string): boolean => {
@@ -31,11 +32,42 @@ const GROUP_LABELS: Record<string, string> = {
 
 const POPULAR_SLUGS = ["vases-cachepots", "figurines-sculptures", "paintings-posters-panels", "womens-clothing", "home-aromas", "candles-holders", "photo-frames-albums", "decorative-figures-souvenirs"];
 
+function computePosition(boxRef: HTMLDivElement | null): { top: number; left: number; width: number } {
+  if (!boxRef) return { top: 0, left: 16, width: 500 };
+  const rect = boxRef.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  /* Ровняем dropdown по карточке формы (section) — края совпадают с контентом */
+  const card = (boxRef.closest("section") as HTMLElement | null) || boxRef;
+  const cardRect = card.getBoundingClientRect();
+  let left = cardRect.left;
+  let width = cardRect.width;
+  /* Не даём вылезать за экран */
+  if (left < 16) { width -= 16 - left; left = 16; }
+  if (left + width > viewportWidth - 16) width = viewportWidth - 16 - left;
+  return { top: rect.bottom + 8, left, width };
+}
+
 export function CategoryPicker({ value, sub, onChange }: { value: string; sub: string; onChange: (category: string, sub: string) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const boxRef = useRef<HTMLDivElement>(null);
   const current = CATEGORIES.find((c) => c.name === value) || null;
+
+  /* Позиция вычисляется в layout-эффекте: он выполняется ДО отрисовки,
+     поэтому портал появляется сразу на правильном месте, без мигания.
+     Ref читается только внутри эффекта — требование правила react-hooks/refs. */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => setPos(computePosition(boxRef.current));
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -60,6 +92,7 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
   const popular = useMemo(() => CATEGORIES.filter((c) => POPULAR_SLUGS.includes(c.slug)), []);
   const pick = (name: string) => { onChange(name, ""); setQ(""); setOpen(false); };
 
+
   return (
     <div className="relative" ref={boxRef}>
       <button type="button" onClick={() => setOpen((o) => !o)}
@@ -71,14 +104,15 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
         <span className="text-ink-mute text-[12px]">{open ? "▴" : "▾"}</span>
       </button>
 
-      {open && (
+      {open && pos.width > 0 && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 mt-2 w-full min-w-[320px] rounded-[14px] border border-line bg-white shadow-card overflow-hidden">
+          <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[100] rounded-[14px] border border-line bg-white shadow-card overflow-hidden"
+            style={{ top: pos.top, left: pos.left, width: pos.width }}>
             <div className="p-2 border-b border-line-soft">
               <input autoFocus className="field" placeholder="🔍 Поиск: кашпо, платье, ваза…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <div className="max-h-72 overflow-auto p-2 space-y-3">
+            <div className="max-h-96 overflow-auto p-2 space-y-3">
               {!q && (
                 <div>
                   <p className="text-[11px] font-bold text-ink-mute mb-1.5">🏆 Популярные</p>
@@ -112,7 +146,8 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
               ✓ Готово · выбрано: {value.length}
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {current && current.subs.length > 0 && (
@@ -133,7 +168,7 @@ export function CategoryPicker({ value, sub, onChange }: { value: string; sub: s
   );
 }
 
-export function CategoryMultiPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+export function CategoryMultiPicker({ value, onChange }: { value: string[]; onChange: (next: string[])=> void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const current = CATEGORIES.filter((c) => value.includes(c.slug));
@@ -182,14 +217,15 @@ export function CategoryMultiPicker({ value, onChange }: { value: string[]; onCh
           ))}
         </div>
       )}
-      {open && (
+      {open && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 mt-2 w-full min-w-[320px] rounded-[14px] border border-line bg-white shadow-card overflow-hidden">
+          <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[100] rounded-[14px] border border-line bg-white shadow-card overflow-hidden"
+            style={{ top: (document.activeElement as HTMLElement)?.getBoundingClientRect().bottom + 8, left: (document.activeElement as HTMLElement)?.getBoundingClientRect().left, minWidth: "500px", maxWidth: "90vw" }}>
             <div className="p-2 border-b border-line-soft">
               <input autoFocus className="field" placeholder="🔍 Поиск: кухня, диван, ваза…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <div className="max-h-72 overflow-auto p-2 space-y-3">
+            <div className="max-h-96 overflow-auto p-2 space-y-3">
               {!q && (
                 <div>
                   <p className="text-[11px] font-bold text-ink-mute mb-1.5">🏆 Популярные</p>
@@ -209,7 +245,8 @@ export function CategoryMultiPicker({ value, onChange }: { value: string[]; onCh
               ✓ Готово · выбрано: {value.length}
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
