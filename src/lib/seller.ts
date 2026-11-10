@@ -370,7 +370,7 @@ ogrn: string;
   profilesByAccount: Record<string, SellerProfile>;
 
   setLegalType: (t: SellerLegalType) => void;
-  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "inn" | "ogrn" | "kpp" | "bankAccount" | "directorTitle" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar" | "isMaster" | "acceptsCustomOrders" | "productionGallery" | "videoTourUrl" | "submittedAt">>) => void;
+  setInfo: (patch: Partial<Pick<SellerRegState, "shopName" | "contactName" | "email" | "phone" | "city" | "shopGeoMode" | "shopGeoCities" | "inn" | "ogrn" | "kpp" | "bankAccount" | "directorTitle" | "legalName" | "legalAddress" | "masterName" | "yearsExperience" | "businessStory" | "achievements" | "shopLogo" | "masterAvatar" | "isMaster" | "acceptsCustomOrders" | "productionGallery" | "videoTourUrl" | "submittedAt">>) => void;
   toggleCategory: (slug: string) => void;
   backToStep1: () => void;
   toDocs: () => void;
@@ -556,7 +556,7 @@ export const useSellerReg = create<SellerRegState>()(
           return;
         }
         const { accountId: _accountId, ...rest } = p;
-        set({ ...rest, production_city: p.production_city || p.city || "", docs: p.docs || {} });
+        set({ ...rest, production_city: p.production_city || p.city || "", shopGeoMode: p.shopGeoMode || "city", shopGeoCities: p.shopGeoCities || [], docs: p.docs || {} });
       },
       saveProfile: (uid) => {
         if (!uid) return;
@@ -565,7 +565,7 @@ export const useSellerReg = create<SellerRegState>()(
         const prof: SellerProfile = {
           accountId: uid,
           status: s.status, legalType: s.legalType, shopName: s.shopName, contactName: s.contactName,
-          email: s.email, phone: s.phone, city: s.city, inn: s.inn, ogrn: s.ogrn, legalName: s.legalName,
+          email: s.email, phone: s.phone, city: s.city, shopGeoMode: s.shopGeoMode, shopGeoCities: s.shopGeoCities, inn: s.inn, ogrn: s.ogrn, legalName: s.legalName,
           legalAddress: s.legalAddress, shopLogo: s.shopLogo, masterAvatar: s.masterAvatar, slug: s.slug,
           production_region: s.production_region, production_city: s.production_city, commissionRate: s.commissionRate, submittedAt: s.submittedAt,
           isMaster: s.isMaster, acceptsCustomOrders: s.acceptsCustomOrders, masterName: s.masterName,

@@ -974,6 +974,57 @@ export function SellerRegWizard({ embedded = false }: { embedded?: boolean }) {
             )}
             <Field label="Email" required><input className="field" type="email" value={s.email} onChange={(e) => s.setInfo({ email: e.target.value })} placeholder="maria@studio.ru" /></Field>
             <Field label="Город"><input className="field" value={s.city} onChange={(e) => s.setInfo({ city: e.target.value })} placeholder="Псков" /></Field>
+            {/* 🗺️ Блок "География продаж" */}
+            <div className="sm:col-span-2 lg:col-span-3 mt-2">
+              <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-3">🗺️ География продаж</p>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="shopGeoMode" value="city" checked={s.shopGeoMode === "city"} onChange={(e) => s.setInfo({ shopGeoMode: e.target.value as any })} className="mt-1" />
+                  <div>
+                    <p className="text-[14px] font-semibold text-ink">Только мой город ({s.city || "не указан"})</p>
+                    <p className="text-[12px] text-ink-soft">Вы торгуете локально. Крупногабарит, монтаж, еда — идеально для вас.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="shopGeoMode" value="cities" checked={s.shopGeoMode === "cities"} onChange={(e) => s.setInfo({ shopGeoMode: e.target.value as any })} className="mt-1" />
+                  <div className="flex-1">
+                    <p className="text-[14px] font-semibold text-ink">Несколько городов</p>
+                    <p className="text-[12px] text-ink-soft mb-2">Выберите до 10 городов, в которые вы доставляете.</p>
+                    {s.shopGeoMode === "cities" && (
+                      <div className="flex flex-wrap gap-2">
+                        {CITIES.slice(0, 50).map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            onClick={() => {
+                              const current = s.shopGeoCities || [];
+                              const updated = current.includes(c.name)
+                                ? current.filter((x) => x !== c.name)
+                                : current.length < 10 ? [...current, c.name] : current;
+                              s.setInfo({ shopGeoCities: updated });
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+                              (s.shopGeoCities || []).includes(c.name)
+                                ? "bg-accent text-ink"
+                                : "bg-cream text-ink-soft hover:bg-line-soft"
+                            }`}
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="shopGeoMode" value="nationwide" checked={s.shopGeoMode === "nationwide"} onChange={(e) => s.setInfo({ shopGeoMode: e.target.value as any })} className="mt-1" />
+                  <div>
+                    <p className="text-[14px] font-semibold text-ink">Вся Россия</p>
+                    <p className="text-[12px] text-ink-soft">Вы готовы отправлять СДЭК/Почтой по всей стране. Для крупногабарита рекомендуем сузить географию на уровне товара.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
             {s.legalType === "ooo" ? (
               <>
                 <Field label="ИНН организации (10 цифр)" required><input className="field" inputMode="numeric" value={s.inn} onChange={(e) => s.setInfo({ inn: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="6027000000" /></Field>
@@ -2368,6 +2419,57 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
               <Field label="Email"><input className="field" type="email" value={sProf.email} onChange={(e) => setSProf({ ...sProf, email: e.target.value })} /></Field>
               <Field label="Телефон"><input className="field" value={sProf.phone} onChange={(e) => setSProf({ ...sProf, phone: e.target.value })} /></Field>
               <Field label="Город"><input className="field" value={sProf.city} onChange={(e) => setSProf({ ...sProf, city: e.target.value })} /></Field>
+            {/* 🗺️ Блок "География продаж" в настройках */}
+            <div className="sm:col-span-2 mt-4">
+              <p className="text-[12px] font-bold uppercase tracking-wide text-ink-mute mb-3">🗺️ География продаж</p>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="shopGeoModeSettings" value="city" checked={sProf.shopGeoMode === "city"} onChange={(e) => setSProf({ ...sProf, shopGeoMode: e.target.value as any })} className="mt-1" />
+                  <div>
+                    <p className="text-[14px] font-semibold text-ink">Только мой город ({sProf.city || "не указан"})</p>
+                    <p className="text-[12px] text-ink-soft">Вы торгуете локально.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="shopGeoModeSettings" value="cities" checked={sProf.shopGeoMode === "cities"} onChange={(e) => setSProf({ ...sProf, shopGeoMode: e.target.value as any })} className="mt-1" />
+                  <div className="flex-1">
+                    <p className="text-[14px] font-semibold text-ink">Несколько городов</p>
+                    <p className="text-[12px] text-ink-soft mb-2">Выберите до 10 городов.</p>
+                    {sProf.shopGeoMode === "cities" && (
+                      <div className="flex flex-wrap gap-2">
+                        {CITIES.slice(0, 50).map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            onClick={() => {
+                              const current = sProf.shopGeoCities || [];
+                              const updated = current.includes(c.name)
+                                ? current.filter((x) => x !== c.name)
+                                : current.length < 10 ? [...current, c.name] : current;
+                              setSProf({ ...sProf, shopGeoCities: updated });
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+                              (sProf.shopGeoCities || []).includes(c.name)
+                                ? "bg-accent text-ink"
+                                : "bg-cream text-ink-soft hover:bg-line-soft"
+                            }`}
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="shopGeoModeSettings" value="nationwide" checked={sProf.shopGeoMode === "nationwide"} onChange={(e) => setSProf({ ...sProf, shopGeoMode: e.target.value as any })} className="mt-1" />
+                  <div>
+                    <p className="text-[14px] font-semibold text-ink">Вся Россия</p>
+                    <p className="text-[12px] text-ink-soft">Доставка СДЭК/Почтой по всей стране.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
             </div>
 
             {/* о мастере — редактируемое */}
