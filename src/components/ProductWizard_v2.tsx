@@ -110,8 +110,23 @@ export function ProductWizard_v2({ open, onClose, editId, initialData }: Props) 
           sellerCity: sellerReg.city || "",
         });
       } else {
-        setDraft({ ...empty, sellerCity: sellerReg.city || "" });
-      }
+      // Умное наследование географии от магазина
+      const mode = sellerReg.shopGeoMode || "nationwide";
+      const cities = sellerReg.shopGeoCities || [];
+      const inheritedZone = 
+        mode === "city" ? { mode: "city" as const } :
+        mode === "cities" ? { mode: "cities" as const, cities } :
+        { mode: "nationwide" as const };
+        
+      setDraft({ 
+        ...empty, 
+        sellerCity: sellerReg.city || "",
+        deliveryZone: inheritedZone,
+        deliveryPickup: true,
+        deliveryCourier: mode !== "nationwide",
+        deliveryRussia: mode === "nationwide",
+      });
+    }
       setStep(1);
     }, 0);
     return () => clearTimeout(t);
