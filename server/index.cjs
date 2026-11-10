@@ -1757,7 +1757,7 @@ app.get("/api/products/:id/logistics", softGuard, async (req, res) => {
 /* ============================================================
    ПРОВЕРКА ГЕОГРАФИИ: Товар не может иметь зону доставки шире, чем магазин
    ============================================================ */
-function isGeoSubset(productGeo, shopMode, shopCities, shopCity) {
+function isGeoSubset(productGeo, shopMode, shopCities, _shopCity) {
   if (!productGeo) return true; // Если гео не указана, считаем ок (будет дефолт)
   
   // Если магазин "только город" — товар не может быть nationwide или списком других городов
