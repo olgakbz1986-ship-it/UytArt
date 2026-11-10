@@ -9,3 +9,5 @@ server/dev-admin.json
 lint-report.json
 public/img/*.old.jpg
 server/dev-db.json
+patch-*.cjs
+fix-*.cjs
