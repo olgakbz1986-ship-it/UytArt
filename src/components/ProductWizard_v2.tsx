@@ -130,7 +130,7 @@ export function ProductWizard_v2({ open, onClose, editId, initialData }: Props) 
       setStep(1);
     }, 0);
     return () => clearTimeout(t);
-  }, [open, editId, initialData, editItem, sellerReg.city]);
+  }, [open, editId, initialData, editItem, sellerReg.city, sellerReg.shopGeoMode, sellerReg.shopGeoCities]);
 
   const totalSteps = 5;
 
