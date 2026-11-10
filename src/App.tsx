@@ -32,6 +32,7 @@ const NotFoundPage = React.lazy(() => import("./pages/extras").then((m) => ({ de
 const Cabinet = React.lazy(() => import("./pages/cabinet/router"));
 const DigitalProductViewPage = React.lazy(() => import("./pages/DigitalProductView").then((m) => ({ default: m.DigitalProductView })));
 const DigitalPurchasesPage = React.lazy(() => import("./pages/DigitalPurchases").then((m) => ({ default: m.DigitalPurchasesPage })));
+const TryOnPage = React.lazy(() => import("./pages/TryOnPage").then((m) => ({ default: m.TryOnPage })));
 
 function PageFallback() {
   return (
@@ -125,6 +126,7 @@ function AppInner() {
               <Route path="/product/:slug" element={<ProductPage />} />
               <Route path="/digital/:id" element={<DigitalProductViewPage />} />
               <Route path="/digital-purchases" element={<DigitalPurchasesPage />} />
+              <Route path="/try-on" element={<TryOnPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/auth" element={<AuthPage />} />

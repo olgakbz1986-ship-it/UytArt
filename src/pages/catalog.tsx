@@ -2,7 +2,7 @@ import { useMarketProducts } from "../lib/market";
 import { useSellerAccount, useSellerReg } from "../lib/seller";
 import { useMemo, useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play , Building2, Truck, Wrench } from "lucide-react";
+import { MapPin, Ban, Minus, Plus, ShoppingBag, Heart, ShieldCheck, MessageSquare, Play, Building2, Truck, Wrench, Sparkles } from "lucide-react";
 import { SellerAboutModal } from "../components/SellerAboutModal";
 import {
   GROUPS, GROUP_IMG, fmt, fmtDate, catBySlug, groupById, catsByGroup,
@@ -576,6 +576,9 @@ export function ProductPage() {
             <Btn size="lg" className="flex-1 min-w-[200px]" onClick={() => addToCart(p.id, qty)}>
               <ShoppingBag size={18} /> В корзину
             </Btn>
+            <Link to={`/try-on?productId=${p.id}`} className="h-[52px] flex-1 min-w-[200px] px-4 rounded-[10px] border border-line bg-surface text-[14px] font-semibold hover:bg-cream transition-colors flex items-center justify-center gap-2 text-ink cursor-pointer">
+              <Sparkles size={18} className="text-accent-deep" /> Примерить
+            </Link>
             <button onClick={() => { console.log("[FAV] Toggling:", p.id); toggleFav(p.id); }} aria-label="В избранное"
               className={`w-[52px] h-[52px] rounded-[10px] flex items-center justify-center transition-colors cursor-pointer ${onFav ? "bg-error text-white" : "border border-line bg-surface text-ink-soft hover:text-error"}`}>
               <Heart size={20} fill={onFav ? "currentColor" : "none"} />
@@ -599,6 +602,9 @@ export function ProductPage() {
               <Btn size="lg" className="flex-1 min-w-0" onClick={() => addToCart(p.id, qty)}>
                 <ShoppingBag size={18} /> В корзину · {fmt(p.price * qty)}
               </Btn>
+              <Link to={`/try-on?productId=${p.id}`} className="h-[44px] flex-1 min-w-0 px-3 rounded-[10px] border border-line bg-surface text-[13px] font-semibold hover:bg-cream transition-colors flex items-center justify-center gap-2 text-ink cursor-pointer">
+                <Sparkles size={16} className="text-accent-deep" /> Примерить
+              </Link>
               <button onClick={() => toggleFav(p.id)} aria-label="В избранное"
                 className={`w-11 h-11 shrink-0 rounded-[10px] flex items-center justify-center transition-colors cursor-pointer ${onFav ? "bg-error text-white" : "border border-line bg-surface text-ink-soft active:text-error"}`}>
                 <Heart size={20} fill={onFav ? "currentColor" : "none"} />
