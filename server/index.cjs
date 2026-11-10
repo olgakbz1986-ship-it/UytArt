@@ -1753,8 +1753,49 @@ app.get("/api/products/:id/logistics", softGuard, async (req, res) => {
   }
 });
 
+
+/* ============================================================
+   ПРОВЕРКА ГЕОГРАФИИ: Товар не может иметь зону доставки шире, чем магазин
+   ============================================================ */
+function isGeoSubset(productGeo, shopMode, shopCities, shopCity) {
+  if (!productGeo) return true; // Если гео не указана, считаем ок (будет дефолт)
+  
+  // Если магазин "только город" — товар не может быть nationwide или списком других городов
+  if (shopMode === "city") {
+    if (productGeo.mode === "nationwide") return false;
+    if (productGeo.mode === "cities" && productGeo.cities && productGeo.cities.length > 0) return false;
+  }
+  
+  // Если магазин "список городов" — товар должен быть подмножеством этого списка
+  if (shopMode === "cities") {
+    if (productGeo.mode === "nationwide") return false;
+    if (productGeo.mode === "cities" && productGeo.cities) {
+      if (!productGeo.cities.every(c => shopCities.includes(c))) return false;
+    }
+  }
+  
+  // Если магазин "вся Россия" — товар может быть любым
+  return true;
+}
 app.post("/api/products", guard, async (req, res) => {
   try {
+      // 🛡️ ПРОВЕРКА ГЕОГРАФИИ МАГАЗИНА
+      try {
+        const shop = await db.byId(req.userId);
+        const mode = shop?.shopGeoMode || "nationwide";
+        const cities = shop?.shopGeoCities || [];
+        const city = shop?.city || "";
+        
+        if (req.body.deliveryZone && !isGeoSubset(req.body.deliveryZone, mode, cities, city)) {
+          return res.status(400).json({ 
+            error: "geo_too_wide", 
+            message: "География товара не может быть шире географии магазина (режим: " + mode + ")" 
+          });
+        }
+      } catch (e) { 
+        console.warn("[GEO CHECK WARN] Не удалось проверить географию магазина:", e.message);
+      }
+
     const p = req.body || {};
     if (!p.id) return res.status(400).json({ error: "no_id" });
     /* Пункт Е: серверный стоп-лист запрещённых товаров. Проверка выполняется
