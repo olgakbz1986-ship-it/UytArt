@@ -2357,7 +2357,17 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       )}
 
                 <ProductWizard_v2 open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
-                                                  {tab === "settings" && (
+                                                  
+      {tab === "delivery-requests" && (
+        <div className="space-y-4">
+          <h2 className="font-display font-bold text-[20px] text-ink mb-4 flex items-center gap-2">
+            <Truck className="text-accent-deep" size={24} /> Заявки на доставку и установку
+          </h2>
+          <DeliveryRequestsPanel shopId={user?.userId} />
+        </div>
+      )}
+
+      {tab === "settings" && (
         <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 
@@ -3829,6 +3839,194 @@ function PasswordChangeCard() {
       </div>
       {msg && <p className={"text-[12px] font-bold mt-2 " + (msg.ok ? "text-success" : "text-error")}>{msg.text}</p>}
       <Btn size="sm" className="mt-3" onClick={save}>Сменить пароль</Btn>
+    </div>
+  );
+}
+/* ==========================================================================
+   КОМПОНЕНТ: Панель заявок на доставку (Delivery Requests Panel)
+   ========================================================================== */
+function DeliveryRequestsPanel({ shopId }: { shopId?: string }) {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadRequests = useCallback(async () => {
+    if (!shopId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/delivery-requests?shopId=${shopId}`, { credentials: "include" });
+      const data = await res.json();
+      if (data.ok) {
+        setRequests(data.requests);
+      } else {
+        setError(data.error || "Ошибка загрузки");
+      }
+    } catch (e) {
+      setError("Ошибка сети");
+    } finally {
+      setLoading(false);
+    }
+  }, [loadRequests, shopId]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests, shopId]);
+
+  const updateRequest = async (id: string, patch: any) => {
+    try {
+      const res = await fetch(`/api/delivery-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        loadRequests(); // Перезагружаем список
+      } else {
+        alert("Ошибка: " + data.error);
+      }
+    } catch (e) {
+      alert("Ошибка сети");
+    }
+  };
+
+  const deleteRequest = async (id: string, isClosed: boolean) => {
+    if (!isClosed) {
+      alert("Нельзя удалить незакрытую заявку! Сначала завершите её.");
+      return;
+    }
+    if (!confirm("Удалить эту заявку из архива безвозвратно?")) return;
+    
+    try {
+      const res = await fetch(`/api/delivery-requests/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data.ok) {
+        loadRequests();
+      } else {
+        alert("Ошибка: " + data.error);
+      }
+    } catch (e) {
+      alert("Ошибка сети");
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center text-ink-mute">Загрузка заявок...</div>;
+  if (error) return <div className="p-8 text-center text-error">{error}</div>;
+  if (requests.length === 0) return <div className="p-8 text-center text-ink-mute">Пока нет заявок на доставку.</div>;
+
+  return (
+    <div className="space-y-4">
+      {requests.map((req) => {
+        const statusColors: Record<string, string> = {
+          pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
+          confirmed: "bg-blue-100 text-blue-800 border-blue-300",
+          in_progress: "bg-purple-100 text-purple-800 border-purple-300",
+          completed: "bg-green-100 text-green-800 border-green-300",
+          cancelled: "bg-gray-100 text-gray-800 border-gray-300",
+        };
+        const statusLabels: Record<string, string> = {
+          pending: "Ожидает подтверждения",
+          confirmed: "Подтверждена",
+          in_progress: "В работе",
+          completed: "Завершена",
+          cancelled: "Отменена",
+        };
+
+        return (
+          <div key={req.id} className="p-4 rounded-xl border border-line bg-white shadow-sm">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <h4 className="font-bold text-[15px] text-ink">{req.itemsSummary}</h4>
+                <p className="text-[12px] text-ink-mute mt-1">
+                  Заказ #{req.orderId || "без номера"} · {new Date(req.createdAt).toLocaleDateString("ru-RU")}
+                </p>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${statusColors[req.status] || "bg-gray-100"}`}>
+                {statusLabels[req.status] || req.status}
+              </span>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3 text-[13px] mb-4">
+              <div>
+                <p className="text-ink-mute text-[11px] uppercase tracking-wide mb-1">Покупатель</p>
+                <p className="font-semibold text-ink">{req.buyerName}</p>
+                <p className="text-accent-deep font-bold flex items-center gap-1 mt-1">
+                  📞 {req.buyerPhone}
+                </p>
+              </div>
+              <div>
+                <p className="text-ink-mute text-[11px] uppercase tracking-wide mb-1">Адрес и дата</p>
+                <p className="text-ink">{req.buyerAddress || "Не указан"}</p>
+                <p className="mt-1">
+                  <span className="text-ink-mute">Запрошено:</span> <span className="font-semibold">{req.requestedDate}</span>
+                  {req.confirmedDate && req.confirmedDate !== req.requestedDate && (
+                    <span className="ml-2 text-green-700 font-bold">→ Подтверждено: {req.confirmedDate}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {req.comment && (
+              <div className="mb-4 p-3 bg-cream rounded-lg text-[12px] text-ink-soft italic border border-line-soft">
+                💬 {req.comment}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-line-soft">
+              {req.status === "pending" && (
+                <button 
+                  onClick={() => {
+                    const newDate = prompt("Введите подтвержденную дату (ГГГГ-ММ-ДД):", req.requestedDate);
+                    if (newDate) updateRequest(req.id, { status: "confirmed", confirmedDate: newDate });
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-dark text-cream text-[12px] font-bold hover:bg-accent transition-colors"
+                >
+                  ✓ Подтвердить дату
+                </button>
+              )}
+              
+              {req.status !== "completed" && req.status !== "cancelled" && (
+                <button 
+                  onClick={() => {
+                    if (confirm("Завершить эту заявку? После этого её можно будет удалить.")) {
+                      updateRequest(req.id, { status: "completed", isClosed: true });
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-[12px] font-bold hover:bg-green-700 transition-colors"
+                >
+                  🏁 Завершить
+                </button>
+              )}
+
+              {req.status === "pending" && (
+                <button 
+                  onClick={() => {
+                    if (confirm("Отменить эту заявку?")) {
+                      updateRequest(req.id, { status: "cancelled", isClosed: true });
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-[12px] font-bold hover:bg-red-200 transition-colors"
+                >
+                  ✕ Отменить
+                </button>
+              )}
+
+              {req.isClosed && (
+                <button 
+                  onClick={() => deleteRequest(req.id, req.isClosed)}
+                  className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-bold hover:bg-gray-200 transition-colors ml-auto"
+                >
+                  🗑 Удалить из архива
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
