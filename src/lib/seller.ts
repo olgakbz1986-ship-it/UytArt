@@ -322,7 +322,9 @@ ogrn: string;
   dataSource?: "manual" | "api";
   changeReason?: string;
   auditLog?: AuditEntry[];
-  docs?: Record<string, { fileName: string; size: number; ok: boolean }>;
+  docs?: Record<string, { fileName: string; size: number; ok: boolean   /* Настройки доставки и установки */
+  deliverySettings?: ShopDeliverySettings;
+}>;
 }
 
 interface SellerRegState {
@@ -382,7 +384,9 @@ ogrn: string;
   retryDocuments: () => void;
   /* §1.4: оплата разового взноса — реальный платёж; возвращает результат,
      статус «active» выставляется только при успешной оплате на сервере */
-  payFee: (method: string) => Promise<{ ok: boolean; offline?: boolean; error?: string; paymentId?: string; receipt?: any }>;
+  payFee: (method: string) => Promise<{ ok: boolean; offline?: boolean; error?: string; paymentId?: string; receipt?: any   /* Настройки доставки */
+  deliverySettings?: ShopDeliverySettings;
+}>;
   resetFlow: () => void;
   /* Загрузить в активный стор профиль аккаунта uid (при входе/переключении) */
   loadProfile: (uid: string) => void;
