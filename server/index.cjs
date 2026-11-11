@@ -1653,6 +1653,122 @@ app.get("/api/masters", softGuard, async (_q, r) => {
 
 /* Лента магазинов: зеркальный эндпоинт к /api/masters. Карточки магазинов
    создаются лениво при первом POST /api/shops (repo.upsertSeller). */
+
+/* ==========================================================================
+   API: Заявки на доставку и установку (Delivery Requests)
+   ========================================================================== */
+
+// Инициализация массива в БД (если еще нет)
+if (!db.deliveryRequests) db.deliveryRequests = [];
+
+// 1. Создание заявки покупателем
+app.post("/api/delivery-requests", guard, async (req, res) => {
+  try {
+    const { shopId, orderId, buyerName, buyerPhone, buyerAddress, requestedDate, itemsSummary, totalPrice, comment } = req.body;
+    if (!shopId || !buyerPhone || !requestedDate) {
+      return res.status(400).json({ error: "shopId, buyerPhone и requestedDate обязательны" });
+    }
+    const newRequest = {
+      id: "dr_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+      shopId,
+      orderId: orderId || "",
+      buyerName: buyerName || "Покупатель",
+      buyerPhone, // Телефон сохраняется и будет виден продавцу
+      buyerAddress: buyerAddress || "",
+      requestedDate,
+      confirmedDate: undefined,
+      status: "pending",
+      itemsSummary: itemsSummary || "Заказ на доставку/установку",
+      totalPrice: Number(totalPrice) || 0,
+      comment: comment || "",
+      createdAt: new Date().toISOString(),
+      isClosed: false // Запрет на удаление, пока не true
+    };
+    db.deliveryRequests.push(newRequest);
+    res.json({ ok: true, request: newRequest });
+  } catch (e) {
+    console.error("[Delivery Request Create Error]", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// 2. Получение заявок продавцом (фильтр по shopId)
+app.get("/api/delivery-requests", guard, async (req, res) => {
+  try {
+    const { shopId } = req.query;
+    if (!shopId) return res.status(400).json({ error: "shopId обязателен" });
+    
+    // Проверка прав: принадлежит ли магазин этому пользователю
+    const shop = db.shops.find(s => String(s.id) === String(shopId));
+    if (!shop || String(shop.accountId) !== String(req.userId)) {
+      return res.status(403).json({ error: "Доступ запрещен" });
+    }
+
+    const requests = db.deliveryRequests.filter(r => r.shopId === shopId);
+    // Сортируем: новые сверху
+    requests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json({ ok: true, requests });
+  } catch (e) {
+    console.error("[Delivery Request Get Error]", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// 3. Обновление заявки продавцом (подтверждение даты, смена статуса, закрытие)
+app.patch("/api/delivery-requests/:id", guard, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, confirmedDate, isClosed } = req.body;
+    
+    const reqIdx = db.deliveryRequests.findIndex(r => r.id === id);
+    if (reqIdx === -1) return res.status(404).json({ error: "Заявка не найдена" });
+    
+    const request = db.deliveryRequests[reqIdx];
+    const shop = db.shops.find(s => String(s.id) === String(request.shopId));
+    if (!shop || String(shop.accountId) !== String(req.userId)) {
+      return res.status(403).json({ error: "Доступ запрещен" });
+    }
+
+    // Обновляем только разрешенные поля
+    if (status !== undefined) request.status = status;
+    if (confirmedDate !== undefined) request.confirmedDate = confirmedDate;
+    if (isClosed !== undefined) request.isClosed = isClosed;
+
+    db.deliveryRequests[reqIdx] = request;
+    res.json({ ok: true, request });
+  } catch (e) {
+    console.error("[Delivery Request Patch Error]", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// 4. Удаление заявки (ТОЛЬКО если isClosed === true)
+app.delete("/api/delivery-requests/:id", guard, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reqIdx = db.deliveryRequests.findIndex(r => r.id === id);
+    if (reqIdx === -1) return res.status(404).json({ error: "Заявка не найдена" });
+    
+    const request = db.deliveryRequests[reqIdx];
+    const shop = db.shops.find(s => String(s.id) === String(request.shopId));
+    if (!shop || String(shop.accountId) !== String(req.userId)) {
+      return res.status(403).json({ error: "Доступ запрещен" });
+    }
+
+    // 🔒 ЖЕСТКОЕ ПРАВИЛО: нельзя удалить, пока заявка не закрыта
+    if (!request.isClosed) {
+      return res.status(403).json({ error: "Нельзя удалить незакрытую заявку. Сначала завершите её (статус completed/cancelled и isClosed=true)." });
+    }
+
+    db.deliveryRequests.splice(reqIdx, 1);
+    res.json({ ok: true, message: "Заявка удалена из архива" });
+  } catch (e) {
+    console.error("[Delivery Request Delete Error]", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+
 app.get("/api/shops", softGuard, async (_q, r) => {
   try {
     const shops = await repo.listSellers("shop");
