@@ -117,6 +117,7 @@ function profileForItem(item: SellerProductItem): SellerProfile | null {
       acceptsCustomOrders: false, masterName: "", yearsExperience: "", businessStory: "",
       achievements: "", categories: [], productionGallery: [], videoTourUrl: "",
       shopLogo: item.avatar,
+      deliverySettings: (item as any).deliverySettings,
     } as SellerProfile;
   }
   return null;
@@ -278,6 +279,7 @@ export function sellerMarketProducts(): Product[] {
       contactName: prof?.contactName,
       masterName: prof?.masterName,
       businessStory: prof?.businessStory,
+      deliverySettings: prof?.deliverySettings,
       isMaster: prof?.isMaster,
       acceptsCustomOrders: prof?.acceptsCustomOrders,
       ai_assets: p.ai_assets,

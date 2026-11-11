@@ -641,6 +641,24 @@ export function ProductPage() {
                 <p className="text-[12px] text-ink-mute flex items-center gap-1.5 mt-0.5">
                   <MapPin size={12} /> {(p as any).sellerCity || vendor?.city || "Россия"} · <Rating value={(p as any).shopName ? 0 : (vendor?.rating || 0)} size={10} />
                 </p>
+
+                {/* Бейдж с ближайшей датой установки */}
+                {(p as any).deliverySettings?.nextAvailableDate && (p as any).deliverySettings?.hasInstallation && (
+                  <div className="mt-2 p-2.5 rounded-lg bg-accent/10 border border-accent/30 flex items-center gap-2">
+                    <Truck size={14} className="text-accent-deep" />
+                    <div className="flex-1">
+                      <p className="text-[11px] font-bold text-accent-deep">Ближайшая установка</p>
+                      <p className="text-[12px] font-bold text-ink">
+                        {new Date((p as any).deliverySettings.nextAvailableDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
+                      </p>
+                    </div>
+                    {(p as any).deliverySettings?.deliveryCost > 0 && (
+                      <span className="text-[11px] text-ink-mute">
+                        +{(p as any).deliverySettings.deliveryCost} ₽
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               {(p as any).shopName
                 ? <Badge tone="success"><ShieldCheck size={12} /> Проверенный продавец</Badge>
