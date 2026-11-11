@@ -1073,3 +1073,45 @@ useAppStore.subscribe((st) => {
   } catch { /* noop */ }
 });
 
+
+
+/* ==========================================================================
+   НОВЫЕ ТИПЫ: Система заявок на доставку и установку (Крупногабарит / Еда)
+   ========================================================================== */
+
+/** Статусы заявки на доставку/установку */
+export type DeliveryRequestStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
+
+/** Настройки доставки и расписание конкретного магазина */
+export interface ShopDeliverySettings {
+  hasInstallation: boolean;      // Предлагает ли магазин установку (для дверей, окон и т.д.)
+  installationTimeHours: number; // Среднее время установки (часов)
+  deliveryCost: number;          // Базовая стоимость доставки
+  nextAvailableDate: string;     // Ближайшая свободная дата (формат "YYYY-MM-DD")
+  blockedDates: string[];        // Массив занятых дат: ["2024-11-21", "2024-11-25"]
+}
+
+/** Заявка на доставку и установку (привязывается к Order) */
+export interface DeliveryRequest {
+  id: string;
+  shopId: string;          // ID магазина продавца
+  orderId: string;         // Связь с основным заказом в корзине
+  buyerName: string;       // Имя покупателя
+  buyerPhone: string;      // ТЕЛЕФОН (обязательно для связи установщика)
+  buyerAddress: string;    // Адрес доставки
+  requestedDate: string;   // Дата, которую запросил покупатель
+  confirmedDate?: string;  // Дата, которую подтвердил продавец
+  status: DeliveryRequestStatus;
+  itemsSummary: string;    // Краткое описание: "Дверь межкомнатная + 2 добора + наличники"
+  totalPrice: number;      // Стоимость товаров + доставка + установка
+  comment?: string;        // Комментарий покупателя (домофон, этаж и т.д.)
+  createdAt: string;
+  isClosed: boolean;       // Если true, заявку можно удалить (архив). Иначе - запрет на удаление.
+}
+
+/** Связь основного товара с обязательными комплектующими */
+export interface RequiredAccessoryLink {
+  mainProductId: string;       // ID основного товара (например, двери)
+  accessoryProductIds: string[]; // ID обязательных дополнений (доборы, наличники)
+  isStrictlyRequired: boolean; // Если true, нельзя оформить заказ без них
+}
