@@ -148,6 +148,12 @@ export function CheckoutPage() {
   const [agreeEscrow, setAgreeEscrow] = useState(false);
   const [agreeCustom, setAgreeCustom] = useState(false);
   const [err, setErr] = useState("");
+  /* Форма заявки на доставку/установку */
+  const [buyerPhone, setBuyerPhone] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [deliveryComment, setDeliveryComment] = useState("");
+  const [_deliveryLoading, setDeliveryLoading] = useState(false);
+
   const [done, setDone] = useState<string | null>(null);
 
   const market = useMarketProducts();
@@ -189,6 +195,43 @@ export function CheckoutPage() {
     }
     addBonus(50, "Кэшбэк за заказ");
     clearCart();
+    
+    /* Отправляем заявку на доставку/установку, если есть товары с installation */
+    const itemsWithInstallation = rows.filter((r) => (r.p as any)?.deliverySettings?.hasInstallation);
+    if (itemsWithInstallation.length > 0 && buyerPhone) {
+      setDeliveryLoading(true);
+      const shopId = itemsWithInstallation[0].p?.ownerId || "self-shop";
+      const itemsSummary = itemsWithInstallation.map((r) => r.p!.name).join(", ");
+      const totalPrice = itemsWithInstallation.reduce((s, r) => s + r.p!.price * r.qty, 0);
+      
+      fetch("/api/delivery-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          shopId,
+          orderId: order.id,
+          buyerName: sess?.name || "Покупатель",
+          buyerPhone,
+          buyerAddress: addr ? `${addr.city}, ${addr.street}` : "",
+          requestedDate: deliveryDate || new Date().toISOString().split('T')[0],
+          itemsSummary,
+          totalPrice,
+          comment: deliveryComment,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.ok) {
+            console.log("✅ Заявка на доставку создана:", data.request.id);
+          } else {
+            console.error("❌ Ошибка создания заявки:", data.error);
+          }
+        })
+        .catch((e) => console.error("Ошибка сети при создании заявки:", e))
+        .finally(() => setDeliveryLoading(false));
+    }
+
     setDone(order.number);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -334,6 +377,60 @@ export function CheckoutPage() {
             </label>
           )}
           {err && <p className="text-[12.5px] font-semibold text-error mt-3">{err}</p>}
+          
+          {/* Блок заявки на доставку/установку */}
+          {rows.some((r) => (r.p as any)?.deliverySettings?.hasInstallation) && (
+            <div className="mt-6 p-4 rounded-xl border-2 border-accent/30 bg-accent/5">
+              <h3 className="font-bold text-[15px] text-ink mb-3 flex items-center gap-2">
+                🚚 Заявка на доставку и установку
+              </h3>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-ink-mute mb-1">
+                    Телефон для связи * (обязательно)
+                  </label>
+                  <input
+                    type="tel"
+                    value={buyerPhone}
+                    onChange={(e) => setBuyerPhone(e.target.value)}
+                    placeholder="+7 (___) ___-__-__"
+                    className="w-full px-3 py-2 rounded-lg border border-line bg-white text-[13px] focus:outline-none focus:border-accent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-ink-mute mb-1">
+                    Желаемая дата доставки/установки
+                  </label>
+                  <input
+                    type="date"
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 rounded-lg border border-line bg-white text-[13px] focus:outline-none focus:border-accent"
+                  />
+                  <p className="text-[11px] text-ink-mute mt-1">
+                    Продавец подтвердит точную дату после получения заявки
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-ink-mute mb-1">
+                    Комментарий (необязательно)
+                  </label>
+                  <textarea
+                    value={deliveryComment}
+                    onChange={(e) => setDeliveryComment(e.target.value)}
+                    placeholder="Домофон не работает, 3 этаж, лифт есть..."
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-line bg-white text-[13px] focus:outline-none focus:border-accent resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <Btn size="lg" className="w-full mt-4" onClick={submit}><CreditCard size={18} /> Оплатить {fmt(total)}</Btn>
           <p className="text-[11px] text-ink-mute text-center mt-3">Чеки по 54-ФЗ · возврат 7 дней (кроме custom-made)</p>
         </aside>
