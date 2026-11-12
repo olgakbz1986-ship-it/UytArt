@@ -1,3 +1,4 @@
+import { ShipmentsPanel } from "../components/ShipmentsPanel";
 import { ProductWizard_v2 } from "../components/ProductWizard_v2";
 import { api } from "../lib/api";
 import { DigitalProductWizard, DigitalVersionForm, DigitalAnalyticsModal } from "../components/DigitalProductWizard";
@@ -2358,6 +2359,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
 
                 <ProductWizard_v2 open={wizardOpen} onClose={() => { setWizardOpen(false); setWizardPrefill(null); }} initialData={wizardPrefill} />
                                                   
+      {tab === "shipments" && (<ShipmentsPanel />)}
       {tab === "delivery-requests" && (
         <div className="space-y-4">
           <h2 className="font-display font-bold text-[20px] text-ink mb-4 flex items-center gap-2">

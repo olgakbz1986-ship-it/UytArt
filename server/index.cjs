@@ -1673,6 +1673,7 @@ app.post("/api/delivery-requests", guard, async (req, res) => {
       shopId,
       orderId: orderId || "",
       buyerName: buyerName || "Покупатель",
+      buyerId: req.userId,
       buyerPhone, // Телефон сохраняется и будет виден продавцу
       buyerAddress: buyerAddress || "",
       requestedDate,
@@ -1769,6 +1770,8 @@ app.delete("/api/delivery-requests/:id", guard, async (req, res) => {
 });
 
 
+
+require("./logistics.cjs").register(app, () => db, guard);
 app.get("/api/shops", softGuard, async (_q, r) => {
   try {
     const shops = await repo.listSellers("shop");

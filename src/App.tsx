@@ -1,3 +1,4 @@
+import { ShipmentsPanel } from "./components/ShipmentsPanel";
 import React from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
@@ -129,6 +130,7 @@ function AppInner() {
               <Route path="/try-on" element={<TryOnPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/logistics" element={<div className="max-w-[1100px] mx-auto px-4 py-10"><ShipmentsPanel /></div>} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/masters" element={<MastersPage />} />
               <Route path="/shops" element={<ShopsPage />} />
