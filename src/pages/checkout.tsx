@@ -7,6 +7,7 @@ import { useMarketProducts } from "../lib/market";
 import { useAppStore } from "../lib/store";
 import { useSubStore, buyerLimits } from "../lib/subscriptions";
 import { Badge, Btn, ProductImg } from "../components/ui";
+import { DeliveryPicker, type DeliverySelection } from "../components/DeliveryPicker";
 
 const DELIVERY = [
   { id: "sdek", label: "СДЭК до пункта выдачи", price: 350, days: "2–5 дней" },
@@ -141,7 +142,10 @@ export function CheckoutPage() {
   useEffect(() => { if (!sess) nav("/auth"); }, [sess, nav]);
 
   const [addrId, setAddrId] = useState(addresses[0]?.id || "");
-  const [deliveryId, setDeliveryId] = useState(DELIVERY[0].id);
+  const [deliverySel, setDeliverySel] = useState<DeliverySelection>(() => {
+    const d = DELIVERY[0];
+    return { method: "pvz", deliveryId: d.id, label: d.label, price: d.price, days: d.days, carrier: "СДЭК", point: null };
+  });
   const [pay, setPay] = useState("card");
   const [useBonuses, setUseBonuses] = useState(false);
   const [agreeTos, setAgreeTos] = useState(false);
@@ -161,7 +165,7 @@ export function CheckoutPage() {
   const rows = cart.map((c) => ({ ...c, p: market.find((x) => x.id === c.productId) })).filter((r) => r.p);
   const subtotal = rows.reduce((s, r) => s + (r.p!.price * r.qty), 0);
   const discount = Math.round((subtotal * lim.discountPct) / 100);
-  const delivery = DELIVERY.find((d) => d.id === deliveryId)!;
+  const delivery = { price: deliverySel.price, label: deliverySel.label + (deliverySel.slot ? " · " + deliverySel.slot : "") };
   const perSeller: Record<string, number> = {};
   rows.forEach((r) => { const sid = r.productId.startsWith("sp-") ? "self-shop" : (r.p!.vendorId || "v1"); perSeller[sid] = (perSeller[sid] || 0) + r.p!.price * r.qty; });
   const usableBonuses = Object.entries(perSeller).reduce((s, [sid, sub]) => s + Math.min(bonusBySeller[sid] || 0, Math.round(sub * 0.3)), 0);
@@ -172,14 +176,16 @@ export function CheckoutPage() {
 
   const submit = () => {
     if (!addr) { setErr("Выберите адрес доставки."); return; }
+    if ((deliverySel.method === "pvz" || deliverySel.method === "post") && !deliverySel.point) { setErr("Выберите пункт выдачи или отделение почты."); return; }
+    const finalAddress = deliverySel.point ? deliverySel.point.name + " · " + deliverySel.point.address : addr.city + ", " + addr.street;
     if (!agreeTos || !agreeEscrow) { setErr("Примите Оферту и Регламент безопасной сделки."); return; }
     if (hasCustom && !agreeCustom) { setErr("Подтвердите, что товар на заказ не подлежит возврату."); return; }
     const order = placeOrder({
       items: rows.map((r) => ({ productId: r.productId, qty: r.qty, price: r.p!.price })),
       total,
       delivery: delivery.price,
-      deliveryMethod: delivery.label,
-      address: `${addr.city}, ${addr.street}`,
+      deliveryMethod: delivery.label + (deliverySel.point ? " · " + deliverySel.point.name : ""),
+      address: finalAddress,
       hasCustom,
       payMethod: pay === "card" ? "Банковская карта (ЮKassa)" : pay === "sbp" ? "СБП" : "Электронный кошелёк",
     });
@@ -213,7 +219,7 @@ export function CheckoutPage() {
           orderId: order.id,
           buyerName: sess?.name || "Покупатель",
           buyerPhone,
-          buyerAddress: addr ? `${addr.city}, ${addr.street}` : "",
+          buyerAddress: finalAddress,
           requestedDate: deliveryDate || new Date().toISOString().split('T')[0],
           itemsSummary,
           totalPrice,
@@ -292,23 +298,12 @@ export function CheckoutPage() {
           </div>
 
           {/* доставка */}
-          <div className="bg-surface rounded-2xl shadow-card p-6">
-            <h2 className="font-display font-bold text-[18px] text-ink mb-4">2. Способ доставки</h2>
-            <div className="grid sm:grid-cols-2 gap-2.5">
-              {DELIVERY.map((d) => (
-                <label key={d.id} className={`flex items-center justify-between gap-3 border rounded-[10px] px-4 py-3 cursor-pointer transition-colors ${deliveryId === d.id ? "border-dark bg-cream" : "border-line hover:border-ink-mute"}`}>
-                  <span className="flex items-center gap-2.5">
-                    <input type="radio" name="delivery" checked={deliveryId === d.id} onChange={() => setDeliveryId(d.id)} />
-                    <span>
-                      <span className="block text-[13px] font-semibold text-ink">{d.label}</span>
-                      <span className="block text-[11.5px] text-ink-mute">{d.days}</span>
-                    </span>
-                  </span>
-                  <span className="font-display font-bold text-[14px] text-ink">{fmt(d.price)}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <DeliveryPicker
+            value={deliverySel}
+            onChange={setDeliverySel}
+            city={addr?.city}
+            address={addr ? addr.city + ", " + addr.street : undefined}
+          />
 
           {/* оплата */}
           <div className="bg-surface rounded-2xl shadow-card p-6">
