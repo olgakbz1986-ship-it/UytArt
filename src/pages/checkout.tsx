@@ -176,6 +176,8 @@ export function CheckoutPage() {
 
   const submit = () => {
     if (!addr) { setErr("Выберите адрес доставки."); return; }
+    const needsDelivery = rows.some((r) => (r.p as any)?.deliverySettings?.hasInstallation || deliverySel.method !== "post");
+    if (needsDelivery && !buyerPhone.trim()) { setErr("Укажите телефон для связи с курьером/установщиком."); return; }
     if ((deliverySel.method === "pvz" || deliverySel.method === "post") && !deliverySel.point) { setErr("Выберите пункт выдачи или отделение почты."); return; }
     const finalAddress = deliverySel.point ? deliverySel.point.name + " · " + deliverySel.point.address : addr.city + ", " + addr.street;
     if (!agreeTos || !agreeEscrow) { setErr("Примите Оферту и Регламент безопасной сделки."); return; }
@@ -319,6 +321,34 @@ export function CheckoutPage() {
             </div>
             <p className="flex items-center gap-2 text-[12px] text-ink-mute mt-4"><ShieldCheck size={14} className="text-success" /> Безопасная сделка: деньги уходят мастеру только после отправки.</p>
           </div>
+
+          
+          {/* Телефон для доставки */}
+          <div className="bg-surface rounded-2xl shadow-card p-6">
+            <h2 className="font-display font-bold text-[18px] text-ink mb-4">3. Контакт для доставки</h2>
+            <p className="text-[12px] text-ink-mute mb-3">Обязательно для связи с курьером или установщиком</p>
+            <input 
+              type="tel" 
+              value={buyerPhone} 
+              onChange={(e) => setBuyerPhone(e.target.value)} 
+              placeholder="+7 (___) ___-__-__"
+              className="w-full h-[48px] px-4 rounded-lg border border-line bg-surface text-[14px] text-ink placeholder:text-ink-mute focus:outline-none focus:border-dark focus:ring-1 focus:ring-dark transition-all"
+            />
+            {rows.some((r) => (r.p as any)?.deliverySettings?.hasInstallation) && !buyerPhone && (
+              <p className="text-[12px] text-warning mt-2 flex items-center gap-1">⚠️ Для товаров с установкой телефон обязателен</p>
+            )}
+          </div>
+
+          {/* Предупреждение о комплектующих */}
+          {rows.some((r) => (r.p as any)?.itemsSummary?.includes("добор") || (r.p as any)?.itemsSummary?.includes("наличник")) && (
+            <div className="bg-cream border border-accent/30 rounded-2xl p-4 flex items-start gap-3">
+              <span className="text-[20px]">📦</span>
+              <div>
+                <p className="text-[13px] font-bold text-ink mb-1">Внимание: комплектующие</p>
+                <p className="text-[12px] text-ink-soft">В вашей корзине есть товары, требующие доборов или наличников. Убедитесь, что они добавлены в заказ, или уточните у продавца в чате.</p>
+              </div>
+            </div>
+          )}
 
           {/* юр. согласия */}
           <div className="bg-surface rounded-2xl shadow-card p-6 space-y-3">

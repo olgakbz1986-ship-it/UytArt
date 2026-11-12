@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAppStore } from "../lib/store";
+import { useAppStore, useNotifyStore } from "../lib/store";
 import { apiJson, FLOW, STATUS_LABEL, type Shipment, type ShipmentStatus } from "../lib/logistics";
 
 const ESCROW_LABEL: Record<string, string> = { held: "Эскроу: удержано", frozen: "Эскроу: заморожено (жалоба)", released: "Эскроу: переведено продавцу" };
@@ -74,15 +74,24 @@ export function ShipmentsPanel() {
     try {
       await apiJson("/api/shipments/" + id + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
       await load();
-    } catch (e) { setErr(e instanceof Error ? e.message : "Ошибка действия"); }
+      notify("success", "Статус обновлён", "Действие успешно выполнено и зафиксировано в журнале.");
+    } catch (e) { setErr(e instanceof Error ? e.message : "Ошибка действия"); notify("error", "Ошибка", e instanceof Error ? e.message : "Не удалось выполнить действие"); }
     finally { setBusy(null); }
   };
 
   const create = async (requestId: string) => {
     setBusy(requestId);
-    try { await apiJson("/api/shipments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId }) }); await load(); }
-    catch (e) { setErr(e instanceof Error ? e.message : "Ошибка создания"); }
+    try { 
+      await apiJson("/api/shipments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId }) }); 
+      await load();
+      notify("confirm", "Отправление создано", "Этикетка готова к печати. Не забудьте передать посылку перевозчику.");
+    } catch (e) { setErr(e instanceof Error ? e.message : "Ошибка создания"); }
     finally { setBusy(null); }
+  };
+
+  
+  const notify = (kind: "success" | "error" | "confirm" | "info", title: string, text: string) => {
+    try { (useNotifyStore.getState() as any).push?.({ kind, title, text }); } catch(e) { /* fallback */ }
   };
 
   const shown = list.filter((s) => filter === "all" || s.status === filter);
@@ -148,12 +157,12 @@ export function ShipmentsPanel() {
                   </>
                 )}
                 {role === "buyer" && sh.status === "at_point" && (
-                  <button disabled={busy === sh.id} onClick={() => act(sh.id, "/confirm")} className="px-3 py-1.5 rounded-lg bg-success text-white text-[12px] font-bold disabled:opacity-50">Подтвердить получение</button>
+                  <button disabled={busy === sh.id} onClick={() => { act(sh.id, "/confirm").then(() => notify("success", "Получение подтверждено", "Сделка закрыта, средства переведены продавцу.")); }} className="px-3 py-1.5 rounded-lg bg-success text-white text-[12px] font-bold disabled:opacity-50">Подтвердить получение</button>
                 )}
                 {role === "buyer" && ["delivered","closed"].includes(sh.status) && (
                   <button disabled={busy === sh.id} onClick={() => act(sh.id, "/return")} className="px-3 py-1.5 rounded-lg border border-line text-[12px] font-bold text-ink hover:border-dark disabled:opacity-50">Оформить возврат</button>
                 )}
-                <button onClick={() => { const t = window.prompt("Суть жалобы (фиксируется в журнале):"); if (t) act(sh.id, "/complaint", { text: t }); }} className="px-3 py-1.5 rounded-lg bg-danger-soft text-danger text-[12px] font-bold">Пожаловаться</button>
+                <button onClick={() => { const t = window.prompt("Суть жалобы (фиксируется в журнале):"); if (t) { act(sh.id, "/complaint", { text: t }).then(() => notify("error", "Жалоба отправлена", "Эскроу заморожен. Данные переданы в модерацию.")); } }} className="px-3 py-1.5 rounded-lg bg-danger-soft text-danger text-[12px] font-bold">Пожаловаться</button>
                 <button onClick={() => setOpen(open === sh.id ? null : sh.id)} className="px-3 py-1.5 rounded-lg border border-line text-[12px] font-bold text-ink-soft hover:border-dark">Журнал</button>
               </div>
               {open === sh.id && (

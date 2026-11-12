@@ -97,7 +97,13 @@ function register(app, getDb, guard){
       carrier: "mock", trackingNumber: "", status: "created", issue: false,
       itemsSummary: rq.itemsSummary, totalPrice: rq.totalPrice,
       storageUntil: null, createdAt: now(), updatedAt: now(),
-      escrow: { state: "held", heldAt: now(), releaseAt: null, frozenAt: null, releasedAt: null },
+      escrow: { 
+        state: "held", 
+        heldAt: now(), 
+        releaseAt: (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString(); })(), 
+        frozenAt: null, 
+        releasedAt: null 
+      },
       journal: []
     };
     MockAdapter.createShipment(sh);
