@@ -30,6 +30,13 @@ interface NotifyState {
   mergeServerNotifications: (notifs: Array<{ id: string; kind: NotifyKind; title: string; text: string; createdAt: number; read: boolean; deepLink?: string }>) => void;
 }
 
+
+/* Валидация данных при чтении из localStorage — защита от битых данных */
+function validateItems(items: unknown): NotifyItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.filter((i) => i && typeof i.id === "string" && typeof i.title === "string");
+}
+
 export const useNotifyStore = create<NotifyState>()(
   persist(
     (set) => ({
@@ -57,6 +64,13 @@ export const useNotifyStore = create<NotifyState>()(
         return { items: [...newItems, ...s.items].slice(0, 100) };
       }),
     }),
-    { name: "quantiform-notify" }
+    { 
+      name: "quantiform-notify",
+      onRehydrateStorage: () => (state) => {
+        if (state && state.items) {
+          state.items = validateItems(state.items);
+        }
+      }
+    }
   )
 );
