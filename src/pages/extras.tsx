@@ -1595,23 +1595,22 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
         </div>
       </div>
 
-      {/* Живые метрики из реальных заказов */}
+      {/* Живые метрики из реальных заказов (матовый стиль) */}
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6 mb-8">
         {[
-          { label: "Выручка (отправленные)", value: fmt(revenue), icon: Wallet, bar: "#4d7327", tint: "bg-[#eef5e9] text-[#4d7327]" },
-          { label: "Заказов всего", value: String(myOrders.length), icon: Package, bar: "#c77e28", tint: "bg-[#f7efe2] text-[#c77e28]" },
-          { label: "Средний чек", value: fmt(avgCheck), icon: Receipt, bar: "#2d5f4c", tint: "bg-[#e9f0ec] text-[#2d5f4c]" },
-          { label: "К выплате · комиссия " + commissionNow + "%", value: fmt(payout), icon: Banknote, bar: "#4d7327", tint: "bg-[#eef5e9] text-[#4d7327]" },
+          { label: "Выручка (отправленные)", value: fmt(revenue), icon: Wallet },
+          { label: "Заказов всего", value: String(myOrders.length), icon: Package },
+          { label: "Средний чек", value: fmt(avgCheck), icon: Receipt },
+          { label: `К выплате · комиссия ${commissionNow}%`, value: fmt(payout), icon: Banknote },
         ].map((m) => (
-          <div key={m.label} className="relative overflow-hidden bg-surface rounded-2xl shadow-card hover:shadow-lift hover:-translate-y-0.5 transition-all duration-300 p-5">
-            <span className="absolute left-0 top-0 h-full w-1" style={{ background: m.bar }} />
+          <div key={m.label} className="group relative overflow-hidden rounded-2xl border border-line/40 bg-surface/60 p-5 backdrop-blur-md shadow-sm hover:bg-surface/80 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute truncate">{m.label}</p>
-                <p className="font-display font-extrabold text-[26px] leading-tight text-ink mt-2">{m.value}</p>
+                <p className="text-[11px] font-light uppercase tracking-[0.1em] text-ink-soft truncate">{m.label}</p>
+                <p className="font-display font-normal text-[28px] leading-tight text-ink mt-2 tracking-tight">{m.value}</p>
               </div>
-              <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.tint}`}>
-                <m.icon size={18} />
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-ink/5 text-ink-soft group-hover:bg-accent/10 group-hover:text-accent transition-colors duration-300">
+                <m.icon size={20} strokeWidth={1.5} />
               </span>
             </div>
           </div>
