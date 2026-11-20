@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ShipmentsPanel } from "../components/ShipmentsPanel";
 import { ProductWizard_v2 } from "../components/ProductWizard_v2";
 import { api } from "../lib/api";
@@ -1444,7 +1445,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
     myOrders.flatMap((o) => o.items).filter((i) => i.productId.startsWith("sp-"))
       .reduce<Record<string, number>>((m2, i) => ({ ...m2, [i.productId]: (m2[i.productId] || 0) + i.qty }), {})
   ).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const planName = sellerPlanById(lt, planId)?.name || "Бесплатный";
+  const planName = sellerPlanById(lt || "self_employed", planId || "free")?.name || "Тариф" || "Бесплатный";
   const month = currentMonth();
   const aiUsed = acc.aiCardGens[month] || 0;
   const _balance = acc.transactions.reduce((sum, t) => sum + t.sellerPayout, 0);
@@ -2370,7 +2371,8 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
       )}
 
       {tab === "settings" && (
-        <div className="fade-up space-y-4">
+        <ErrorBoundary>
+          <div className="fade-up space-y-4">
           <p className="text-[13px] text-ink-soft">Настройки · тариф <strong style={{ color: lvlMeta.accent }}>{sellerPlanById(lt, planId)?.name}</strong> — чем выше тариф, тем больше разделов доступно.</p>
 
           <div className="mb-5"><SellerAvatar /></div>
@@ -2604,6 +2606,7 @@ const commissionNow = (COMMISSION_BY_LEVEL[lt] || [15, 14, 13, 11])[lvl] ?? s.co
             <Link to="/plans" className="text-[13px] font-bold text-accent-deep hover:text-accent underline">Управлять подпиской</Link>
           </div>
         </div>
+        </ErrorBoundary>
       )}
       <ProductWizard_v2 open={prodWizardOpen} editId={editProductId} onClose={() => { setProdWizardOpen(false); setEditProductId(null); }} />
       <Modal open={legalWizardOpen} onClose={() => { setLegalWizardOpen(false); setLegalStep(1); setLegalTarget(null); setLegalPreview(null); setLegalErr(""); }} title="Смена правовой формы">
