@@ -47,10 +47,10 @@ export function HomeScreen() {
       </Panel>
 
       {/* требуют решения */}
-      <Panel title="Требуют решения" sub={`${d.decisions.length} действий ожидают администратора`} right={<Link to="/admin/queue"><Btn size="sm" variant="outline">Вся очередь</Btn></Link>}>
-        {!d.decisions.length ? <EmptyState title="Очередь пуста" why="Агенту не нужны ваши подтверждения — все действия в рамках политик выполнены автоматически." action={<Link to="/admin/traces"><Btn size="sm" variant="outline">Посмотреть работу агента</Btn></Link>} /> : (
+      <Panel title="Требуют решения" sub={`${(d.decisions || []).length} действий ожидают администратора`} right={<Link to="/admin/queue"><Btn size="sm" variant="outline">Вся очередь</Btn></Link>}>
+        {!(d.decisions || []).length ? <EmptyState title="Очередь пуста" why="Агенту не нужны ваши подтверждения — все действия в рамках политик выполнены автоматически." action={<Link to="/admin/traces"><Btn size="sm" variant="outline">Посмотреть работу агента</Btn></Link>} /> : (
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {d.decisions.map((x: any) => (
+            {(d.decisions || []).map((x: any) => (
               <button key={x.id} onClick={() => nav("/admin/queue?focus=" + x.id)} className="text-left bg-surface border border-line rounded-xl p-4 hover:border-dark transition-colors cursor-pointer">
                 <div className="flex items-center justify-between gap-2 mb-2"><RiskTag r={x.risk} /><span className="text-[11px] font-bold text-ink-mute">срок: {dueIn(x.due_ts)}</span></div>
                 <p className="text-[13.5px] font-bold text-ink leading-snug mb-1">{x.title}</p>
@@ -64,9 +64,9 @@ export function HomeScreen() {
 
       {/* критические алерты */}
       <Panel title="Критические алерты" sub="Уровень · время · ответственный · статус обработки">
-        {!d.alerts.length ? <EmptyState title="Активных алертов нет" why="Мониторинг шлюзов, доставки, поиска и активности агента работает штатно." /> : (
+        {!(d.alerts || []).length ? <EmptyState title="Активных алертов нет" why="Мониторинг шлюзов, доставки, поиска и активности агента работает штатно." /> : (
           <div className="space-y-2">
-            {d.alerts.map((a: any) => (
+            {(d.alerts || []).map((a: any) => (
               <div key={a.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border rounded-xl px-4 py-3", a.level === "critical" ? "border-error/40 bg-error/5" : a.level === "important" ? "border-warning/40 bg-warning/5" : "border-line")}>
                 <Badge tone={a.level === "critical" ? "error" : a.level === "important" ? "warning" : "neutral"}>{a.level}</Badge>
                 <span className="text-[13px] font-semibold text-ink flex-1 min-w-[200px]">{a.title}</span>
@@ -115,7 +115,7 @@ export function HomeScreen() {
         {/* лента последних изменений */}
         <Panel title="Лента последних изменений" sub="Релизы · флаги · правила · массовые действия · финансы · блокировки · инциденты · решения агента">
           <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
-            {d.feed.map((f: any, i: number) => (
+            {(d.feed || []).map((f: any, i: number) => (
               <div key={i} className="flex items-start gap-2.5 text-[12.5px] py-1 border-b border-line/50 last:border-0">
                 <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ background: FEED_COLOR[f.kind] || "#9a9a94" }} />
                 <span className="flex-1 text-ink">{f.text}</span>
@@ -288,7 +288,7 @@ export function ObservationsScreen() {
   return (
     <Panel title="Журнал наблюдений агента" sub="Аномалии с доказательствами; каждое наблюдение можно превратить в гипотезу, задачу, инцидент или правило"
       right={<div className="flex gap-2">
-        <select className="field !h-9 !w-auto text-[12.5px]" value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}><option value="">Все источники</option>{[...new Set(data!.observations.map((o: any) => o.source))].map((s) => <option key={String(s)}>{String(s)}</option>)}</select>
+        <select className="field !h-9 !w-auto text-[12.5px]" value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}><option value="">Все источники</option>{[...new Set((data?.observations || []).map((o: any) => o.source))].map((s) => <option key={String(s)}>{String(s)}</option>)}</select>
         <select className="field !h-9 !w-auto text-[12.5px]" value={f.severity} onChange={(e) => setF({ ...f, severity: e.target.value })}><option value="">Любая серьёзность</option><option>high</option><option>medium</option><option>low</option></select>
       </div>}>
       <div className="space-y-3">
@@ -366,7 +366,7 @@ export function QueueScreen() {
 
   if (loading) return <LoadingBlock rows={5} />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
-  const pending = data!.decisions.filter((x: any) => x.status === "pending");
+  const pending = (data?.decisions || []).filter((x: any) => x.status === "pending");
   return (
     <div className="space-y-5">
       <Panel title="Очередь решений агента" sub="Каждая карточка: риск, срок, затронутые объекты, доказательства, альтернативы, прогноз, последствия">
@@ -384,7 +384,7 @@ export function QueueScreen() {
         )}
       </Panel>
       <Panel title="Закрытые решения" sub="Фиксируются: кто принял, когда, на основании каких данных, причина и результат">
-        <DataTable rows={data!.decisions.filter((x: any) => x.status !== "pending")} rowKey={(x: any) => x.id} onRow={(x: any) => setOpenId(x.id)} cols={[
+        <DataTable rows={(data?.decisions || []).filter((x: any) => x.status !== "pending")} rowKey={(x: any) => x.id} onRow={(x: any) => setOpenId(x.id)} cols={[
           { key: "title", title: "Решение" }, { key: "risk", title: "Риск", render: (x: any) => <RiskTag r={x.risk} /> },
           { key: "status", title: "Статус", render: (x: any) => <St s={x.status} /> },
           { key: "resolution", title: "Принял", render: (x: any) => x.resolution ? `${x.resolution.by} · ${timeAgo(x.resolution.at)}` : "—" },
@@ -401,7 +401,7 @@ export function QueueScreen() {
             <section>
               <p className="text-[12px] font-bold uppercase text-ink-mute mb-2">Evidence pack</p>
               {d.evidence?.cancel_series && (
-                <div className="h-24 mb-2 rounded-lg bg-line-soft/50 p-1"><ResponsiveContainer width="100%" height="100%"><LineChart data={d.evidence.cancel_series.map((v: number, i: number) => ({ d: "день " + (i + 1), v }))}><XAxis dataKey="d" hide /><YAxis hide /><Tooltip /><Line dataKey="v" stroke="#e53935" strokeWidth={2} /></LineChart></ResponsiveContainer></div>
+                <div className="h-24 mb-2 rounded-lg bg-line-soft/50 p-1"><ResponsiveContainer width="100%" height="100%"><LineChart data={(d.evidence?.cancel_series || []).map((v: number, i: number) => ({ d: "день " + (i + 1), v }))}><XAxis dataKey="d" hide /><YAxis hide /><Tooltip /><Line dataKey="v" stroke="#e53935" strokeWidth={2} /></LineChart></ResponsiveContainer></div>
               )}
               <pre className="text-[11px] bg-line-soft rounded-lg p-3 overflow-x-auto max-h-48">{JSON.stringify(d.evidence, null, 1)}</pre>
             </section>
@@ -463,7 +463,7 @@ export function PoliciesScreen() {
   return (
     <div className="space-y-5">
       <Panel title="Policy Engine — границы автономности агента" sub="Что агент может сам · что только после подтверждения · что запрещено · лимиты · уровни риска">
-        <DataTable rows={d.policies} rowKey={(p: any) => p.id} onRow={(p: any) => can("agent_manage") && setEdit({ ...p, _reason: "" })} cols={[
+        <DataTable rows={d.policies ?? []} rowKey={(p: any) => p.id} onRow={(p: any) => can("agent_manage") && setEdit({ ...p, _reason: "" })} cols={[
           { key: "action_type", title: "Тип действия", render: (p: any) => <span className="font-mono text-[12px]">{p.action_type}</span> },
           { key: "mode", title: "Режим", render: (p: any) => <Badge tone={p.mode === "auto" ? "success" : p.mode === "forbidden_auto" ? "error" : "warning"}>{MODE_POL[p.mode] || p.mode}</Badge> },
           { key: "risk", title: "Риск", render: (p: any) => <RiskTag r={p.risk} /> },
@@ -833,13 +833,13 @@ export function CatalogScreen() {
       </Panel>
       <Panel title="Менеджер категорий и брендов" sub="Вложенность, атрибуты, фильтры, SEO, правила модерации · бренды, производители, сертификаты">
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="space-y-2">{data!.categories.map((c: any) => (
+          <div className="space-y-2">{(data?.categories || []).map((c: any) => (
             <div key={c.id} className="border border-line rounded-xl px-3.5 py-2.5 text-[12.5px]">
               <p className="font-bold text-ink">{c.title} {c.parent && <span className="text-ink-mute font-normal">← внутри {c.parent}</span>} <Badge tone={c.moderation === "strict_docs" ? "error" : c.moderation === "manual_kids" ? "warning" : "neutral"}>модерация: {c.moderation}</Badge></p>
               <p className="text-ink-soft mt-0.5">Атрибуты: {c.attrs.join(", ")} · Фильтры: {c.filters.join(", ")} · SEO: {c.seo}</p>
             </div>
           ))}</div>
-          <div className="space-y-2">{data!.brands.map((b: any) => (
+          <div className="space-y-2">{(data?.brands || []).map((b: any) => (
             <div key={b.id} className="border border-line rounded-xl px-3.5 py-2.5 text-[12.5px]">
               <p className="font-bold text-ink">{b.title} <span className="font-normal text-ink-mute">· {b.producer}</span></p>
               <p className="text-ink-soft">Сертификаты: {b.certs.join(", ") || "нет"} · Категории: {b.allowed_cats.join(", ")}</p>
@@ -950,7 +950,7 @@ export function FinanceScreen() {
         </div>
       </Panel>
       <Panel title="Платёжные транзакции" sub="Шлюзы · ошибки · повторные списания · chargeback · связь с заказом/спором">
-        <DataTable rows={d.transactions} rowKey={(t: any) => t.id} cols={[
+        <DataTable rows={d.transactions ?? []} rowKey={(t: any) => t.id} cols={[
           { key: "id", title: "ID", mono: true }, { key: "type", title: "Тип" }, { key: "order", title: "Заказ", mono: true, render: (t: any) => t.order || "—" },
           { key: "amount_rub", title: "Сумма", right: true, render: (t: any) => fmtRub(t.amount_rub) }, { key: "gateway", title: "Шлюз" }, { key: "status", title: "Статус", render: (t: any) => <St s={t.status} /> },
           { key: "ts", title: "Когда", render: (t: any) => timeAgo(t.ts) },
@@ -958,7 +958,7 @@ export function FinanceScreen() {
       </Panel>
       <div className="grid lg:grid-cols-2 gap-5">
         <Panel title="Правила комиссий" sub="Категории · продавцы · акции · регионы · периоды">
-          <DataTable rows={d.commission_rules} rowKey={(c: any) => c.id} cols={[
+          <DataTable rows={d.commission_rules ?? []} rowKey={(c: any) => c.id} cols={[
             { key: "scope", title: "Область" }, { key: "pct", title: "%", right: true }, { key: "period", title: "Период" },
             { key: "active", title: "", render: (c: any) => <Badge tone={c.active ? "success" : "neutral"}>{c.active ? "вкл" : "выкл"}</Badge> },
             { key: "reason", title: "Причина" },
@@ -966,7 +966,7 @@ export function FinanceScreen() {
           {can("finance_write") && <Btn size="sm" variant="outline" className="mt-3" onClick={() => setConfirm({ spec: { title: "Создать правило комиссии", risk: "high", affected: "все подходящие сделки", changes: ["Новое активное правило"], reversible: true, reasonLabel: "основание" }, run: (r) => adminApi.commissionCreate({ scope: "promo:winter", pct: 6, period: "2026-12", reason: r }) })}>+ Новое правило</Btn>}
         </Panel>
         <Panel title="Очередь выплат" sub={`Порог подтверждения: ${fmtRub(d.thresholds.payout_confirm_threshold_rub)} · подозрительные выплаты автоматически в проверке`}>
-          <div className="space-y-2">{d.payouts.map((p: any) => (
+          <div className="space-y-2">{(d.payouts || []).map((p: any) => (
             <div key={p.id} className="border border-line rounded-xl px-3.5 py-2.5 flex flex-wrap items-center gap-2 text-[13px]">
               <span className="font-mono text-[12px]">{p.id}</span><span className="font-semibold">{p.seller}</span><span>{fmtRub(p.amount_rub)}</span><St s={p.status} />
               {p.hold && <Badge tone="warning">холд</Badge>}
@@ -980,7 +980,7 @@ export function FinanceScreen() {
         </Panel>
       </div>
       <Panel title="Сверка" sub="Заказы ↔ платежи ↔ комиссии ↔ выплаты ↔ бухгалтерия; расхождения → задачи">
-        <DataTable rows={d.reconciliation} rowKey={(r: any) => r.id} cols={[
+        <DataTable rows={d.reconciliation ?? []} rowKey={(r: any) => r.id} cols={[
           { key: "diff", title: "Расхождение" }, { key: "delta_rub", title: "Δ ₽", right: true, render: (r: any) => <span className={r.delta_rub < 0 ? "text-error" : "text-success"}>{fmtRub(r.delta_rub)}</span> },
           { key: "status", title: "Статус", render: (r: any) => <St s={r.status} /> }, { key: "found_at", title: "Найдено", render: (r: any) => timeAgo(r.found_at) },
         ]} />
@@ -1058,7 +1058,7 @@ export function SupportScreen() {
         </div>
       </Panel>
       <Panel title="Омниканальный inbox" sub="Чат · email · соцсети · формы · внутренние обращения — единая очередь с SLA">
-        <DataTable rows={d.tickets} rowKey={(t: any) => t.id} onRow={setSel} cols={[
+        <DataTable rows={d.tickets ?? []} rowKey={(t: any) => t.id} onRow={setSel} cols={[
           { key: "id", title: "№", mono: true }, { key: "channel", title: "Канал" },
           { key: "subject", title: "Тема", render: (t: any) => <span className="font-semibold">{t.subject}<br /><span className="text-ink-mute text-[11px] font-normal">{t.tags?.join(", ")} · {t.order || t.user}</span></span> },
           { key: "priority", title: "Приоритет", render: (t: any) => <Badge tone={t.priority === "high" ? "error" : "neutral"}>{t.priority}</Badge> },
@@ -1077,7 +1077,7 @@ export function SupportScreen() {
               <Btn size="sm" variant="outline" onClick={async () => { const r = await adminApi.ticketClose(sel.id, "решено по макросу: " + d.macros[0]); if (r?.ok) { push("Тикет закрыт"); reload(); setSel(null); } else push(mapErrLocal(r), "err"); }}>Закрыть по шаблону</Btn>
             </div>
           )}
-          <section><p className="text-[12px] font-bold uppercase text-ink-mute mb-1.5">Макросы</p><div className="flex flex-wrap gap-1.5">{d.macros.map((m: string) => <Badge key={m} tone="neutral">{m}</Badge>)}</div></section>
+          <section><p className="text-[12px] font-bold uppercase text-ink-mute mb-1.5">Макросы</p><div className="flex flex-wrap gap-1.5">{(d.macros || []).map((m: string) => <Badge key={m} tone="neutral">{m}</Badge>)}</div></section>
         </>)}
       </Drawer>
     </div>
@@ -1097,7 +1097,7 @@ export function SecurityScreen() {
   return (
     <div className="space-y-5">
       <Panel title="Fraud Operations Center" sub="Подозрительные пользователи, продавцы, заказы, платежи, устройства, IP — риск-скоринг, флаги, рекомендация агента">
-        <DataTable rows={d.fraud} rowKey={(f: any) => f.type + f.id} cols={[
+        <DataTable rows={d.fraud ?? []} rowKey={(f: any) => f.type + f.id} cols={[
           { key: "type", title: "Тип" }, { key: "id", title: "Объект", mono: true },
           { key: "risk", title: "Риск", render: (f: any) => <span className={f.risk > 0.7 ? "text-error font-bold" : ""}>{f.risk.toFixed(2)}</span> },
           { key: "flags", title: "Флаги", render: (f: any) => f.flags.map((x: string) => <Badge key={x} tone="warning">{x}</Badge>) },
@@ -1107,13 +1107,13 @@ export function SecurityScreen() {
       </Panel>
       <Panel title="Граф связей" sub="Мультиаккаунты, общие устройства/IP/реквизиты, накрутка отзывов, фиктивные заказы">
         <div className="flex flex-wrap gap-2 text-[12px]">
-          {d.graph.nodes.map((n: any) => <span key={n.id} className="px-2.5 py-1 rounded-full border border-line bg-surface font-mono">{n.t}:{n.id}</span>)}
+          {(d.graph?.nodes || []).map((n: any) => <span key={n.id} className="px-2.5 py-1 rounded-full border border-line bg-surface font-mono">{n.t}:{n.id}</span>)}
         </div>
-        <ul className="mt-3 space-y-1 text-[12.5px] text-ink-soft">{d.graph.edges.map((e: any, i: number) => <li key={i}>• {e[0]} —<b>{e[2]}</b>→ {e[1]}</li>)}</ul>
+        <ul className="mt-3 space-y-1 text-[12.5px] text-ink-soft">{(d.graph?.edges || []).map((e: any, i: number) => <li key={i}>• {e[0]} —<b>{e[2]}</b>→ {e[1]}</li>)}</ul>
       </Panel>
       <div className="grid lg:grid-cols-2 gap-5">
         <Panel title="Правила антифрода">
-          <div className="space-y-2">{d.rules.map((r: any) => (
+          <div className="space-y-2">{(d.rules || []).map((r: any) => (
             <div key={r.id} className="flex items-center justify-between border border-line rounded-xl px-3.5 py-2.5 text-[13px]">
               <span>{r.title}</span><span className="flex items-center gap-2"><span className="text-ink-mute text-[11.5px]">{r.hits_7d} срабатываний/7д</span><Badge tone={r.enabled ? "success" : "neutral"}>{r.enabled ? "вкл" : "выкл"}</Badge></span>
             </div>
@@ -1128,14 +1128,14 @@ export function SecurityScreen() {
               <Btn size="sm" disabled={!subj.id} onClick={() => setConfirm({ spec: { title: "Создать блокировку", risk: subj.days === "0" ? "critical" : "high", affected: `${subj.type}:${subj.id}`, changes: [subj.days === "0" ? "Пожизненная блокировка" : `Блокировка на ${subj.days} дней`, "Пользователь получит уведомление и право апелляции"], reversible: subj.days !== "0", requireConfirmText: subj.days === "0" }, run: (reason, ct) => adminApi.blockCreate({ subject_type: subj.type, subject: subj.id, days: +subj.days || 0, reason, confirm_text: ct }) })}>Заблокировать</Btn>
             </div>
           )}
-          <div className="space-y-2">{d.blocks.map((b: any) => (
+          <div className="space-y-2">{(d.blocks || []).map((b: any) => (
             <div key={b.id} className="border border-line rounded-xl px-3.5 py-2.5 text-[12.5px]">
               <p className="font-semibold text-ink">{b.subject_type}:{b.subject} <Badge tone={b.permanent ? "error" : "warning"}>{b.permanent ? "навсегда" : "до " + new Date(b.until).toLocaleDateString("ru-RU")}</Badge></p>
               <p className="text-ink-soft">{b.reason} · доказательства: {b.evidence.join(", ")}</p>
             </div>
           ))}</div>
           <p className="text-[12px] font-bold uppercase text-ink-mute mt-4 mb-2">Апелляции (агент готовит материалы, решение — администратор)</p>
-          {d.appeals.map((ap: any) => (
+          {(d.appeals || []).map((ap: any) => (
             <div key={ap.id} className="border border-warning/40 bg-warning/5 rounded-xl px-3.5 py-2.5 text-[12.5px]">
               <p className="font-semibold">{ap.id} · {ap.who} против {ap.block} · <St s={ap.status} /></p>
               <p className="text-ink-soft my-1">{ap.materials}</p>
@@ -1150,7 +1150,7 @@ export function SecurityScreen() {
         </Panel>
       </div>
       <Panel title="Журнал безопасности (входы, коды, устройства, IP, регион, попытки)" sub="Append-only: записи только добавляются">
-        <DataTable rows={d.sec_log.slice(0, 30)} rowKey={(l: any) => l.id} cols={[
+        <DataTable rows={(d.sec_log || []).slice(0, 30)} rowKey={(l: any) => l.id} cols={[
           { key: "ts", title: "Время", render: (l: any) => new Date(l.ts).toLocaleString("ru-RU") },
           { key: "type", title: "Событие" }, { key: "result", title: "Результат", render: (l: any) => <Badge tone={l.result === "success" ? "success" : l.result === "fail" || l.result === "blocked" ? "error" : "warning"}>{l.result}</Badge> },
           { key: "ip", title: "IP", mono: true }, { key: "device_id", title: "Устройство" }, { key: "region", title: "Регион" }, { key: "detail", title: "Детали" },
@@ -1172,7 +1172,7 @@ export function ContentScreen() {
   return (
     <div className="space-y-5">
       <Panel title="Кампании коммуникаций" sub="Email · push · SMS · внутренние сообщения · объявления. Массовые рассылки — только после предпросмотра размера аудитории, примера и тестовой отправки">
-        <div className="space-y-3">{data!.campaigns.map((c: any) => (
+        <div className="space-y-3">{(data?.campaigns || []).map((c: any) => (
           <div key={c.id} className="border border-line rounded-xl p-4">
             <div className="flex flex-wrap items-center gap-2 text-[13px]"><Badge tone="dark">{c.channel}</Badge><b>{c.subject}</b><St s={c.status} /><span className="text-ink-mute">аудитория: {fmtNum(c.size)}</span><span className="text-ink-mute">{c.audience}</span></div>
             <p className="text-[12px] text-ink-soft mt-1">Доставлено {fmtNum(c.stats.delivered)} · открыто {fmtNum(c.stats.opened)} · клики {fmtNum(c.stats.clicked)} · отписки {fmtNum(c.stats.unsub)}</p>
@@ -1212,17 +1212,17 @@ export function AnalyticsScreen() {
         <Panel title="Воронка продавцов"><Funnel steps={d.seller_funnel} /></Panel>
       </div>
       <div className="grid lg:grid-cols-2 gap-5">
-        <Panel title="Когорты (retention, %)"><DataTable rows={d.cohorts} rowKey={(c: any) => c.c} cols={[{ key: "c", title: "Когорта" }, { key: "d7", title: "D7" }, { key: "d30", title: "D30", render: (c: any) => c.d30 ?? "—" }, { key: "d90", title: "D90", render: (c: any) => c.d90 ?? "—" }]} /></Panel>
+        <Panel title="Когорты (retention, %)"><DataTable rows={d.cohorts ?? []} rowKey={(c: any) => c.c} cols={[{ key: "c", title: "Когорта" }, { key: "d7", title: "D7" }, { key: "d30", title: "D30", render: (c: any) => c.d30 ?? "—" }, { key: "d90", title: "D90", render: (c: any) => c.d90 ?? "—" }]} /></Panel>
         <Panel title="Поисковая аналитика" sub="Популярные запросы · без результатов · низкая конверсия — clicкабельно ведёт в модуль улучшения поиска">
-          <p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1">Топ запросов</p>{d.search.top.map((s: any) => <Link key={s[0]} to="/admin/search-analytics" className="inline-block text-[12px] bg-line-soft rounded-full px-2.5 py-1 mr-1.5 mb-1.5 no-underline text-ink">{s[0]} · {fmtNum(s[1])}</Link>)}
-          <p className="text-[11.5px] font-bold uppercase text-ink-mute mt-2 mb-1">Без результатов</p>{d.search.noresult.map((s: any) => <span key={s[0]} className="inline-block text-[12px] bg-error/10 text-error rounded-full px-2.5 py-1 mr-1.5 mb-1.5">{s[0]} · {fmtNum(s[1])}</span>)}
+          <p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1">Топ запросов</p>{(d.search?.top || []).map((s: any) => <Link key={s[0]} to="/admin/search-analytics" className="inline-block text-[12px] bg-line-soft rounded-full px-2.5 py-1 mr-1.5 mb-1.5 no-underline text-ink">{s[0]} · {fmtNum(s[1])}</Link>)}
+          <p className="text-[11.5px] font-bold uppercase text-ink-mute mt-2 mb-1">Без результатов</p>{(d.search?.noresult || []).map((s: any) => <span key={s[0]} className="inline-block text-[12px] bg-error/10 text-error rounded-full px-2.5 py-1 mr-1.5 mb-1.5">{s[0]} · {fmtNum(s[1])}</span>)}
         </Panel>
       </div>
       <Panel title="Анализ проблем" sub="Где бросают процесс, какие шаги дают жалобы, категории споров, нарушители сроков">
-        <DataTable rows={d.problems} rowKey={(p: any) => p.area} cols={[{ key: "area", title: "Область" }, { key: "drop_pct", title: "Отвал, %", right: true }, { key: "complaints", title: "Жалоб", right: true, render: (p: any) => p.complaints ? <span className="text-error font-bold">{p.complaints}</span> : "0" }]} />
+        <DataTable rows={d.problems ?? []} rowKey={(p: any) => p.area} cols={[{ key: "area", title: "Область" }, { key: "drop_pct", title: "Отвал, %", right: true }, { key: "complaints", title: "Жалоб", right: true, render: (p: any) => p.complaints ? <span className="text-error font-bold">{p.complaints}</span> : "0" }]} />
       </Panel>
       <Panel title="Объяснение от агента" sub="Не только графики: что произошло, какие сегменты затронуты, какие гипотезы, что рекомендуется">
-        {d.agent_insights.map((x: any, i: number) => (
+        {(d.agent_insights || []).map((x: any, i: number) => (
           <div key={i} className="flex items-start gap-2.5 bg-ai-soft border border-ai/20 rounded-xl px-4 py-3 mb-2 text-[13px]">
             <Zap size={15} className="text-ai mt-0.5 shrink-0" /><span className="flex-1">{x.text}</span>
             <span className="flex gap-1">{x.links.map((l: string) => <Link key={l} to={l.startsWith("hyp") ? "/admin/agent" : "/admin/security"} className="text-[11px] font-bold text-ai underline">{l}</Link>)}</span>
@@ -1251,7 +1251,7 @@ export function ReleasesScreen() {
   return (
     <div className="space-y-5">
       <Panel title="Roadmap и релизы" sub="Release control tower: статус, состав, цель, эффект, риски, критерии успеха, пост-анализ">
-        {d.releases.map((r: any) => (
+        {(d.releases || []).map((r: any) => (
           <div key={r.id} className="border border-line rounded-xl p-4 mb-3 last:mb-0">
             <div className="flex flex-wrap items-center gap-2 text-[13px]"><b>{r.name}</b><St s={r.status} /><span className="text-ink-mute">дата: {new Date(r.target).toLocaleDateString("ru-RU")}</span><span className="text-ink-mute">владелец: {r.owner}</span></div>
             <p className="text-[12.5px] text-ink-soft mt-1">Цель: {r.goal} · Успех: {r.success} {r.risks && <>· Риски: {r.risks}</>}</p>
@@ -1261,7 +1261,7 @@ export function ReleasesScreen() {
         ))}
       </Panel>
       <Panel title="Feature flags" sub="Процент пользователей, регион, роль, сегмент; каждое изменение: кто/когда/зачем/до/после">
-        <DataTable rows={d.flags} rowKey={(f: any) => f.id} cols={[
+        <DataTable rows={d.flags ?? []} rowKey={(f: any) => f.id} cols={[
           { key: "name", title: "Флаг", mono: true }, { key: "rollout_pct", title: "Раскатка", render: (f: any) => f.rollout_pct + "%" },
           { key: "segment", title: "Сегмент" }, { key: "note", title: "Комментарий" },
           { key: "history", title: "История", render: (f: any) => f.history.length ? f.history.slice(-1)[0].from + "%→" + f.history.slice(-1)[0].to + "% (" + f.history.slice(-1)[0].reason + ")" : "—" },
@@ -1272,7 +1272,7 @@ export function ReleasesScreen() {
         ]} />
       </Panel>
       <Panel title="A/B-тесты" sub="Гипотеза · метрика успеха · выборка · стоп-правила · результат; ухудшение ключевых метрик → предложение остановки и отката">
-        {d.tests.map((t: any) => (
+        {(d.tests || []).map((t: any) => (
           <div key={t.id} className="border border-line rounded-xl p-4 text-[13px]">
             <p className="font-bold">{t.hypothesis} {t.stopped && <Badge tone="error">остановлен: {t.stop_reason}</Badge>}</p>
             <p className="text-ink-soft text-[12.5px] mt-1">Метрика: {t.metric} · {t.sample} · {t.duration_days} дней · стоп-правило: {t.stop_rule}</p>
@@ -1282,7 +1282,7 @@ export function ReleasesScreen() {
         ))}
       </Panel>
       <Panel title="Бэклог доработок (RICE/MoSCoW, источник: жалоба/гипотеза агента/инцидент/аналитика)">
-        <DataTable rows={d.backlog} rowKey={(h: any) => h.id} cols={[
+        <DataTable rows={d.backlog ?? []} rowKey={(h: any) => h.id} cols={[
           { key: "title", title: "Задача", render: (h: any) => <span className="font-semibold">{h.title}<br /><span className="text-ink-mute text-[11px] font-normal">источник: {h.obs_id || "идея"} · сегмент: {h.segment}</span></span> },
           { key: "priority", title: "Приоритет", render: (h: any) => <Badge tone={h.priority === "P1" ? "error" : h.priority === "P2" ? "warning" : "neutral"}>{h.priority}</Badge> },
           { key: "impact_volume", title: "Reach" }, { key: "confidence", title: "Confidence", render: (h: any) => pct(h.confidence) },
@@ -1309,7 +1309,7 @@ export function SettingsScreen() {
       <Panel title="Режим платформы и окружение" sub="Пользователи при спец-режиме получают понятное уведомление; опасные действия в production визуально выделены">
         <div className="flex flex-wrap gap-2 mb-3">{Object.entries(MODES_RU).map(([k, v]) => (
           <button key={k} disabled={!can("settings_write")} onClick={() => setConfirm({ spec: { title: "Режим платформы → " + v, risk: k === "emergency" ? "critical" : "high", affected: "все пользователи и продавцы", changes: [v + (k !== "normal" ? "; верхний баннер-уведомление на сайте" : "; обычный режим")], reversible: true, reasonLabel: "почему переключаем" }, run: (r) => adminApi.settingsPatch({ platform_mode: k, reason: r }) })}
-            className={cn("px-3.5 py-2 rounded-xl border text-[12.5px] font-bold cursor-pointer transition-colors", d.settings.platform_mode === k ? "bg-dark text-cream border-dark" : "border-line text-ink hover:border-dark")}>{v}</button>
+            className={cn("px-3.5 py-2 rounded-xl border text-[12.5px] font-bold cursor-pointer transition-colors", (d.settings || {}).platform_mode === k ? "bg-dark text-cream border-dark" : "border-line text-ink hover:border-dark")}>{v}</button>
         ))}</div>
         <div className="grid grid-cols-2 gap-2"><Info label="Окружение" v={<Badge tone={d.settings.env === "production" ? "error" : "success"}>{d.settings.env}</Badge>} /><Info label="Порог подтверждения выплат" v={fmtRub(d.settings.limits_cfg.payout_confirm_threshold_rub)} /><Info label="Авто-возврат до" v={fmtRub(d.settings.limits_cfg.refund_auto_limit_rub)} /><Info label="Макс. холд" v={d.settings.limits_cfg.hold_max_days + " дн"} /></div>
       </Panel>
@@ -1319,21 +1319,21 @@ export function SettingsScreen() {
         ))}</div>
       </Panel>
       <Panel title="Интеграции" sub="Статус · версия · ошибки · лимиты · ключи · история сбоев">
-        <DataTable rows={d.integrations} rowKey={(i: any) => i.key} cols={[
+        <DataTable rows={d.integrations ?? []} rowKey={(i: any) => i.key} cols={[
           { key: "title", title: "Сервис" }, { key: "status", title: "Статус", render: (i: any) => <St s={i.status} /> }, { key: "version", title: "Версия" },
           { key: "errors_24h", title: "Ошибок/24ч", right: true, render: (i: any) => i.errors_24h ? <span className="text-error font-bold">{i.errors_24h}</span> : "0" },
           { key: "limits", title: "Лимиты" }, { key: "keys_ok", title: "Ключи", render: (i: any) => i.keys_ok ? "✓" : "✗" },
-          { key: "incidents", title: "Сбои", render: (i: any) => i.incidents.length ? i.incidents[i.incidents.length - 1].text : "—" },
+          { key: "incidents", title: "Сбои", render: (i: any) => (i.incidents || []).length ? i.incidents[(i.incidents || []).length - 1].text : "—" },
           { key: "_r", title: "", render: (i: any) => can("settings_write") ? <div onClick={(e) => e.stopPropagation()}><Btn size="sm" variant="ghost" onClick={async () => { const r = await adminApi.integrationRetry(i.key, "ручной health-check интеграции из кабинета"); if (r?.ok) { push("Health-check выполнен", "ok"); } else push(mapErrLocal(r), "err"); reload(); }}>Проверить</Btn></div> : null },
         ]} />
       </Panel>
       <Panel title="Роли и доступы (RBAC на сервере)" sub="Минимальные привилегии; granular permissions; разделение полномочий; 2FA email-код сейчас, passkey/FIDO2 — следующая версия для Super Admin / Finance / AI Ops">
-        <DataTable rows={Object.entries(d.roles).map(([k, v]: any) => ({ key: k, ...v }))} rowKey={(r: any) => r.key} cols={[
+        <DataTable rows={Object.entries(d.roles ?? {}).map(([k, v]: any) => ({ key: k, ...v }))} rowKey={(r: any) => r.key} cols={[
           { key: "title", title: "Роль", render: (r: any) => <b>{r.title}</b> },
           { key: "sections", title: "Разделы", render: (r: any) => r.sections.includes("*") ? "все" : r.sections.length + " шт" },
           { key: "perms", title: "Права", render: (r: any) => <span className="text-[11px]">{r.perms.slice(0, 8).join(", ")}{r.perms.length > 8 ? "…" : ""}</span> },
         ]} />
-        <p className="text-[12px] text-ink-mute mt-3">Администраторы: {d.admins.map((a: any) => a.email + " (" + a.role + ")").join(" · ")}</p>
+        <p className="text-[12px] text-ink-mute mt-3">Администраторы: {(d.admins || []).map((a: any) => a.email + " (" + a.role + ")").join(" · ")}</p>
       </Panel>
       {confirm && <DangerConfirm spec={confirm.spec} busy={busy} onCancel={() => setConfirm(null)} onConfirm={async (reason) => { setBusy(true); const r = await confirm.run(reason); setBusy(false); setConfirm(null); if (r?.ok) { push("Настройка применена и записана"); reload(); } else push(mapErrLocal(r), "err"); }} />}
     </div>
@@ -1384,9 +1384,9 @@ export function SearchAnalyticsScreen() {
     <div className="space-y-5">
       <Panel title="Модуль поиска" sub="Популярные запросы · пустые выдачи · синонимы · стоп-слова · веса · рекомендации агента">
         <div className="grid md:grid-cols-3 gap-4">
-          <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Популярные</p>{d.search.top.map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40">{s[0]} <span className="text-ink-mute float-right">{fmtNum(s[1])}</span></p>)}</div>
-          <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Без результатов</p>{d.search.noresult.map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40 text-error">{s[0]} <span className="text-ink-mute float-right">{fmtNum(s[1])}</span></p>)}</div>
-          <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Низкая конверсия</p>{d.search.lowconv.map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40">{s[0]} <span className="text-ink-mute float-right">{(s[1] * 100).toFixed(1)}%</span></p>)}</div>
+          <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Популярные</p>{(d.search?.top || []).map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40">{s[0]} <span className="text-ink-mute float-right">{fmtNum(s[1])}</span></p>)}</div>
+          <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Без результатов</p>{(d.search?.noresult || []).map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40 text-error">{s[0]} <span className="text-ink-mute float-right">{fmtNum(s[1])}</span></p>)}</div>
+          <div><p className="text-[11.5px] font-bold uppercase text-ink-mute mb-1.5">Низкая конверсия</p>{(d.search?.lowconv || []).map((s: any) => <p key={s[0]} className="text-[13px] py-1 border-b border-line/40">{s[0]} <span className="text-ink-mute float-right">{(s[1] * 100).toFixed(1)}%</span></p>)}</div>
         </div>
         <p className="text-[12.5px] text-ink-soft mt-3 bg-ai-soft border border-ai/20 rounded-lg px-3 py-2"><Sparkles size={13} className="inline mr-1 text-ai" />Рекомендация агента: добавить словарь синонимов «фурнитура↔латунь/петля» и подсказку продавцам по отсутствующим позициям — см. гипотезу hyp-3.</p>
       </Panel>
@@ -1456,9 +1456,9 @@ export function LearningScreen() {
   };
 
   const groups: [string, any[]][] = [
-    ["Кандидаты на подпись", d.skills.filter((s: any) => ["candidate", "deferred", "exam_failed"].includes(s.status))],
-    ["В работе", d.skills.filter((s: any) => s.status === "active")],
-    ["Отклонённые и снятые (границы допустимого)", d.skills.filter((s: any) => ["rejected", "rolled_back"].includes(s.status))],
+    ["Кандидаты на подпись", (d.skills || []).filter((s: any) => ["candidate", "deferred", "exam_failed"].includes(s.status))],
+    ["В работе", (d.skills || []).filter((s: any) => s.status === "active")],
+    ["Отклонённые и снятые (границы допустимого)", (d.skills || []).filter((s: any) => ["rejected", "rolled_back"].includes(s.status))],
   ];
   return (
     <div className="space-y-5">
@@ -1467,9 +1467,9 @@ export function LearningScreen() {
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2.5 mb-4">
           <Info label="Версия правил" v={d.rules_version} />
           <Info label="Версия агента" v={d.agent_version} />
-          <Info label="Кандидатов" v={String(d.skills.filter((s: any) => s.status === "candidate").length)} />
-          <Info label="Активных навыков" v={String(d.skills.filter((s: any) => s.status === "active").length)} />
-          <Info label="Примеров в датасете" v={fmtNum(d.dataset.length)} />
+          <Info label="Кандидатов" v={String((d.skills || []).filter((s: any) => s.status === "candidate").length)} />
+          <Info label="Активных навыков" v={String((d.skills || []).filter((s: any) => s.status === "active").length)} />
+          <Info label="Примеров в датасете" v={fmtNum((d.dataset || []).length)} />
           <Info label="Лимит уведомлений/час" v={`${d.limits.notify_requests_per_hour_per_user}${d.limits.digest_after_excess ? " → дайджест" : ""}`} />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -1481,7 +1481,7 @@ export function LearningScreen() {
         right={<Btn size="sm" variant="outline" disabled={repBusy} onClick={() => loadReport()}>{repBusy ? "Загрузка…" : "Обновить"}</Btn>}>
         {!!d.reports?.length && (
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {d.reports.map((r: any) => (
+            {(d.reports || []).map((r: any) => (
               <button key={r.id} onClick={() => loadReport(r.id)} className={cn("px-2.5 py-1 rounded-lg border text-[12px] font-semibold cursor-pointer transition-colors", report?.id === r.id ? "border-dark bg-dark text-cream" : "border-line text-ink hover:border-dark")}>
                 {r.date}{r.zero_summary ? " · пусто" : ""}{r.signed_by ? " ✓" : ""}
               </button>
@@ -1606,17 +1606,17 @@ export function IntelScreen() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
           <Info label="Периодичность" v={d.cadence_h + " ч"} />
           <Info label="Следующий цикл" v={new Date(d.next_run_at).toLocaleString("ru-RU")} />
-          <Info label="Циклов в журнале" v={String(d.runs.length)} />
-          <Info label="Белый список" v={d.whitelist.length + " источников"} />
+          <Info label="Циклов в журнале" v={String((d.runs || []).length)} />
+          <Info label="Белый список" v={(d.whitelist || []).length + " источников"} />
         </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">{d.whitelist.map((w: string) => <Chip key={w} t={"✓ " + w} />)}</div>
+        <div className="flex flex-wrap gap-1.5 mb-3">{(d.whitelist || []).map((w: string) => <Chip key={w} t={"✓ " + w} />)}</div>
         <p className="text-[12.5px] text-ink-soft bg-line-soft/60 border border-line rounded-xl px-3.5 py-2.5">Защита контура: любой внешний текст трактуется как данные, а не команды; попытка внедрения инструкций отсекается и помечается; факт подтверждается минимум двумя независимыми источниками из белого списка; находка становится только навыком-кандидатом с меткой «внешний источник» — применение решает человек.</p>
       </Panel>
 
       <Panel title="Журнал циклов разведки">
-        {!d.runs.length ? <EmptyState title="Циклов ещё не было" why="Воркер запускает цикл каждые 12 часов; вручную — кнопкой выше." /> : (
+        {!(d.runs || []).length ? <EmptyState title="Циклов ещё не было" why="Воркер запускает цикл каждые 12 часов; вручную — кнопкой выше." /> : (
           <div className="space-y-3">
-            {d.runs.map((r: any) => (
+            {(d.runs || []).map((r: any) => (
               <div key={r.id} className="border border-line rounded-xl p-4">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <b className="text-[13px]">{new Date(r.ts).toLocaleString("ru-RU")}</b>
